@@ -1,0 +1,502 @@
+// TU-Circle — proposed domain/database design for Release 1 + Release 2.
+// Revision: 17 tables; term-based committee assignments; updated club and recruitment data.
+// Nullable references use >?; mandatory references use >.
+// Muted gray lines identify account/actor references; no foreign keys are hidden.
+// TableGroup/headercolor control grouping and colors, not canvas coordinates.
+// Older companion layouts have 16 tables; arrange the new assignment table near memberships.
+// No invented x/y metadata is used. Nullable references retain the supplied >? dialect.
+// Paste the entire file into dbdiagram.io. Database: PostgreSQL.
+// Java: snake_case columns -> camelCase fields; bigint -> Long;
+// timestamptz -> Instant; status varchar -> Java enum with EnumType.STRING.
+// This is a design proposal, not an inspection of an existing implementation.
+// Assumptions: one category per club; text-only selection questions;
+// one application per student per round; one membership per student per club;
+// accepted applicants become members only after confirming their place.
+// A published recruitment round is also its recruitment announcement.
+// No file uploads: store HTTPS links only; no automatic server-side fetching.
+// Session JDBC tables are technical infrastructure and omitted from this ERD.
+
+Project TU_Circle {
+  database_type: 'PostgreSQL'
+  Note: 'TU-Circle: club discovery, recruitment, review, confirmation, membership and in-app notifications.'
+}
+
+Table users [headercolor: #2563EB] {
+  id                       bigint [pk, increment]
+  tu_username              varchar(100) [not null, unique, note: 'Stable TU login identity; never store TU passwords']
+  display_name             varchar(200) [not null]
+  email                    varchar(254)
+  system_role              varchar(20) [not null, default: 'USER']
+  account_status           varchar(20) [not null, default: 'ACTIVE']
+  last_login_at            timestamptz
+  created_at               timestamptz [not null, default: `now()`]
+  updated_at               timestamptz [not null, default: `now()`]
+  version                  bigint [not null, default: 0, note: 'Java @Version; incremented by ORM']
+  checks {
+    `system_role IN ('USER', 'ADMIN')`
+    `account_status IN ('ACTIVE', 'SUSPENDED')`
+  }
+  Note: 'Java: User. Club committee privileges come from effective ClubCommitteeAssignment records, not system_role.'
+}
+
+Table student_profiles [headercolor: #2563EB] {
+  user_id                  bigint [pk]
+  student_code             varchar(20) [not null, unique]
+  faculty_name             varchar(200)
+  department_name          varchar(200)
+  program_name             varchar(200) [note: 'Curriculum/program name; distinct from department']
+  study_year               smallint
+  student_status           varchar(20) [not null, default: 'UNKNOWN']
+  synced_at                timestamptz [not null, default: `now()`]
+  checks {
+    `study_year IS NULL OR study_year > 0`
+    `student_status IN ('ACTIVE', 'INACTIVE', 'GRADUATED', 'UNKNOWN')`
+  }
+  Note: 'Java: StudentProfile; @MapsId with User. Status is our normalized value, not a claim about TU API field names. Only verified eligible students may apply.'
+}
+
+Table club_categories [headercolor: #0F766E] {
+  id                       bigint [pk, increment]
+  name                     varchar(100) [not null, unique]
+  description              text
+  Note: 'Java: ClubCategory. One primary category per club in this proposal.'
+}
+
+Table clubs [headercolor: #0F766E] {
+  id                       bigint [pk, increment]
+  category_id              bigint [not null]
+  name                     varchar(200) [not null, unique]
+  description              text [not null]
+  objectives               text
+  contact_url              varchar(2048) [note: 'Other website/contact URL']
+  facebook_url             varchar(2048)
+  instagram_url            varchar(2048)
+  contact_email            varchar(254) [note: 'Validate email format in Java; not an HTTPS URL']
+  affiliation_level        varchar(30) [note: 'University/faculty/other approved level; vocabulary defined by project']
+  affiliation_name         varchar(200)
+  image_url                varchar(2048) [note: 'Optional external HTTPS image; otherwise use bundled default image']
+  banner_url               varchar(2048) [note: 'Optional external HTTPS banner; no file upload']
+  status                   varchar(20) [not null, default: 'ACTIVE']
+  created_by               bigint [not null]
+  created_at               timestamptz [not null, default: `now()`]
+  updated_at               timestamptz [not null, default: `now()`]
+  version                  bigint [not null, default: 0]
+  indexes {
+    (category_id, status)
+  }
+  checks {
+    `status IN ('ACTIVE', 'INACTIVE')`
+    `contact_url IS NULL OR contact_url ~* '^https://[^[:space:]]+$'`
+    `image_url IS NULL OR image_url ~* '^https://[^[:space:]]+$'`
+    `banner_url IS NULL OR banner_url ~* '^https://[^[:space:]]+$'`
+    `facebook_url IS NULL OR facebook_url ~* '^https://[^[:space:]]+$'`
+    `instagram_url IS NULL OR instagram_url ~* '^https://[^[:space:]]+$'`
+  }
+  Note: 'Java: Club. HTTPS checks are basic guards; validate URI scheme and host in Java too.'
+}
+
+Table tags [headercolor: #0F766E] {
+  id                       bigint [pk, increment]
+  name                     varchar(80) [not null, unique]
+  Note: 'Java: Tag. Normalize whitespace/case before creating tags.'
+}
+
+Table club_tags [headercolor: #0F766E] {
+  club_id                  bigint [not null]
+  tag_id                   bigint [not null]
+  indexes {
+    (club_id, tag_id) [pk]
+    tag_id
+  }
+  Note: 'Join table. Java may use Club.tags: Set<Tag>; a separate entity is unnecessary until this association needs additional attributes.'
+}
+
+Table recruitment_rounds [headercolor: #B45309] {
+  id                       bigint [pk, increment]
+  club_id                  bigint [not null]
+  title                    varchar(200) [not null]
+  academic_year            smallint [not null, note: 'Buddhist Era academic year, e.g. 2569; not derived from the current calendar year']
+  semester                 smallint [not null, note: 'Positive semester code; approved codes and summer-term meaning are project policy']
+  description              text [not null]
+  eligibility_text         text [note: 'Human-readable conditions; not executable validation rules']
+  opens_at                 timestamptz [not null]
+  closes_at                timestamptz [not null, note: 'Original scheduled closing time; do not overwrite to close early']
+  closed_at                timestamptz [note: 'Actual manual early-close time; NULL when no early close was performed']
+  results_scheduled_at     timestamptz [note: 'Announced result schedule; distinct from actual publication time']
+  confirmation_deadline    timestamptz [not null]
+  publication_status       varchar(20) [not null, default: 'DRAFT']
+  published_at             timestamptz
+  results_published_at     timestamptz [note: 'Release final results to applicants only after this is set']
+  created_by               bigint [not null]
+  created_at               timestamptz [not null, default: `now()`]
+  updated_at               timestamptz [not null, default: `now()`]
+  version                  bigint [not null, default: 0]
+  indexes {
+    (id, club_id) [unique]
+    (club_id, publication_status, opens_at)
+    (academic_year, semester, club_id)
+  }
+  checks {
+    `academic_year > 0`
+    `semester > 0`
+    `opens_at < closes_at`
+    `closed_at IS NULL OR (closed_at >= opens_at AND closed_at < closes_at)`
+    `closed_at IS NULL OR published_at IS NOT NULL`
+    `results_scheduled_at IS NULL OR (results_scheduled_at >= opens_at AND results_scheduled_at < confirmation_deadline)`
+    `confirmation_deadline > closes_at`
+    `publication_status IN ('DRAFT', 'PUBLISHED', 'CANCELLED')`
+    `publication_status <> 'PUBLISHED' OR published_at IS NOT NULL`
+    `results_published_at IS NULL OR (published_at IS NOT NULL AND results_published_at >= published_at AND results_published_at >= opens_at AND results_published_at < confirmation_deadline)`
+  }
+  Note: 'Java: RecruitmentRound. Open for applications only when PUBLISHED and opens_at <= now < closes_at and closed_at IS NULL. Closing early does not cancel existing applications. Confirmation starts at results_published_at and ends before confirmation_deadline. Publication-before-close and form-edit policies still need agreement; not imposed as DB checks.'
+}
+
+Table application_questions [headercolor: #B45309] {
+  id                       bigint [pk, increment]
+  round_id                 bigint [not null]
+  prompt                   text [not null]
+  is_required              boolean [not null, default: true]
+  display_order            int [not null]
+  max_length               int [not null, default: 2000]
+  indexes {
+    (id, round_id) [unique]
+    (round_id, display_order) [unique]
+  }
+  checks {
+    `display_order > 0`
+    `max_length > 0`
+  }
+  Note: 'Java: ApplicationQuestion. MVP supports text answers only.'
+}
+
+Table applications [headercolor: #7C3AED] {
+  id                       bigint [pk, increment]
+  round_id                 bigint [not null]
+  club_id                  bigint [not null, note: 'Controlled redundancy for composite foreign keys']
+  applicant_id             bigint [not null]
+  motivation               text [not null]
+  status                   varchar(30) [not null, default: 'SUBMITTED']
+  submitted_at             timestamptz [not null, default: `now()`]
+  decided_by               bigint
+  decided_at               timestamptz
+  result_message           text [note: 'Applicant-visible message after results are published; never copy private review notes here automatically']
+  responded_at             timestamptz [note: 'Time of student confirmation/decline; remains NULL for automatic EXPIRED']
+  updated_at               timestamptz [not null, default: `now()`]
+  version                  bigint [not null, default: 0]
+  indexes {
+    (round_id, applicant_id) [unique]
+    (id, round_id) [unique]
+    (id, applicant_id, club_id) [unique]
+    (applicant_id, submitted_at)
+    (club_id, status)
+  }
+  checks {
+    `status IN ('SUBMITTED', 'UNDER_REVIEW', 'ACCEPTED', 'REJECTED', 'CONFIRMED', 'DECLINED', 'WITHDRAWN', 'EXPIRED')`
+    `(decided_by IS NULL) = (decided_at IS NULL)`
+    `status NOT IN ('ACCEPTED', 'REJECTED', 'CONFIRMED', 'DECLINED', 'EXPIRED') OR decided_at IS NOT NULL`
+    `(status IN ('CONFIRMED', 'DECLINED')) = (responded_at IS NOT NULL)`
+  }
+  Note: 'Java: Application. Submit once per round; withdrawn applications are retained and do not permit a second submission in this proposal. Final decision belongs to this record (status, decided_by, decided_at); reviews are advisory opinions. UI maps SUBMITTED to Pending and both DECLINED/EXPIRED to declined, with expiry reason shown separately. Status transitions and authorization belong to transactional services.'
+}
+
+Table application_answers [headercolor: #7C3AED] {
+  id                       bigint [pk, increment]
+  application_id           bigint [not null]
+  question_id              bigint [not null]
+  round_id                 bigint [not null, note: 'Both parents must belong to this same round']
+  answer_text              text [not null]
+  indexes {
+    (application_id, question_id) [unique]
+    (question_id, round_id)
+  }
+  Note: 'Java: ApplicationAnswer. Service verifies all required questions and per-question length at submission.'
+}
+
+Table application_links [headercolor: #7C3AED] {
+  id                       bigint [pk, increment]
+  application_id           bigint [not null]
+  label                    varchar(200) [not null]
+  url                      varchar(2048) [not null]
+  display_order            int [not null]
+  created_at               timestamptz [not null, default: `now()`]
+  indexes {
+    (application_id, display_order) [unique]
+  }
+  checks {
+    `display_order > 0`
+    `url ~* '^https://[^[:space:]]+$'`
+  }
+  Note: 'Java: ApplicationLink. External document/portfolio link. Backend validates a valid HTTPS URI with a host; reviewers open the origin website themselves. Never upload or fetch files automatically.'
+}
+
+Table application_reviews [headercolor: #7C3AED] {
+  id                       bigint [pk, increment]
+  application_id           bigint [not null]
+  reviewer_id              bigint [not null]
+  recommendation           varchar(20) [not null]
+  internal_comment         text
+  created_at               timestamptz [not null, default: `now()`]
+  updated_at               timestamptz [not null, default: `now()`]
+  version                  bigint [not null, default: 0]
+  indexes {
+    (application_id, reviewer_id) [unique]
+    reviewer_id
+  }
+  checks {
+    `recommendation IN ('ACCEPT', 'REJECT', 'DISCUSS')`
+  }
+  Note: 'Java: ApplicationReview. One editable opinion per reviewer per application; not the final decision. Service checks an effective committee assignment and active membership/account for this club. Self-review prohibition is a proposed policy, not an agreed requirement in the supplied Use Cases.'
+}
+
+Table application_status_history [headercolor: #7C3AED] {
+  id                       bigint [pk, increment]
+  application_id           bigint [not null]
+  from_status              varchar(30) [note: 'NULL for initial submission']
+  to_status                varchar(30) [not null]
+  actor_id                 bigint [note: 'NULL for system action, e.g. expiry']
+  reason                   text
+  changed_at               timestamptz [not null, default: `now()`]
+  indexes {
+    (application_id, changed_at)
+  }
+  checks {
+    `from_status IS NULL OR from_status IN ('SUBMITTED', 'UNDER_REVIEW', 'ACCEPTED', 'REJECTED', 'CONFIRMED', 'DECLINED', 'WITHDRAWN', 'EXPIRED')`
+    `to_status IN ('SUBMITTED', 'UNDER_REVIEW', 'ACCEPTED', 'REJECTED', 'CONFIRMED', 'DECLINED', 'WITHDRAWN', 'EXPIRED')`
+    `from_status IS NULL OR from_status <> to_status`
+  }
+  Note: 'Java: ApplicationStatusHistory. Append-only via service; write in the same transaction as status change. Contains internal decisions; applicant DTO must hide unreleased results.'
+}
+
+Table club_memberships [headercolor: #15803D] {
+  id                       bigint [pk, increment]
+  club_id                  bigint [not null]
+  user_id                  bigint [not null]
+  source_application_id    bigint [unique, note: 'NULL for authorized initial/manual membership provisioning']
+  status                   varchar(20) [not null, default: 'ACTIVE']
+  joined_at                timestamptz [not null]
+  ended_at                 timestamptz
+  updated_at               timestamptz [not null, default: `now()`]
+  version                  bigint [not null, default: 0]
+  indexes {
+    (club_id, user_id) [unique]
+    (user_id, status)
+    (club_id, status)
+  }
+  checks {
+    `status IN ('ACTIVE', 'INACTIVE', 'LEFT', 'REMOVED')`
+    `(status IN ('LEFT', 'REMOVED')) = (ended_at IS NOT NULL)`
+    `ended_at IS NULL OR ended_at >= joined_at`
+  }
+  Note: 'Java: ClubMembership. Current relationship, not a User subclass. Confirmation creates or reactivates one row transactionally; history records previous periods. Membership source must match both student and club. Committee roles and terms exist only in club_committee_assignments; expiry of an assignment does not end membership.'
+}
+
+Table club_committee_assignments [headercolor: #15803D] {
+  id                       bigint [pk, increment]
+  membership_id            bigint [not null, note: 'Student and club are obtained through this membership; no duplicate user_id/club_id']
+  position_name            varchar(100) [not null]
+  permission_role          varchar(20) [not null, default: 'COMMITTEE']
+  starts_at                timestamptz [not null]
+  ends_at                  timestamptz [not null, note: 'Exclusive end of the assigned term']
+  status                   varchar(20) [not null, default: 'ACTIVE', note: 'ACTIVE means not revoked; current privileges also depend on time and membership/account status']
+  assigned_by              bigint [not null]
+  revoked_by               bigint
+  revoked_at               timestamptz
+  revocation_reason        text
+  created_at               timestamptz [not null, default: `now()`]
+  updated_at               timestamptz [not null, default: `now()`]
+  version                  bigint [not null, default: 0]
+  indexes {
+    (membership_id, permission_role, starts_at) [unique]
+    (membership_id, status, starts_at, ends_at)
+  }
+  checks {
+    `permission_role IN ('COMMITTEE', 'PRESIDENT')`
+    `status IN ('ACTIVE', 'REVOKED')`
+    `starts_at < ends_at`
+    `(status = 'REVOKED') = (revoked_at IS NOT NULL)`
+    `(revoked_at IS NULL) = (revoked_by IS NULL)`
+    `revoked_at IS NULL OR revoked_at >= created_at`
+  }
+  Note: 'Java: ClubCommitteeAssignment; @ManyToOne ClubMembership. Each term is a separate retained row. Effective privileges require ACTIVE, starts_at <= now < ends_at, ACTIVE membership and ACTIVE account. End of term is derived from time; no expiration job is required for authorization. Admin provisions assignments. Revoke instead of deleting; role/term corrections use revoke-and-create to preserve history. Prevent overlapping non-revoked terms for the same membership and permission_role in the service or a migration-level exclusion constraint.'
+}
+
+Table membership_history [headercolor: #15803D] {
+  id                       bigint [pk, increment]
+  membership_id            bigint [not null]
+  old_status               varchar(20)
+  new_status               varchar(20) [not null]
+  actor_id                 bigint
+  reason                   text
+  changed_at               timestamptz [not null, default: `now()`]
+  indexes {
+    (membership_id, changed_at)
+  }
+  checks {
+    `old_status IS NULL OR old_status IN ('ACTIVE', 'INACTIVE', 'LEFT', 'REMOVED')`
+    `new_status IN ('ACTIVE', 'INACTIVE', 'LEFT', 'REMOVED')`
+    `old_status IS NULL OR old_status <> new_status`
+  }
+  Note: 'Java: MembershipHistory. Append-only record of membership join/reactivation and status changes; reason includes termination reason. Committee appointments are separate term records, not membership status changes.'
+}
+
+Table notifications [headercolor: #BE185D] {
+  id                       bigint [pk, increment]
+  recipient_id             bigint [not null]
+  application_id           bigint
+  membership_id            bigint
+  type                     varchar(30) [not null]
+  title                    varchar(200) [not null]
+  message                  text [not null]
+  deduplication_key        varchar(200) [not null, unique, note: 'Stable recipient+event key to prevent duplicate notifications on retries']
+  created_at               timestamptz [not null, default: `now()`]
+  read_at                  timestamptz
+  indexes {
+    (recipient_id, read_at, created_at)
+  }
+  checks {
+    `type IN ('APPLICATION_SUBMITTED', 'RESULT_PUBLISHED', 'APPLICATION_CONFIRMED', 'MEMBERSHIP_UPDATED')`
+    `read_at IS NULL OR read_at >= created_at`
+    `(type = 'MEMBERSHIP_UPDATED' AND membership_id IS NOT NULL AND application_id IS NULL) OR (type <> 'MEMBERSHIP_UPDATED' AND application_id IS NOT NULL AND membership_id IS NULL)`
+  }
+  Note: 'Java: Notification. In-app only. Insert with business transaction; result notices are created only when results are published. Recipient and referenced-object visibility must be checked by the service.'
+}
+
+// Identity / club discovery
+Ref: users.id - student_profiles.user_id [delete: restrict, color: #2563EB]
+Ref: clubs.category_id > club_categories.id [delete: restrict, color: #0F766E]
+Ref: clubs.created_by > users.id [delete: restrict, color: #94A3B8]
+Ref: club_tags.club_id > clubs.id [delete: cascade, color: #0F766E]
+Ref: club_tags.tag_id > tags.id [delete: cascade, color: #0F766E]
+
+// Recruitment / applications
+Ref: recruitment_rounds.club_id > clubs.id [delete: restrict, color: #B45309]
+Ref: recruitment_rounds.created_by > users.id [delete: restrict, color: #94A3B8]
+Ref: application_questions.round_id > recruitment_rounds.id [delete: restrict, color: #B45309]
+Ref: applications.(round_id, club_id) > recruitment_rounds.(id, club_id) [delete: restrict, color: #7C3AED]
+Ref: applications.applicant_id > student_profiles.user_id [delete: restrict, color: #7C3AED]
+Ref: applications.decided_by >? users.id [delete: restrict, color: #94A3B8]
+Ref: application_answers.(application_id, round_id) > applications.(id, round_id) [delete: restrict, color: #7C3AED]
+Ref: application_answers.(question_id, round_id) > application_questions.(id, round_id) [delete: restrict, color: #7C3AED]
+Ref: application_links.application_id > applications.id [delete: restrict, color: #7C3AED]
+Ref: application_reviews.application_id > applications.id [delete: restrict, color: #7C3AED]
+Ref: application_reviews.reviewer_id > users.id [delete: restrict, color: #94A3B8]
+Ref: application_status_history.application_id > applications.id [delete: restrict, color: #7C3AED]
+Ref: application_status_history.actor_id >? users.id [delete: restrict, color: #94A3B8]
+
+// Membership / notifications
+Ref: club_memberships.club_id > clubs.id [delete: restrict, color: #15803D]
+Ref: club_memberships.user_id > student_profiles.user_id [delete: restrict, color: #15803D]
+Ref: club_memberships.(source_application_id, user_id, club_id) >? applications.(id, applicant_id, club_id) [delete: restrict, color: #15803D]
+Ref: club_committee_assignments.membership_id > club_memberships.id [delete: restrict, color: #15803D]
+Ref: club_committee_assignments.assigned_by > users.id [delete: restrict, color: #94A3B8]
+Ref: club_committee_assignments.revoked_by >? users.id [delete: restrict, color: #94A3B8]
+Ref: membership_history.membership_id > club_memberships.id [delete: restrict, color: #15803D]
+Ref: membership_history.actor_id >? users.id [delete: restrict, color: #94A3B8]
+Ref: notifications.recipient_id > users.id [delete: restrict, color: #BE185D]
+Ref: notifications.application_id >? applications.id [delete: restrict, color: #BE185D]
+Ref: notifications.membership_id >? club_memberships.id [delete: restrict, color: #BE185D]
+
+// #region DIAGRAM GROUPS
+// Header colors remain useful when table-group display is unavailable.
+TableGroup "01_Identity" [color: #EFF6FF] {
+  users
+  student_profiles
+}
+
+TableGroup "02_Club_Discovery" [color: #F0FDFA] {
+  club_categories
+  clubs
+  tags
+  club_tags
+}
+
+TableGroup "03_Recruitment" [color: #FFFBEB] {
+  recruitment_rounds
+  application_questions
+}
+
+TableGroup "04_Applications" [color: #F5F3FF] {
+  applications
+  application_answers
+  application_links
+  application_reviews
+  application_status_history
+}
+
+TableGroup "05_Membership" [color: #F0FDF4] {
+  club_memberships
+  club_committee_assignments
+  membership_history
+}
+
+TableGroup "06_Notifications" [color: #FDF2F8] {
+  notifications
+}
+
+// The Default view shows every table. Named views are not required.
+DiagramView Default {
+  Tables { * }
+  TableGroups { * }
+}
+// #endregion
+
+// BUSINESS RULES NOT FULLY ENFORCED BY FOREIGN KEYS / CHECKS
+// 1. Club management, review and final decisions require an effective assignment:
+//    assignment ACTIVE; starts_at <= now < ends_at; membership and account ACTIVE;
+//    target club matches the membership. Check at execution time on every request.
+//    ADMIN provisions initial memberships/assignments. Do not put committee roles
+//    back into users.system_role or club_memberships.
+// 2. Submit atomically: eligible student/account; active club; round PUBLISHED;
+//    opens_at <= now < closes_at; closed_at IS NULL; required answers and HTTPS
+//    links valid; unique student/round; application quota not exceeded.
+//    Quota amount, counting period and distinct-club/status rules remain TBD.
+//    Serialize competing submissions for the student (or equivalent) when enforcing
+//    quota; a count followed by insert without concurrency control is insufficient.
+// 3. Proposed transitions retained from the earlier design:
+//    SUBMITTED -> UNDER_REVIEW or WITHDRAWN;
+//    UNDER_REVIEW -> ACCEPTED or REJECTED or WITHDRAWN;
+//    ACCEPTED -> CONFIRMED or DECLINED or EXPIRED.
+//    WITHDRAWN support, resubmission and correction/reapplication policies require
+//    explicit scope agreement. Existing unique student/round constraint is retained.
+// 4. Review recommendations are internal opinions; applications holds the final
+//    decision. Release final results, messages and history only after the parent
+//    results_published_at is set. Publish in-app result notices with that change.
+//    Confirmation opens at actual publication, not results_scheduled_at.
+// 5. Confirm/decline requires ownership, ACCEPTED, published results, a noncancelled
+//    round, an active club/account and now < confirmation_deadline. Check eligibility
+//    according to the agreed business policy. Create/reactivate membership with its
+//    application and membership histories in one transaction; avoid duplicate rows.
+//    Earlier-round closed_at is not a reason to block confirmation.
+// 6. At the deadline, change unanswered published ACCEPTED applications to EXPIRED
+//    with actor_id NULL and history reason; responded_at remains NULL. The UI shows
+//    DECLINED and EXPIRED as declined, distinguishing voluntary action from timeout.
+//    Preserve each old membership period/source in an immutable history reason or
+//    structured extension before reactivating/replacing the current source link.
+// 7. Manual close sets closed_at to the actual server time; it does not rewrite
+//    closes_at, cancel the round, delete applications or decide existing applicants.
+//    Concurrency between closing and submission must be controlled transactionally.
+//    A cancelled round blocks submission/review/confirmation; cancellation policy
+//    after result publication is outside the agreed MVP and must be defined first.
+// 8. Assignment periods/permission roles are retained per term. Revoke and create
+//    a new assignment to correct them. Membership LEFT/REMOVED must revoke current
+//    and future assignments transactionally so reactivation cannot revive old powers.
+//    Membership INACTIVE temporarily blocks access. Check overlap and active-member
+//    prerequisites in the service; a foreign key alone does not enforce these rules.
+// 9. POLICY DECISIONS STILL TO AGREE (not new mandatory acceptance criteria):
+//    self-review/self-decision prohibition; need for all applicants to be decided;
+//    publication before scheduled/effective close; edits to published questions or
+//    submitted answers/links; eligibility after application; reapplication rules.
+//    Effective closure is closed_at when set, otherwise closes_at. The removed
+//    results_published_at >= closes_at CHECK must not be silently treated as policy.
+//    External document contents can change at their origin; no automatic fetching.
+// 10. Dashboard numbers are computed from clubs/rounds/applications/memberships.
+//     Define unique-person versus application counts and semester membership scope
+//     before acceptance; use academic_year (B.E.) + semester consistently.
+// 11. updated_at is maintained by application auditing, not DEFAULT now().
+//     Histories are append-only through services/permissions; Java @Version,
+//     unique constraints and transactions handle concurrent updates. Use DTOs
+//     appropriate to each role instead of directly serializing Java entities.
+// MIGRATION NOTE: this file is a revised design, not an executable migration.
+// For an existing database, backfill academic_year/semester before NOT NULL checks.
+// Preserve old committee roles and role-history data before removing role columns;
+// create assignment rows with actual known terms, not invented historical dates.
