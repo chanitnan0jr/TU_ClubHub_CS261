@@ -1,0 +1,36 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# Top-most EditorConfig file
+root = true
+
+# Default rules for all files
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Java / JVM source files
+[*.{java,groovy}]
+indent_size = 4
+
+# Maven POM & XML files
+[pom.xml]
+indent_size = 4
+
+[*.xml]
+indent_size = 4
+
+# Markdown files
+[*.md]
+trim_trailing_whitespace = false
+
+# Windows Batch / Cmd scripts
+[*.{cmd,bat}]
+end_of_line = crlf
+
+# Makefiles
+[Makefile]
+indent_style = tab
