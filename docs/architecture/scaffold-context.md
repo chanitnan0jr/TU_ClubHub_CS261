@@ -1,12 +1,12 @@
-# TU-Circle — Monorepo Scaffold Context
+# TU-ClubHub — Monorepo Scaffold Context
 
 วันที่: 11 ตุลาคม 2026 · สถานะ: ข้อกำหนดสำหรับสร้าง Scaffold ยังไม่ใช่รายงานว่าโค้ดถูกสร้างหรือทดสอบแล้ว
 
-เอกสารนี้ใช้ส่งให้ Coding Agent หรือทีมพัฒนาได้ทั้งไฟล์ อ่านร่วมกับ [System architecture](system-architecture.md), [API contract](../api/API_v1.md), [OpenAPI specification](../api/openapi.yaml) และ [ERD ที่เสนอ](../database/TU-Circle-ERD-Updated.dbml)
+เอกสารนี้ใช้ส่งให้ Coding Agent หรือทีมพัฒนาได้ทั้งไฟล์ อ่านร่วมกับ [System architecture](system-architecture.md), [API contract](../api/API_v1.md), [OpenAPI specification](../api/openapi.yaml) และ [ERD ที่เสนอ](../database/TU-ClubHub-ERD-Updated.dbml)
 
 ## 1. บทบาทและเป้าหมายของผู้สร้าง Scaffold
 
-คุณเป็น Software Engineer ที่สร้างฐานโครงการ TU-Circle ให้ทีม 7 คนพัฒนาต่อได้ เป้าหมายคือ Repository ที่ติดตั้ง Build ทดสอบ และรันด้วย Docker Compose ได้ พร้อมโครงสร้างที่เข้าใจง่ายสำหรับสมาชิกมือใหม่
+คุณเป็น Software Engineer ที่สร้างฐานโครงการ TU-ClubHub ให้ทีม 7 คนพัฒนาต่อได้ เป้าหมายคือ Repository ที่ติดตั้ง Build ทดสอบ และรันด้วย Docker Compose ได้ พร้อมโครงสร้างที่เข้าใจง่ายสำหรับสมาชิกมือใหม่
 
 ให้สร้างโครงสร้างและ Foundation ที่ระบุด้านล่าง โดยไม่ขยายเป็นการพัฒนาครบทุก User Story อย่ารายงานว่า Feature เสร็จหากมีเพียงหน้าว่างหรือ API Stub
 
@@ -14,7 +14,7 @@
 
 ## 2. บริบทของผลิตภัณฑ์
 
-TU-Circle เป็นเว็บค้นหาชมรมและจัดการรับสมัครสมาชิกของมหาวิทยาลัยธรรมศาสตร์
+TU-ClubHub เป็นเว็บค้นหาชมรมและจัดการรับสมัครสมาชิกของมหาวิทยาลัยธรรมศาสตร์
 
 | ผู้ใช้ | ความสามารถ |
 |---|---|
@@ -60,7 +60,7 @@ TU-Circle เป็นเว็บค้นหาชมรมและจัด�
 | `README.md` | Setup, run, test, build และข้อจำกัดปัจจุบัน |
 | `backend/pom.xml` | Dependencies และ Build Backend |
 | `backend/mvnw`, `backend/mvnw.cmd`, `backend/.mvn/` | Maven Wrapper |
-| `backend/src/main/java/com/tucircle/` | Source Backend |
+| `backend/src/main/java/com/tuclubhub/` | Source Backend |
 | `backend/src/main/resources/` | Configuration และ Flyway SQL |
 | `backend/src/test/` | Tests และ test resources |
 | `frontend/package.json`, `frontend/package-lock.json` | Dependencies และ Scripts |
@@ -80,7 +80,7 @@ TU-Circle เป็นเว็บค้นหาชมรมและจัด�
 
 ## 5. Backend module contract
 
-Base package: `com.tucircle`; คลาสเริ่มต้น `TuCircleApplication` อยู่ใน Root Package
+Base package: `com.tuclubhub`; คลาสเริ่มต้น `TuClubHubApplication` อยู่ใน Root Package
 
 | Package | เจ้าของความรับผิดชอบ |
 |---|---|
@@ -192,7 +192,7 @@ Production TU adapter สร้าง Interface, config validation และ tim
 
 ## 9. Database และข้อมูลทดสอบ
 
-ใช้ `TU-Circle-ERD-Updated.dbml` เป็น Reference Design หากไฟล์นี้ถูกส่งมาพร้อมงาน อย่าเดาว่า DBML ที่ใช้ `>?` แปลงผ่าน Tool ทุกตัวได้โดยตรง ต้องตรวจ SQL ที่สร้างก่อนใช้
+ใช้ `docs/database/TU-ClubHub-ERD-Updated.dbml` เป็น Reference Design อย่าเดาว่า DBML ที่ใช้ `>?` แปลงผ่าน Tool ทุกตัวได้โดยตรง ต้องตรวจ SQL ที่สร้างก่อนใช้
 
 Scaffold ใช้ Schema subset เท่าที่ Vertical slice ต้องใช้ ได้แก่ `users`, `student_profiles` ถ้าจำเป็นต่อ Login, `club_categories`, `clubs` และตาราง Spring Session ตาม Spring Session รุ่นจริง รักษาชื่อ/ข้อกำหนดของตารางที่สร้างให้ตรง ERD และสร้าง FK dependencies ให้ครบ ตารางอื่นค่อยเพิ่มด้วย Migration เมื่อเริ่ม Story นั้น
 

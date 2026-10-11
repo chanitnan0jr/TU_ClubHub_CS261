@@ -1,4 +1,4 @@
-// TU-Circle — proposed domain/database design for Release 1 + Release 2.
+// TU-ClubHub — proposed domain/database design for Release 1 + Release 2.
 // Revision: 17 tables; term-based committee assignments; updated club and recruitment data.
 // Nullable references use >?; mandatory references use >.
 // Muted gray lines identify account/actor references; no foreign keys are hidden.
@@ -16,9 +16,9 @@
 // No file uploads: store HTTPS links only; no automatic server-side fetching.
 // Session JDBC tables are technical infrastructure and omitted from this ERD.
 
-Project TU_Circle {
+Project TU_ClubHub {
   database_type: 'PostgreSQL'
-  Note: 'TU-Circle: club discovery, recruitment, review, confirmation, membership and in-app notifications.'
+  Note: 'TU-ClubHub: club discovery, recruitment, review, confirmation, membership and in-app notifications.'
 }
 
 Table users [headercolor: #2563EB] {

@@ -1,12 +1,12 @@
-# TU-Circle — System Architecture
+# TU-ClubHub — System Architecture
 
 วันที่: 11 ตุลาคม 2026 · Version: 1.0 · สถานะ: Target Architecture สำหรับทีมพัฒนา
 
-เอกสารนี้อธิบายระบบที่ตั้งใจสร้าง ไม่ใช่หลักฐานว่าระบบ Deploy แล้วหรือทุก Feature เสร็จแล้ว ใช้ร่วมกับ [Scaffold context](scaffold-context.md), [API contract](../api/API_v1.md), [OpenAPI specification](../api/openapi.yaml) และ [ERD ที่เสนอ](../database/TU-Circle-ERD-Updated.dbml)
+เอกสารนี้อธิบายระบบที่ตั้งใจสร้าง ไม่ใช่หลักฐานว่าระบบ Deploy แล้วหรือทุก Feature เสร็จแล้ว ใช้ร่วมกับ [Scaffold context](scaffold-context.md), [API contract](../api/API_v1.md), [OpenAPI specification](../api/openapi.yaml) และ [ERD ที่เสนอ](../database/TU-ClubHub-ERD-Updated.dbml)
 
 ## 1. วัตถุประสงค์และผู้ใช้งานเอกสาร
 
-TU-Circle สนับสนุนการค้นหาชมรม การรับสมัคร การคัดเลือก และการยืนยันสมาชิกภาพของมหาวิทยาลัยธรรมศาสตร์ ออกแบบสำหรับทีม 7 คนและการส่งมอบตามรายวิชา โดยลดภาระ Infrastructure และทำให้สมาชิกที่ยังมีประสบการณ์น้อยเข้าใจขอบเขตงานได้
+TU-ClubHub สนับสนุนการค้นหาชมรม การรับสมัคร การคัดเลือก และการยืนยันสมาชิกภาพของมหาวิทยาลัยธรรมศาสตร์ ออกแบบสำหรับทีม 7 คนและการส่งมอบตามรายวิชา โดยลดภาระ Infrastructure และทำให้สมาชิกที่ยังมีประสบการณ์น้อยเข้าใจขอบเขตงานได้
 
 | Audience | ใช้ส่วนใด |
 |---|---|
@@ -43,7 +43,7 @@ TU-Circle สนับสนุนการค้นหาชมรม การ
 
 ```mermaid
 flowchart TB
-  student["นักศึกษา"] -->|ค้นหา สมัคร ติดตาม และตอบรับสิทธิ์| system["TU-Circle"]
+  student["นักศึกษา"] -->|ค้นหา สมัคร ติดตาม และตอบรับสิทธิ์| system["TU-ClubHub"]
   committee["กรรมการชมรม"] -->|จัดการชมรมและการรับสมัคร| system
   admin["เจ้าหน้าที่ส่วนกลาง"] -->|ดูภาพรวม| system
   system -->|ยืนยันตัวตนผ่าน HTTPS| tu["TU Authentication API"]
@@ -51,14 +51,14 @@ flowchart TB
   committee -->|เปิดเอกสารตามสิทธิ์ต้นทาง| external
 ```
 
-TU-Circle เก็บและแสดง URL ให้ผู้ใช้เปิดเอง การตรวจว่า URL เป็น HTTPS ไม่รับประกันว่าเอกสารมีอยู่ เปิดได้ หรือไม่ถูกแก้ไขภายหลัง การอนุญาตเข้าถึงเอกสารที่ Google Drive/OneDrive อยู่ภายใต้ระบบต้นทาง
+TU-ClubHub เก็บและแสดง URL ให้ผู้ใช้เปิดเอง การตรวจว่า URL เป็น HTTPS ไม่รับประกันว่าเอกสารมีอยู่ เปิดได้ หรือไม่ถูกแก้ไขภายหลัง การอนุญาตเข้าถึงเอกสารที่ Google Drive/OneDrive อยู่ภายใต้ระบบต้นทาง
 
 ## 4. Container Architecture
 
 ```mermaid
 flowchart TB
   user["ผู้ใช้งาน"] --> web["React SPA ใน Browser"]
-  subgraph system["TU-Circle — Software System"]
+  subgraph system["TU-ClubHub — Software System"]
     web -->|"HTTPS / JSON / Session Cookie"| api["Spring Boot Application"]
     api -->|"SQL ผ่าน JDBC"| db[("PostgreSQL: business data + sessions")]
   end
@@ -362,7 +362,7 @@ Sprint 1 รวม 20 SP และ Sprint 2 รวม 21 SP เป็น Estimat
 
 ## 15. เอกสารประกอบและการดูแล
 
-วางเอกสารนี้ที่ `docs/architecture/system-architecture.md`; Context ที่ `docs/architecture/scaffold-context.md`; Draw.io ที่ `docs/architecture/TU-Circle-Architecture.drawio`; API ที่ `docs/api/openapi.yaml`; ERD ที่ `docs/database/`
+วางเอกสารนี้ที่ `docs/architecture/system-architecture.md`; Context ที่ `docs/architecture/scaffold-context.md`; Draw.io ที่ `docs/architecture/TU-ClubHub-Architecture.drawio`; API ที่ `docs/api/openapi.yaml`; ERD ที่ `docs/database/`
 
 Draw.io ที่สร้างก่อนหน้านี้มี Context, Container, Backend Components และ Deployment ทั้งสี่หน้า เอกสารฉบับนี้เพิ่ม Frontend Component View และรายละเอียด Scaffold โดยไม่ได้อ้างว่าได้แก้ไฟล์ Draw.io เพิ่มหน้าที่ห้าแล้ว
 

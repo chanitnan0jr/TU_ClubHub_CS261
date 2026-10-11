@@ -1,14 +1,14 @@
 <?xml version='1.0' encoding='utf-8'?>
-<mxfile host="app.diagrams.net" agent="TU-Circle Architecture" version="24.7.17" type="device">
+<mxfile host="app.diagrams.net" agent="TU-ClubHub Architecture" version="24.7.17" type="device">
   <diagram id="page-1" name="01 — System Context">
     <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0" background="#ffffff">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="title" value="TU-CIRCLE  /  SYSTEM CONTEXT" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=28;fontColor=#0f172a;fontStyle=1;spacing=0;" vertex="1" parent="1">
+        <mxCell id="title" value="TU-CLUBHUB  /  SYSTEM CONTEXT" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=28;fontColor=#0f172a;fontStyle=1;spacing=0;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="50" y="30" width="1500" height="45" />
         </mxCell>
-        <mxCell id="subtitle" value="Audience: business, users and project reviewers  •  Scope: the complete planned TU-Circle system" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=15;fontColor=#475569;fontStyle=0;spacing=0;" vertex="1" parent="1">
+        <mxCell id="subtitle" value="Audience: business, users and project reviewers  •  Scope: the complete planned TU-ClubHub system" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=15;fontColor=#475569;fontStyle=0;spacing=0;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="50" y="83" width="1500" height="40" />
         </mxCell>
         <mxCell id="legend" value="KEY   Navy: people   |   Blue: application / component   |   Green: database   |   Grey: external / platform   |   Orange: planned scope" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=13;fontColor=#475569;fontStyle=0;spacing=0;" vertex="1" parent="1">
@@ -26,7 +26,7 @@
         <mxCell id="admin" value="CENTRAL ADMIN&#10;ดูภาพรวมสถิติส่วนกลาง" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#172554;strokeColor=#172554;fontColor=#ffffff;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="60" y="555" width="285" height="125" />
         </mxCell>
-        <mxCell id="system" value="TU-CIRCLE&#10;[Software system]&#10;&#10;Club discovery &amp; recruitment&#10;Applications · Selection · Membership" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#e0f2fe;strokeColor=#0284c7;fontColor=#0c4a6e;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;" vertex="1" parent="1">
+        <mxCell id="system" value="TU-CLUBHUB&#10;[Software system]&#10;&#10;Club discovery &amp; recruitment&#10;Applications · Selection · Membership" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#e0f2fe;strokeColor=#0284c7;fontColor=#0c4a6e;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="550" y="300" width="470" height="260" />
         </mxCell>
         <mxCell id="tu" value="TU AUTHENTICATION API&#10;[External system]&#10;ตรวจสอบตัวตนมหาวิทยาลัย" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;" vertex="1" parent="1">
@@ -82,7 +82,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="scope" value="Document contents stay on the external sites. TU-Circle stores HTTPS URLs; the backend does not fetch or upload these files." style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=17;fontColor=#334155;fontStyle=0;spacing=0;" vertex="1" parent="1">
+        <mxCell id="scope" value="Document contents stay on the external sites. TU-ClubHub stores HTTPS URLs; the backend does not fetch or upload these files." style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=17;fontColor=#334155;fontStyle=0;spacing=0;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="550" y="620" width="510" height="110" />
         </mxCell>
       </root>
@@ -93,7 +93,7 @@
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="title" value="TU-CIRCLE  /  CONTAINER VIEW" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=28;fontColor=#0f172a;fontStyle=1;spacing=0;" vertex="1" parent="1">
+        <mxCell id="title" value="TU-CLUBHUB  /  CONTAINER VIEW" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=28;fontColor=#0f172a;fontStyle=1;spacing=0;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="50" y="30" width="1500" height="45" />
         </mxCell>
         <mxCell id="subtitle" value="Audience: developers and analysts  •  C4 containers describe applications / data stores, not Docker containers" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=15;fontColor=#475569;fontStyle=0;spacing=0;" vertex="1" parent="1">
@@ -105,7 +105,7 @@
         <mxCell id="legend2" value="Solid arrow: runtime request / call (responses omitted)   ·   Dashed arrow: build / delivery   ·   Dashed box: logical or deployment boundary" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=13;fontColor=#475569;fontStyle=0;spacing=0;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="50" y="940" width="1500" height="28" />
         </mxCell>
-        <mxCell id="system" value="TU-CIRCLE  /  SOFTWARE SYSTEM BOUNDARY" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;fillColor=#f8fafc;strokeColor=#cbd5e1;dashed=1;dashPattern=6 4;verticalAlign=top;align=left;fontStyle=1;fontSize=16;spacingTop=12;" vertex="1" parent="1">
+        <mxCell id="system" value="TU-CLUBHUB  /  SOFTWARE SYSTEM BOUNDARY" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;fillColor=#f8fafc;strokeColor=#cbd5e1;dashed=1;dashPattern=6 4;verticalAlign=top;align=left;fontStyle=1;fontSize=16;spacingTop=12;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="380" y="160" width="1160" height="590" />
         </mxCell>
         <mxCell id="users" value="USERS&#10;Student · Committee · Admin" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#172554;strokeColor=#172554;fontColor=#ffffff;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;" vertex="1" parent="1">
@@ -173,7 +173,7 @@
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="title" value="TU-CIRCLE  /  BACKEND COMPONENTS" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=28;fontColor=#0f172a;fontStyle=1;spacing=0;" vertex="1" parent="1">
+        <mxCell id="title" value="TU-CLUBHUB  /  BACKEND COMPONENTS" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=28;fontColor=#0f172a;fontStyle=1;spacing=0;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="50" y="30" width="1500" height="45" />
         </mxCell>
         <mxCell id="subtitle" value="Audience: developers  •  Feature-based modular monolith  •  One Spring Boot process; Java calls between modules" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=15;fontColor=#475569;fontStyle=0;spacing=0;" vertex="1" parent="1">
@@ -275,7 +275,7 @@
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="title" value="TU-CIRCLE  /  DEPLOYMENT VIEW" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=28;fontColor=#0f172a;fontStyle=1;spacing=0;" vertex="1" parent="1">
+        <mxCell id="title" value="TU-CLUBHUB  /  DEPLOYMENT VIEW" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=28;fontColor=#0f172a;fontStyle=1;spacing=0;" vertex="1" parent="1">
           <mxGeometry as="geometry" x="50" y="30" width="1500" height="45" />
         </mxCell>
         <mxCell id="subtitle" value="Audience: Ops and developers  •  Proposed Render delivery environment  •  Source-based Docker build after CI and review" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=#f1f5f9;strokeColor=#64748b;fontColor=#334155;fontFamily=Arial;fontSize=17;spacing=14;strokeWidth=1.5;text;fillColor=none;strokeColor=none;align=left;fontSize=15;fontColor=#475569;fontStyle=0;spacing=0;" vertex="1" parent="1">

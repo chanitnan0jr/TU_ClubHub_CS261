@@ -1,4 +1,4 @@
-# TU-Circle API Contract
+# TU-ClubHub API Contract
 
 | Property | Value |
 |---|---|
@@ -7,7 +7,7 @@
 | Last updated | 2026-10-11 |
 | Audience | Frontend and backend developers |
 
-This document defines the shared HTTP contract for the TU-Circle foundation. It is based on `TU-Circle-Scaffold-Context.md` and `TU-Circle-System-Architecture.md`. It describes the intended API; it is not evidence that any endpoint has been implemented.
+This document defines the shared HTTP contract for the TU-ClubHub foundation. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). It describes the intended API; it is not evidence that any endpoint has been implemented.
 
 The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](docs/api/openapi.yaml). Keep it in sync with this document and with the DTOs consumed by the frontend. The repository contains a proposed ERD but no backend implementation, so the public club response fields below are an initial proposal to confirm against the ERD before implementation.
 
@@ -140,7 +140,7 @@ Invalidates the current server-side session and clears the session cookie. Requi
 | Status | Code | Meaning |
 |---|---|---|
 | `401` | `AUTHENTICATION_FAILED` | Credentials could not be verified; message must not disclose whether an account exists |
-| `403` | `ACCOUNT_NOT_ALLOWED` | Identity was verified but the account is not allowed to use TU-Circle |
+| `403` | `ACCOUNT_NOT_ALLOWED` | Identity was verified but the account is not allowed to use TU-ClubHub |
 | `403` | `CSRF_INVALID` | CSRF token is missing, expired, or invalid |
 | `503` | `AUTH_PROVIDER_UNAVAILABLE` | TU Authentication API could not be reached or returned an unusable response |
 
@@ -201,7 +201,7 @@ All `/api/v1` errors use `Content-Type: application/problem+json`. The response 
 
 ```json
 {
-  "type": "urn:tucircle:problem:validation-error",
+  "type": "urn:tuclubhub:problem:validation-error",
   "title": "Request validation failed",
   "status": 400,
   "detail": "One or more request fields are invalid.",

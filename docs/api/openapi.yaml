@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
-  title: TU-Circle API
+  title: TU-ClubHub API
   version: 1.0.0
   description: >-
-    Proposed foundation contract for the TU-Circle application. This specification
+    Proposed foundation contract for the TU-ClubHub application. This specification
     covers the current foundation scope only; product workflow endpoints are tracked
     in docs/api/API_v1.md and must be specified before implementation.
 servers:
@@ -91,7 +91,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
               example:
-                type: urn:tucircle:problem:authentication-failed
+                type: urn:tuclubhub:problem:authentication-failed
                 title: Authentication failed
                 status: 401
                 detail: The supplied credentials could not be verified.
@@ -107,7 +107,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
               example:
-                type: urn:tucircle:problem:auth-provider-unavailable
+                type: urn:tuclubhub:problem:auth-provider-unavailable
                 title: Authentication provider unavailable
                 status: 503
                 detail: Authentication is temporarily unavailable.
@@ -220,7 +220,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
               example:
-                type: urn:tucircle:problem:invalid-resource-id
+                type: urn:tuclubhub:problem:invalid-resource-id
                 title: Invalid resource identifier
                 status: 400
                 detail: clubId must be a decimal string.
@@ -234,7 +234,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
               example:
-                type: urn:tucircle:problem:club-not-found
+                type: urn:tuclubhub:problem:club-not-found
                 title: Club not found
                 status: 404
                 detail: No public club was found for this identifier.
@@ -440,7 +440,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: urn:tucircle:problem:validation-error
+            type: urn:tuclubhub:problem:validation-error
             title: Request validation failed
             status: 400
             detail: One or more request fields are invalid.
@@ -458,7 +458,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: urn:tucircle:problem:authentication-required
+            type: urn:tuclubhub:problem:authentication-required
             title: Authentication required
             status: 401
             detail: Sign in to access this resource.
@@ -472,7 +472,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: urn:tucircle:problem:csrf-invalid
+            type: urn:tuclubhub:problem:csrf-invalid
             title: Request rejected
             status: 403
             detail: The CSRF token is missing or invalid.
@@ -486,7 +486,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
           example:
-            type: urn:tucircle:problem:internal-error
+            type: urn:tuclubhub:problem:internal-error
             title: Internal server error
             status: 500
             detail: The request could not be completed.

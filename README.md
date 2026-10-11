@@ -1,6 +1,6 @@
-# TU-Circle
+# TU-ClubHub
 
-TU-Circle is a planned web platform for Thammasat University students to discover clubs, follow recruitment announcements, apply for membership, and track application outcomes. Club committees will manage club profiles and recruitment rounds, while central staff will view university-wide summaries.
+TU-ClubHub is a planned web platform for Thammasat University students to discover clubs, follow recruitment announcements, apply for membership, and track application outcomes. Club committees will manage club profiles and recruitment rounds, while central staff will view university-wide summaries.
 
 > **Project status:** This repository contains project documentation and design proposals, a React + TypeScript Vite frontend starter, and backend Maven Wrapper bootstrap files. The application and full-stack development setup are still being built.
 
@@ -26,8 +26,8 @@ These are target choices from the architecture documents. Dependency versions an
 | [OpenAPI specification](docs/api/openapi.yaml) | Machine-readable foundation API proposal |
 | [System architecture](docs/architecture/system-architecture.md) | System boundaries, modules, security, workflows, and deployment target |
 | [Scaffold context](docs/architecture/scaffold-context.md) | Foundation requirements, repository layout, and implementation scope |
-| [Architecture diagram](docs/architecture/TU-Circle-Architecture.drawio) | Editable system architecture diagrams |
-| [Database design](docs/database/TU-Circle-ERD-Updated.dbml) | Proposed PostgreSQL domain model; this DBML is not an executable migration |
+| [Architecture diagram](docs/architecture/TU-ClubHub-Architecture.drawio) | Editable system architecture diagrams |
+| [Database design](docs/database/TU-ClubHub-ERD-Updated.dbml) | Proposed PostgreSQL domain model; this DBML is not an executable migration |
 
 ## Foundation scope
 
