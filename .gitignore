@@ -1,0 +1,12 @@
+# Java / Maven
+**/target/
+*.class
+
+# Node / frontend build output
+**/node_modules/
+**/dist/
+
+# IDE and operating system files
+.DS_Store
+.idea/
+.vscode/
