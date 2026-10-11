@@ -1,0 +1,495 @@
+openapi: 3.1.0
+info:
+  title: TU-ClubHub API
+  version: 1.0.0
+  description: >-
+    Proposed foundation contract for the TU-ClubHub application. This specification
+    covers the current foundation scope only; product workflow endpoints are tracked
+    in docs/api/API_v1.md and must be specified before implementation.
+servers:
+  - url: /
+    description: Same-origin application server
+tags:
+  - name: Authentication
+  - name: Clubs
+  - name: Operations
+paths:
+  /api/v1/auth/csrf:
+    get:
+      tags: [Authentication]
+      operationId: getCsrfToken
+      summary: Get a CSRF token for the browser session
+      description: Returns an opaque token and the request header name. Response must not be cached.
+      responses:
+        '200':
+          description: CSRF token created or loaded for the current session
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
+            Set-Cookie:
+              description: Server-side session cookie; HttpOnly, Secure on HTTPS, SameSite=Lax, Path=/.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfTokenResponse'
+              example:
+                headerName: X-CSRF-TOKEN
+                token: opaque-token-value
+        default:
+          $ref: '#/components/responses/ServerError'
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Authenticate through the configured TU adapter
+      description: >-
+        Requires the CSRF header returned by /api/v1/auth/csrf. The public request
+        uses username and password; mapping to the actual TU API payload remains
+        dependent on the official TU API contract. On success the session ID rotates.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: student-id-or-account-name
+              password: user-entered-password
+      responses:
+        '200':
+          description: Authenticated; a new session cookie is set
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
+            Set-Cookie:
+              description: Rotated server-side session cookie. Never expose the session ID in JSON.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+              example:
+                user:
+                  id: '10001'
+                  role: USER
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Credentials could not be verified
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:authentication-failed
+                title: Authentication failed
+                status: 401
+                detail: The supplied credentials could not be verified.
+                instance: /api/v1/auth/login
+                code: AUTHENTICATION_FAILED
+                traceId: 01J9EXAMPLE7K4D5
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: TU Authentication API is unavailable or returned an unusable response
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:auth-provider-unavailable
+                title: Authentication provider unavailable
+                status: 503
+                detail: Authentication is temporarily unavailable.
+                instance: /api/v1/auth/login
+                code: AUTH_PROVIDER_UNAVAILABLE
+                traceId: 01J9EXAMPLE7K4D5
+        default:
+          $ref: '#/components/responses/ServerError'
+  /api/v1/auth/me:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentUser
+      summary: Get the authenticated user's minimal account identity
+      description: The role is for UI presentation only; the backend rechecks authorization for every request.
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Current authenticated user
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+              example:
+                user:
+                  id: '10001'
+                  role: USER
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ServerError'
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: Invalidate the current session
+      description: Requires both the authenticated session cookie and the current CSRF header.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      responses:
+        '204':
+          description: Session invalidated and session cookie cleared
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
+            Set-Cookie:
+              description: Expired session cookie.
+              schema:
+                type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ServerError'
+  /api/v1/clubs/{clubId}:
+    get:
+      tags: [Clubs]
+      operationId: getClub
+      summary: Get public club details
+      description: >-
+        Public endpoint. Only published recruitment rounds and public profile fields
+        may be returned. Exact profile fields are proposed and must be checked against
+        the approved ERD before implementation.
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          description: Decimal string identifier for a club
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+          example: '20001'
+      responses:
+        '200':
+          description: Public club detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubDetail'
+              example:
+                id: '20001'
+                name: Example Club
+                description: A student club at Thammasat University.
+                imageUrl: https://images.example.org/clubs/20001.png
+                category:
+                  id: '30001'
+                  name: Technology
+                tags:
+                  - id: '40001'
+                    name: Programming
+                recruitmentRounds:
+                  - id: '50001'
+                    name: Academic Year 2026
+                    opensAt: '2026-10-01T00:00:00Z'
+                    closesAt: '2026-10-31T16:59:59Z'
+                    closedAt: null
+        '400':
+          description: Invalid club identifier
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:invalid-resource-id
+                title: Invalid resource identifier
+                status: 400
+                detail: clubId must be a decimal string.
+                instance: /api/v1/clubs/abc
+                code: INVALID_RESOURCE_ID
+                traceId: 01J9EXAMPLE7K4D5
+        '404':
+          description: Club does not exist or is not public
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:club-not-found
+                title: Club not found
+                status: 404
+                detail: No public club was found for this identifier.
+                instance: /api/v1/clubs/20001
+                code: CLUB_NOT_FOUND
+                traceId: 01J9EXAMPLE7K4D5
+        default:
+          $ref: '#/components/responses/ServerError'
+  /actuator/health:
+    get:
+      tags: [Operations]
+      operationId: getHealth
+      summary: Get the minimum operational health status
+      description: Must not expose secrets, environment values, or internal diagnostics.
+      responses:
+        '200':
+          description: Application is healthy
+          content:
+            application/vnd.spring-boot.actuator.v3+json:
+              schema:
+                $ref: '#/components/schemas/HealthUp'
+        '503':
+          description: Application or required dependency is unhealthy
+          content:
+            application/vnd.spring-boot.actuator.v3+json:
+              schema:
+                $ref: '#/components/schemas/HealthDown'
+        default:
+          description: Unexpected health endpoint failure
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: SESSION
+      description: HttpOnly server-side session cookie. The frontend must not read or store it.
+    CsrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-TOKEN
+      description: Current opaque token returned by GET /api/v1/auth/csrf.
+  schemas:
+    CsrfTokenResponse:
+      type: object
+      required: [headerName, token]
+      properties:
+        headerName:
+          type: string
+          const: X-CSRF-TOKEN
+        token:
+          type: string
+          minLength: 1
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 255
+        password:
+          type: string
+          format: password
+          minLength: 1
+          writeOnly: true
+    CurrentUserResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/CurrentUser'
+    CurrentUser:
+      type: object
+      required: [id, role]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+          description: Decimal string representing a database bigint identifier.
+        role:
+          type: string
+          enum: [USER, ADMIN]
+    ClubDetail:
+      type: object
+      required: [id, name, description, imageUrl, category, tags, recruitmentRounds]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        name:
+          type: string
+        description:
+          type: [string, 'null']
+        imageUrl:
+          type: [string, 'null']
+          format: uri
+          description: If present, must use HTTPS. The backend does not fetch the URL.
+        category:
+          oneOf:
+            - $ref: '#/components/schemas/ClubCategory'
+            - type: 'null'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClubTag'
+        recruitmentRounds:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicRecruitmentRound'
+    ClubCategory:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        name:
+          type: string
+    ClubTag:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        name:
+          type: string
+    PublicRecruitmentRound:
+      type: object
+      required: [id, name, opensAt, closesAt, closedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        name:
+          type: string
+        opensAt:
+          type: string
+          format: date-time
+        closesAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: [string, 'null']
+          format: date-time
+    Problem:
+      type: object
+      required: [type, title, status, code, traceId]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+        fieldErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+        traceId:
+          type: string
+    FieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+    HealthUp:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: UP
+    HealthDown:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: DOWN
+  responses:
+    ValidationError:
+      description: Request body is malformed or fails validation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:validation-error
+            title: Request validation failed
+            status: 400
+            detail: One or more request fields are invalid.
+            instance: /api/v1/auth/login
+            code: VALIDATION_FAILED
+            fieldErrors:
+              - field: username
+                code: REQUIRED
+                message: Username is required.
+            traceId: 01J9EXAMPLE7K4D5
+    Unauthorized:
+      description: Authentication is required or the session is invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:authentication-required
+            title: Authentication required
+            status: 401
+            detail: Sign in to access this resource.
+            instance: /api/v1/auth/me
+            code: AUTHENTICATION_REQUIRED
+            traceId: 01J9EXAMPLE7K4D5
+    Forbidden:
+      description: Request is forbidden or the CSRF token is invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:csrf-invalid
+            title: Request rejected
+            status: 403
+            detail: The CSRF token is missing or invalid.
+            instance: /api/v1/auth/logout
+            code: CSRF_INVALID
+            traceId: 01J9EXAMPLE7K4D5
+    ServerError:
+      description: Unexpected API failure
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:internal-error
+            title: Internal server error
+            status: 500
+            detail: The request could not be completed.
+            instance: /api/v1/resource
+            code: INTERNAL_ERROR
+            traceId: 01J9EXAMPLE7K4D5
