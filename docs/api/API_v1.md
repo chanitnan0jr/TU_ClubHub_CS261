@@ -4,12 +4,12 @@
 |---|---|
 | Version | `v1` |
 | Contract status | Proposed foundation contract |
-| Last updated | 2026-10-11 |
+| Last updated | 2026-10-13 |
 | Audience | Frontend and backend developers |
 
-This document defines the shared HTTP contract for the TU-ClubHub foundation. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). It describes the intended API; it is not evidence that any endpoint has been implemented.
+This document defines the shared HTTP contract for the TU-ClubHub foundation. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
 
-The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](docs/api/openapi.yaml). Keep it in sync with this document and with the DTOs consumed by the frontend. The repository contains a proposed ERD but no backend implementation, so the public club response fields below are an initial proposal to confirm against the ERD before implementation.
+The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](docs/api/openapi.yaml). Keep it in sync with this document and with the DTOs consumed by the frontend. The backend currently includes the TU authentication adapter and `/api/v1/auth` endpoints. The 8-hour absolute session timeout and fresh CSRF token in the login response are not yet implemented. Club endpoints are also not implemented, so the public club response fields below remain an initial proposal to confirm against the ERD.
 
 ## 1. Contract scope
 

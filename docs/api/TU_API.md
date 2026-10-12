@@ -534,17 +534,17 @@ Authentication response ไม่มี Token สำหรับใช้เป�
 
 Response DTO ควรรับ unknown fields ได้ แต่ตรวจ required identity fields และ `status` ก่อนใช้ ห้ามให้ Response ที่ผิดรูปแบบหรือขาด Field สำคัญกลายเป็น Login สำเร็จ
 
-### 8.5 Error mapping ที่เสนอสำหรับ API ของเรา
+### 8.5 Error mapping ที่เสนอสำหรับ API ของ TU-ClubHub
 
-| TU / Network condition | ผลใน TU-Circle ที่เสนอ | Retry |
+| TU / Network condition | ผลใน TU-ClubHub ที่เสนอ | Retry |
 |---|---|---|
 | 200 + true + identity ถูกต้อง | ประเมิน local policy แล้วสร้าง Session | ไม่ต้อง |
 | 400 + invalid credentials ที่ระบุได้ | 401 + `AUTHENTICATION_FAILED` | ไม่ retry อัตโนมัติ |
-| 400 จาก Body ที่ Backend สร้างผิด | 502 + `TU_INVALID_REQUEST` โดยไม่เผยรายละเอียดภายใน | แก้ implementation |
-| 401/403 จาก Application-Key | 503 + `TU_AUTH_UNAVAILABLE`; log เหตุผลที่ผ่านการปิดบัง Secret | ไม่ retry key เดิมซ้ำ |
-| Timeout / TU 5xx | 503 + `TU_AUTH_UNAVAILABLE`; ไม่มี Session สำเร็จ | Login ไม่ retry อัตโนมัติเป็น default |
-| 200 แต่ผิด Schema/identity ไม่สมบูรณ์ | 502 + `TU_INVALID_RESPONSE` | ไม่ยอมรับเป็นสำเร็จ |
-| 200 + false ที่ไม่รู้จัก | ปฏิเสธ Authentication และจัดประเภท upstream rejection ก่อนเลือก code | ไม่เดาว่า password ผิดทุกกรณี |
+| 400 จาก Body ที่ Backend สร้างผิด | 500 + `INTERNAL_ERROR`; log เป็น integration defect โดยไม่เผยรายละเอียดภายใน | แก้ implementation |
+| 401/403 จาก Application-Key | 503 + `AUTH_PROVIDER_UNAVAILABLE`; log เหตุผลที่ผ่านการปิดบัง Secret | ไม่ retry key เดิมซ้ำ |
+| Timeout / TU 5xx | 503 + `AUTH_PROVIDER_UNAVAILABLE`; ไม่มี Session สำเร็จ | Login ไม่ retry อัตโนมัติเป็น default |
+| 200 แต่ผิด Schema/identity ไม่สมบูรณ์ | 503 + `AUTH_PROVIDER_UNAVAILABLE` | ไม่ยอมรับเป็นสำเร็จ |
+| 200 + false ที่ไม่รู้จัก | จัดประเภท upstream rejection ก่อนเลือก code; ถ้าจำแนกไม่ได้ให้ใช้ 503 + `AUTH_PROVIDER_UNAVAILABLE` | ไม่เดาว่า password ผิดทุกกรณี |
 | บัญชีในระบบเราถูกระงับ/Policy ไม่อนุญาต | 403 + `ACCOUNT_NOT_ALLOWED` | ไม่ retry |
 
 กรณีต้นทางไม่ส่ง machine-readable error code อาจต้องจำแนกจาก Message ที่ยืนยันแล้ว ให้จำกัด logic นี้ไว้ใน Adapter และทดสอบกรณีข้อความเปลี่ยน ไม่กระจายการเทียบ string ไปทั่ว Service/UI

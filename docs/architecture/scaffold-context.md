@@ -80,7 +80,7 @@ TU-ClubHub เป็นเว็บค้นหาชมรมและจัด
 
 ## 5. Backend module contract
 
-Base package: `com.tuclubhub`; คลาสเริ่มต้น `TuClubHubApplication` อยู่ใน Root Package
+Base package: `com.tu.clubhub`; คลาสเริ่มต้น `ClubhubApplication` อยู่ใน Root Package
 
 | Package | เจ้าของความรับผิดชอบ |
 |---|---|
@@ -96,7 +96,7 @@ Base package: `com.tuclubhub`; คลาสเริ่มต้น `TuClubHubAp
 | `config` | Security, Session, Web, Properties และ Clock |
 | `common` | Error contract, Exception Handler และ primitive utilities ที่ใช้ร่วมกันจริง |
 
-ภายใน Feature ที่มีโค้ดใช้ `controller/`, `service/`, `repository/`, `entity/`, `dto/` และ `api/` เมื่อจำเป็นต้องเผยแพร่ Service Contract ข้ามโมดูล สำหรับ TU adapter ใช้ `auth/integration/tu/`
+ภายใน Feature ที่มีโค้ดใช้ `controller/`, `service/`, `repository/`, `domain/`, `dto/` และ `api/` เมื่อจำเป็นต้องเผยแพร่ Service Contract ข้ามโมดูล สำหรับ TU adapter ใช้ `auth/integration/tu/`
 
 กติกา:
 
