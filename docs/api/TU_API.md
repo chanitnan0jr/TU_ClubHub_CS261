@@ -539,7 +539,7 @@ Response DTO ควรรับ unknown fields ได้ แต่ตรวจ r
 | TU / Network condition | ผลใน TU-Circle ที่เสนอ | Retry |
 |---|---|---|
 | 200 + true + identity ถูกต้อง | ประเมิน local policy แล้วสร้าง Session | ไม่ต้อง |
-| 400 + invalid credentials ที่ระบุได้ | 401 + `AUTH_INVALID_CREDENTIALS` | ไม่ retry อัตโนมัติ |
+| 400 + invalid credentials ที่ระบุได้ | 401 + `AUTHENTICATION_FAILED` | ไม่ retry อัตโนมัติ |
 | 400 จาก Body ที่ Backend สร้างผิด | 502 + `TU_INVALID_REQUEST` โดยไม่เผยรายละเอียดภายใน | แก้ implementation |
 | 401/403 จาก Application-Key | 503 + `TU_AUTH_UNAVAILABLE`; log เหตุผลที่ผ่านการปิดบัง Secret | ไม่ retry key เดิมซ้ำ |
 | Timeout / TU 5xx | 503 + `TU_AUTH_UNAVAILABLE`; ไม่มี Session สำเร็จ | Login ไม่ retry อัตโนมัติเป็น default |
