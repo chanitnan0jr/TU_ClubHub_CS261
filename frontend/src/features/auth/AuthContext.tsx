@@ -1,6 +1,6 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, type ReactNode } from "react";
 
-// กำหนดประเภทข้อมูลของผู้ใช้ตามที่ Proposal ระบุ
 type User = {
   id: string;
   studentId: string;
@@ -19,18 +19,27 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  // ดึงข้อมูลผู้ใช้จาก localStorage ตอนเปิดเว็บหรือรีเฟรชหน้าจอ (F5)
+  const [user, setUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem("tu_user");
+    if (savedUser) {
+      try {
+        return JSON.parse(savedUser) as User;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
   const login = (userData: User) => {
     setUser(userData);
-    // ในระบบจริง Backend จะจัดการ Session ให้ แต่เบื้องต้นเราอาจเก็บ flag ไว้ใน localStorage เพื่อเช็ก state เบื้องต้น
-    localStorage.setItem("isAuthenticated", "true"); 
+    localStorage.setItem("tu_user", JSON.stringify(userData));
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem("isAuthenticated");
-    // TODO: เรียก API Logout เพื่อทำลาย Session ที่ฝั่ง Backend ด้วย
+    localStorage.removeItem("tu_user");
   };
 
   return (
