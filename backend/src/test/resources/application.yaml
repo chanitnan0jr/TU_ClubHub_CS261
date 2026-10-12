@@ -6,3 +6,9 @@ spring:
 tu:
   auth:
     mode: mock
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false

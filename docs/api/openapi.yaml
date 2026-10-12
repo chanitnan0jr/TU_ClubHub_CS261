@@ -48,8 +48,9 @@ paths:
       summary: Authenticate through the configured TU adapter
       description: >-
         Requires the CSRF header returned by /api/v1/auth/csrf. The public request
-        uses username and password; mapping to the actual TU API payload remains
-        dependent on the official TU API contract. On success the session ID rotates.
+        uses username and password; successful TU verification creates or refreshes
+        the local user account, rotates the session ID, and saves the authenticated
+        security context in the JDBC session.
       security:
         - SessionCookie: []
           CsrfHeader: []
