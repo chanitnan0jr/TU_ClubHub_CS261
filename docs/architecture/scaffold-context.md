@@ -32,11 +32,7 @@ TU-ClubHub เป็นเว็บค้นหาชมรมและจัด
 |---|---|
 | Repository | Monorepo เดียว: `frontend/`, `backend/`, `docs/` |
 | Frontend | React + TypeScript + Vite + Tailwind CSS, CSR, Feature-based |
-<<<<<<< HEAD
-| Backend | Java 21 + Spring Boot ตาม baseline 3.x ของโครงการ, Maven Wrapper |
-=======
 | Backend | Java 21 + Spring Boot 4.x, Maven Wrapper |
->>>>>>> origin/main
 | โครง Backend | Feature-based modular monolith, หนึ่ง Spring Boot process / หนึ่ง Maven module ในช่วงเริ่มต้น |
 | Persistence | PostgreSQL, Spring Data JPA สำหรับข้อมูลธุรกิจ, Flyway |
 | Session | Spring Security + Spring Session JDBC ใน PostgreSQL |
@@ -53,11 +49,7 @@ TU-ClubHub เป็นเว็บค้นหาชมรมและจัด
 
 ตรวจ Compatibility และ Security ของเวอร์ชันจริงก่อนสร้าง เลือก release ที่เสถียรและเข้ากับ baseline แล้วตรึงเวอร์ชันใน manifests, lockfile, Maven Wrapper และ Docker base images ห้ามใส่ `latest`, SNAPSHOT หรือคาดเดาเลขเวอร์ชัน
 
-<<<<<<< HEAD
-ถ้า baseline Spring Boot 3.x มีข้อจำกัดการสนับสนุนที่กระทบโครงการ ให้รายงานพร้อมทางเลือกก่อนเปลี่ยน Major Version ไม่เปลี่ยนเป็น Spring Boot 4 โดยเงียบ ๆ
-=======
 โครงการใช้ Spring Boot 4.x เป็น baseline; เวอร์ชัน patch ที่ใช้งานจริงต้องตรึงไว้ใน `backend/pom.xml` ตรวจ Compatibility ของ Dependency และ Starter กับ Spring Boot 4 ก่อนเพิ่มทุกครั้ง หากจะเปลี่ยน Major Version ให้บันทึกเหตุผลและผลกระทบในเอกสารสถาปัตยกรรมก่อนแก้ manifests
->>>>>>> origin/main
 
 ใช้ npm พร้อม `package-lock.json`; เลือก Node.js LTS ที่เข้ากับ Vite รุ่นที่เลือกและบันทึกใน `.nvmrc` เลือก PostgreSQL major เดียวกันสำหรับ Local, CI และ Render ตามที่ใช้งานได้จริง บันทึกทั้งหมดใน `docs/architecture/versions.md`
 

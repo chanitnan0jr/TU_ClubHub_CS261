@@ -112,8 +112,4 @@ test-results/
 *.log
 docker-compose.override.yml
 compose.override.yaml
-<<<<<<< HEAD
 pgdata/
-=======
-pgdata/
->>>>>>> origin/main

@@ -372,11 +372,7 @@ SA ดูแลภาพรวม/ADR/API Contract; Lead BE ดูแล Securit
 
 - [C4 Container Diagram](https://c4model.com/diagrams/container)
 - [C4 Deployment Diagram](https://c4model.com/diagrams/deployment)
-<<<<<<< HEAD
-- [Spring Boot — Structuring Code](https://docs.spring.io/spring-boot/docs/3.2.10/reference/html/using.html)
-=======
 - [Spring Boot 4.x — Structuring Code](https://docs.spring.io/spring-boot/reference/using/structuring-your-code.html)
->>>>>>> origin/main
 - [Spring Security — CSRF](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)
 - [Spring Session — JDBC](https://docs.spring.io/spring-session/reference/configuration/jdbc.html)
 - [Vite — Environment Variables](https://vite.dev/guide/env-and-mode)

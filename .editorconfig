@@ -33,8 +33,4 @@ end_of_line = crlf
 
 # Makefiles
 [Makefile]
-<<<<<<< HEAD
 indent_style = tab
-=======
-indent_style = tab
->>>>>>> origin/main
