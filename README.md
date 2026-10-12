@@ -9,7 +9,7 @@ TU-ClubHub is a planned web platform for Thammasat University students to discov
 | Area | Target |
 |---|---|
 | Frontend | React, TypeScript, Vite, and Tailwind CSS; client-rendered, feature-based SPA |
-| Backend | Java 21 and Spring Boot 3.x; feature-based modular monolith |
+| Backend | Java 21 and Spring Boot 4.x; feature-based modular monolith |
 | Database | PostgreSQL, Spring Data JPA, and Flyway |
 | Authentication | TU Authentication API with server-side Spring Session JDBC and CSRF protection |
 | API | REST JSON under `/api/v1`; frontend and backend share the same API contract |
