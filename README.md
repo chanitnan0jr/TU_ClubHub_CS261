@@ -2,20 +2,20 @@
 
 TU-ClubHub is a planned web platform for Thammasat University students to discover clubs, follow recruitment announcements, apply for membership, and track application outcomes. Club committees will manage club profiles and recruitment rounds, while central staff will view university-wide summaries.
 
-> **Project status:** This repository contains project documentation and design proposals, a React + TypeScript Vite frontend starter, and backend Maven Wrapper bootstrap files. The application and full-stack development setup are still being built.
+> **Project status:** This repository contains project documentation and design proposals, a React + TypeScript Vite frontend starter, and a Spring Boot backend scaffold with PostgreSQL and Flyway configuration. The application and full-stack development setup are still in progress.
 
 ## Planned technology
 
 | Area | Target |
 |---|---|
 | Frontend | React, TypeScript, Vite, and Tailwind CSS; client-rendered, feature-based SPA |
-| Backend | Java 21 and Spring Boot 3.x; feature-based modular monolith |
+| Backend | Java 21 and Spring Boot 4.x; feature-based modular monolith |
 | Database | PostgreSQL, Spring Data JPA, and Flyway |
 | Authentication | TU Authentication API with server-side Spring Session JDBC and CSRF protection |
 | API | REST JSON under `/api/v1`; frontend and backend share the same API contract |
 | Delivery | Render Web Service and PostgreSQL; frontend build served by Spring Boot |
 
-These are target choices from the architecture documents. Dependency versions and executable setup instructions will be recorded when the application scaffold is added.
+These are the current target choices from the architecture documents. Details may change as implementation progresses.
 
 ## Project documentation
 
@@ -37,7 +37,17 @@ Full application submission, review and result publication, offer confirmation o
 
 ## Development setup
 
-The `frontend/` directory contains an initial Vite starter with `dev`, `build`, `lint`, and `preview` scripts. From that directory, install the dependencies with `npm install` and start the development server with `npm run dev`. These commands are based on the current package manifest and have not been verified here. The backend currently contains only Maven Wrapper bootstrap files; `backend/pom.xml` and `compose.yaml` are not present, so the full-stack application is not runnable yet.
+The `frontend/` directory contains an initial Vite starter with `dev`, `build`, `lint`, and `preview` scripts. From that directory, run `npm install` and `npm run dev` to install dependencies and start the development server.
+
+The backend scaffold is in `backend/`. To run it locally, start PostgreSQL, create a database named `tu_clubhub`, set `DB_PASSWORD` to the password for the `postgres` user, then run:
+
+```sh
+cd backend
+export DB_PASSWORD=your_password
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+The `dev` profile enables Flyway and validates the schema with Hibernate. There is no `compose.yaml` yet, so PostgreSQL must be started separately. Backend endpoints and the complete full-stack setup are still in progress.
 
 ## Contract changes
 

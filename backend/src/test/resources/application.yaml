@@ -1,0 +1,4 @@
+spring:
+  flyway:
+    # PostgreSQL-specific migrations are verified against PostgreSQL, not H2.
+    enabled: false
