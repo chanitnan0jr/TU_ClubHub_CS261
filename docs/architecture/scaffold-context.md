@@ -163,7 +163,7 @@ Route ที่ต้องรองรับใน Scaffold: `/`, `/login`, `/c
 | Method / Path | ความหมาย |
 |---|---|
 | `GET /api/v1/auth/csrf` | ส่ง CSRF token และชื่อ Header สำหรับ request ถัดไป; `Cache-Control: no-store` |
-| `POST /api/v1/auth/login` | ตรวจ TU identity, สร้าง/อัปเดตบัญชีที่อนุญาต และยืนยัน Session |
+| `POST /api/v1/auth/login` | ตรวจ TU identity, สร้าง/อัปเดตบัญชีที่อนุญาต, เปลี่ยน Session ID และคืน CSRF token ใหม่ใน Response Body เมื่อสำเร็จ |
 | `GET /api/v1/auth/me` | คืนข้อมูลผู้ใช้ปัจจุบัน; ไม่มี Session ให้ตอบ JSON 401 |
 | `POST /api/v1/auth/logout` | ตรวจ CSRF, invalidate Session และล้าง Session Cookie |
 | `GET /api/v1/clubs/{clubId}` | ข้อมูลชมรมสาธารณะตาม Response DTO |
@@ -173,13 +173,14 @@ Endpoint และ payload นี้เป็นข้อเสนอสำห�
 
 ใช้ `HttpSessionCsrfTokenRepository` เป็นค่าเริ่มต้นที่เสนอ GET token ผ่าน Controller ซึ่งใช้ Spring Security CsrfToken; ส่ง token กลับตาม `headerName` โดยไม่แยกสร้าง token เองใน JS
 
-Flow: GET csrf → POST login พร้อม token → เปลี่ยน Session ID เมื่อ Authentication สำเร็จ → บันทึก SecurityContext ใน Session ผ่านกลไกที่เข้ากับ Spring Security รุ่นที่เลือก → GET csrf ใหม่ → เรียก API ต่อ เมื่อ Logout แล้วให้ล้าง Auth State และดึง CSRF ใหม่ก่อน Login ครั้งถัดไป
+Flow: GET csrf → POST login พร้อม token → เปลี่ยน Session ID และคืน CSRF token ใหม่ใน Login Response เมื่อ Authentication สำเร็จ → บันทึก SecurityContext ใน Session ผ่านกลไกที่เข้ากับ Spring Security รุ่นที่เลือก → เรียก `/auth/me` เพื่อกู้ Auth State ได้ เมื่อ Logout หรือ Session หมดอายุ ให้ล้าง Auth State และดึง CSRF ใหม่ก่อน Login ครั้งถัดไป
 
 ถ้าทำ JSON Login Controller เอง ต้องตรวจว่ามีการใช้ SessionAuthenticationStrategy และบันทึก SecurityContext อย่างถูกต้อง การตั้ง SecurityContextHolder เพียงอย่างเดียวไม่เพียงพอสำหรับการคงสถานะข้าม Request ให้ทดสอบกับคำขอถัดไปจริง
 
 - Cookie: `HttpOnly`, `Secure=true` บน HTTPS, `SameSite=Lax` เป็นค่าเริ่มต้น, Path `/` และ host-only
 - Local HTTP อนุญาต Secure=false เฉพาะ dev/test profile
-- ค่าเริ่มต้นที่เสนอ: inactivity timeout 30 นาที ปรับจาก Environment ได้ ต้องบันทึกว่าเป็น Technical Default
+- Session หมดอายุเมื่อไม่มี activity 30 นาที หรือครบ 8 ชั่วโมงนับจาก Login สำเร็จ แล้วแต่อย่างใดถึงก่อน; Backend ต้อง enforce ทั้งสองค่า
+- Inactivity timeout ใช้ `spring.session.timeout` (Environment override: `SPRING_SESSION_TIMEOUT`, ค่าเริ่มต้น `30m`); absolute timeout `8h` ต้องตรวจจากเวลาที่ Login สำเร็จและ enforce ฝั่ง Backend แยกจาก idle timeout
 - เปิด CSRF สำหรับ state-changing endpoints รวม Login/Logout; อย่าแก้ CORS ด้วยการปิด CSRF
 - `/api/**` คืน JSON 401/403 ไม่ redirect เป็น HTML login page
 - ไม่เปิด `permitAll()` ทั้ง `/api/**`; เปิด Public Paths แบบระบุชัด
@@ -249,7 +250,8 @@ Render PostgreSQL อยู่ Region เดียวกับแอป ใช�
 | `TU_AUTH_MODE` | mock เฉพาะ dev/test; real สำหรับ delivery |
 | `TU_AUTH_BASE_URL`, `TU_AUTH_APPLICATION_KEY` | ต้องยืนยันจาก TU Contract และตั้งภายนอก Source |
 | `TU_AUTH_CONNECT_TIMEOUT`, `TU_AUTH_READ_TIMEOUT` | ระบุหน่วยและผูก Properties ให้ใช้งานจริง |
-| `SESSION_TIMEOUT` | ค่า Technical Default 30m ต้องผูกกับ Session config จริง |
+| `SPRING_SESSION_TIMEOUT` | Idle timeout ของ Spring Session; ค่าเริ่มต้น 30 นาที |
+| `SESSION_ABSOLUTE_TIMEOUT` | อายุสูงสุด 8 ชั่วโมงนับจาก Login สำเร็จ; ต้อง enforce ฝั่ง Backend ไม่ใช่แค่ cookie expiry |
 
 ชื่อตัวแปร custom เป็น Proposed Contract ให้เขียน ConfigurationProperties และเอกสารให้ตรงกัน ห้ามมี Variable ที่ประกาศแล้วไม่ได้ใช้
 
@@ -275,7 +277,8 @@ Definition of Done:
 
 - [ ] Clone ใหม่แล้วทำตาม README ได้โดยไม่มี dependency/secret ที่ซ่อนอยู่
 - [ ] Health, Club Detail จาก DB, Login, me, Logout ทำงานใน Local mock mode
-- [ ] Login เปลี่ยน Session ID; Cookie เรียก `/auth/me` ข้าม Request ได้; Logout ทำให้ Session เดิมใช้ไม่ได้
+- [ ] Login เปลี่ยน Session ID และคืน CSRF token ใหม่; Cookie เรียก `/auth/me` ข้าม Request ได้; Logout ทำให้ Session เดิมใช้ไม่ได้
+- [ ] Backend enforce idle timeout 30 นาทีและ absolute timeout 8 ชั่วโมง; Session หมดอายุแล้ว Protected API ตอบ 401 และ Frontend ล้าง Auth State
 - [ ] Unsafe request ที่ไม่มี/ผิด CSRF ถูกปฏิเสธ และ request ที่มี token ถูกต้องผ่านได้
 - [ ] Prod ไม่ Start ด้วย Mock adapter; real TU integration ที่ยังไม่ครบถูกระบุชัด
 - [ ] Flyway ใช้กับ DB ว่างได้และ Start รอบสองไม่ทำ Migration ซ้ำ

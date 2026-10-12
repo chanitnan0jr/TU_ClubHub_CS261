@@ -481,13 +481,15 @@ sequenceDiagram
   participant B as Spring Boot
   participant T as TU Authentication
   participant D as PostgreSQL
+  W->>B: GET /api/v1/auth/csrf
+  B-->>W: CSRF token + pre-auth session cookie
   W->>B: POST /api/v1/auth/login + CSRF
   B->>T: POST /api/v1/auth/Ad/verify + Application-Key
   T-->>B: Authentication response
   alt Verified identity and local access policy permits
     B->>D: Upsert account/profile without changing assigned roles
     B->>D: Persist authenticated JDBC session
-    B-->>W: User DTO + rotated HttpOnly session cookie
+    B-->>W: User DTO + rotated HttpOnly session cookie + fresh CSRF token
   else Invalid identity / denied policy / upstream failure
     B-->>W: Normalized error, no authenticated session
   end
@@ -556,6 +558,7 @@ Response DTO ควรรับ unknown fields ได้ แต่ตรวจ r
 - TU password ใช้ชั่วคราวสำหรับ verify ไม่ Persist ใน DB, Session, Log หรือ Error DTO
 - ไม่ log Request/Response ทั้งก้อนโดยอัตโนมัติ เพราะมี Credential และข้อมูลส่วนบุคคล
 - เปิด CSRF สำหรับ Session-based Login/Logout และ state-changing APIs; เปลี่ยน Session ID หลัง Login และ invalidate เมื่อ Logout
+- Session ฝั่งเราใช้ idle timeout 30 นาทีและ absolute timeout 8 ชั่วโมงนับจาก Login สำเร็จ แล้วแต่อย่างใดถึงก่อน; หลัง Login คืน CSRF token ใหม่ใน Response Body และเมื่อหมดอายุให้บังคับ Login ใหม่
 - ตั้ง Connect/Read timeout ให้มีขอบเขต; งด automatic retry ของ Login เป็นค่าเริ่มต้นเพื่อไม่เพิ่มคำขอยืนยันตัวตนซ้ำ
 - ตรวจ Session ของเราใน Request ปกติ ไม่เรียก TU verify ใหม่ทุก API และไม่เก็บ Password เพื่อ re-verify
 - Profile endpoint ภายในของเราต้องผูก Student ID กับสิทธิ์ผู้ร้องขอ ไม่เปิด Proxy ให้ผู้ใช้กรอก ID ใดก็ได้แล้วอ่านข้อมูล

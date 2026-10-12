@@ -61,13 +61,15 @@ Only return sort fields explicitly supported by the endpoint. The collection wra
 
 Authentication uses a server-side Spring Session JDBC session. The browser receives an `HttpOnly` session cookie; authentication details and TU credentials are not returned in JSON. Use `Secure` on HTTPS, `SameSite=Lax` by default, `Path=/`, and a host-only cookie. Secure cookies may be disabled only for local HTTP development and tests. The cookie name is `SESSION` for this contract.
 
+The server expires an authenticated session after 30 minutes without activity or 8 hours after successful login, whichever comes first. The idle timeout resets with session activity; the absolute timeout does not. Enforce both limits server-side. An expired session returns `401 AUTHENTICATION_REQUIRED`; the frontend clears its auth state and gets a fresh CSRF token before the user logs in again.
+
 All state-changing requests, including login and logout, require a valid CSRF token. `GET` requests do not require a CSRF header. This contract fixes the header name to `X-CSRF-TOKEN`; the token endpoint also returns the name so clients can use the server-provided value.
 
 ### Browser flow
 
 1. Call `GET /api/v1/auth/csrf`; retain the returned CSRF token in memory and allow the browser to retain the session cookie.
 2. Call `POST /api/v1/auth/login` with credentials and the returned CSRF header.
-3. After successful login, the backend rotates the session ID. Call the CSRF endpoint again and replace the in-memory token before making another state-changing request.
+3. After successful login, the backend rotates the session ID and returns a fresh CSRF token in the login response body. Replace the in-memory token before making another state-changing request; no extra CSRF request is needed after login.
 4. Call `GET /api/v1/auth/me` to initialize or restore the frontend auth state.
 5. Before logout, send the current CSRF token to `POST /api/v1/auth/logout`. Clear frontend auth state and fetch a fresh CSRF token before a later login.
 
@@ -101,13 +103,17 @@ Verifies the credentials through the configured TU adapter, creates or updates t
 }
 ```
 
-**`200 OK`** — sets the session cookie, returns `Cache-Control: no-store`, and contains no credential or session identifier.
+**`200 OK`** — sets the rotated session cookie, returns `Cache-Control: no-store`, and includes a fresh CSRF token for the authenticated session. It contains no credential or session identifier.
 
 ```json
 {
   "user": {
     "id": "10001",
     "role": "USER"
+  },
+  "csrf": {
+    "headerName": "X-CSRF-TOKEN",
+    "token": "opaque-token-value"
   }
 }
 ```
@@ -116,7 +122,7 @@ The `username` field is the TU account identifier entered by the user. Backend c
 
 ### `GET /api/v1/auth/me`
 
-Returns the authenticated user's minimal account identity. It returns `401` when no authenticated session exists. The response is a UI hint only; the backend still performs authorization for each operation. Committee privileges are assignments scoped to a club and term, not a global user role.
+Returns the authenticated user's minimal account identity. It returns `401 AUTHENTICATION_REQUIRED` when no authenticated session exists or its idle/absolute lifetime has expired. The response is a UI hint only; the backend still performs authorization for each operation. Committee privileges are assignments scoped to a club and term, not a global user role.
 
 **`200 OK`** with `Cache-Control: no-store`.
 

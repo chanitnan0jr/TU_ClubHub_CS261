@@ -49,7 +49,12 @@ paths:
       description: >-
         Requires the CSRF header returned by /api/v1/auth/csrf. The public request
         uses username and password; mapping to the actual TU API payload remains
-        dependent on the official TU API contract. On success the session ID rotates.
+        dependent on the official TU API contract. On successful TU verification, the
+        backend creates or refreshes the local user account, rotates the session ID,
+        and saves the authenticated security context in the JDBC session. The session
+        expires after
+        30 minutes of inactivity or 8 hours after successful login, whichever comes
+        first. A fresh CSRF token for the new session is returned in the response body.
       security:
         - SessionCookie: []
           CsrfHeader: []
@@ -64,7 +69,7 @@ paths:
               password: user-entered-password
       responses:
         '200':
-          description: Authenticated; a new session cookie is set
+          description: Authenticated; a rotated session cookie is set and a fresh CSRF token is returned
           headers:
             Cache-Control:
               schema:
@@ -77,11 +82,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CurrentUserResponse'
+                $ref: '#/components/schemas/LoginResponse'
               example:
                 user:
                   id: '10001'
                   role: USER
+                csrf:
+                  headerName: X-CSRF-TOKEN
+                  token: opaque-token-value
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -121,7 +129,9 @@ paths:
       tags: [Authentication]
       operationId: getCurrentUser
       summary: Get the authenticated user's minimal account identity
-      description: The role is for UI presentation only; the backend rechecks authorization for every request.
+      description: >-
+        The role is for UI presentation only; the backend rechecks authorization for
+        every request. Expired sessions return 401 AUTHENTICATION_REQUIRED.
       security:
         - SessionCookie: []
       responses:
@@ -275,7 +285,7 @@ components:
       type: apiKey
       in: header
       name: X-CSRF-TOKEN
-      description: Current opaque token returned by GET /api/v1/auth/csrf.
+      description: Current opaque token returned by GET /api/v1/auth/csrf or a successful POST /api/v1/auth/login.
   schemas:
     CsrfTokenResponse:
       type: object
@@ -287,6 +297,14 @@ components:
         token:
           type: string
           minLength: 1
+    LoginResponse:
+      type: object
+      required: [user, csrf]
+      properties:
+        user:
+          $ref: '#/components/schemas/CurrentUser'
+        csrf:
+          $ref: '#/components/schemas/CsrfTokenResponse'
     LoginRequest:
       type: object
       additionalProperties: false
@@ -452,7 +470,7 @@ components:
                 message: Username is required.
             traceId: 01J9EXAMPLE7K4D5
     Unauthorized:
-      description: Authentication is required or the session is invalid
+      description: Authentication is missing, invalid, or expired
       content:
         application/problem+json:
           schema:
