@@ -25,13 +25,14 @@ TU-ClubHub สนับสนุนการค้นหาชมรม กา�
 - Backend เป็น Modular Monolith ใน Spring Boot process เดียวและใช้ PostgreSQL ร่วมกัน
 - REST JSON ภายใต้ `/api/v1`; Frontend กับ API ใช้ Origin เดียวเมื่อส่งมอบ
 - Login ผ่าน TU API, เก็บสถานะด้วย Spring Session JDBC และ Cookie
+- Session หมดอายุเมื่อไม่มี activity 30 นาที หรือครบ 8 ชั่วโมงหลัง Login สำเร็จ แล้วแต่อย่างใดถึงก่อน
 - ใช้ Flyway จัดการ Schema และใช้ PostgreSQL สำหรับข้อมูลธุรกิจและ Session
 - ส่งมอบบน Render Web Service และ Render PostgreSQL; Build React รวมกับ Spring Boot
 - เก็บ URL เอกสารและรูปภาพ ไม่อัปโหลดไฟล์หรือดึงไฟล์อัตโนมัติจาก Backend
 
 ### 2.2 Technical Defaults ที่เสนอในเอกสารชุดนี้
 
-ค่าเหล่านี้เป็นทางเลือกสำหรับ Scaffold ยังไม่ใช่กฎธุรกิจที่ผู้ใช้ยืนยัน: Fetch wrapper, React Context สำหรับ Auth, Session timeout 30 นาที, SameSite=Lax, CSRF bootstrap endpoint, JSON ID เป็น string, source-based Docker build บน Render และ Manual Deploy หลัง CI
+ค่าเหล่านี้เป็นทางเลือกสำหรับ Scaffold ยังไม่ใช่กฎธุรกิจที่ผู้ใช้ยืนยัน: Fetch wrapper, React Context สำหรับ Auth, SameSite=Lax, CSRF bootstrap endpoint, JSON ID เป็น string, source-based Docker build บน Render และ Manual Deploy หลัง CI
 
 หาก Repository หรือ Contract ที่มีอยู่เลือกแนวทางอื่นแล้ว ให้เปรียบเทียบและบันทึก ADR ก่อนเปลี่ยน ไม่สร้าง Convention สองชุดควบคู่กัน
 
@@ -171,16 +172,29 @@ sequenceDiagram
   alt Success and eligible account
     B->>D: Create/update local account
     B->>D: Persist authenticated JDBC session
-    B-->>W: Current user + rotated session cookie
-    W->>B: Refresh CSRF token
+    B-->>W: User + rotated session cookie + fresh CSRF token
   else Failure / timeout / suspended account
     B-->>W: JSON error, no authenticated session
   end
+  alt User logs out before expiry
+    W->>B: POST /api/v1/auth/logout + current CSRF token
+    B->>D: Invalidate session
+    B-->>W: 204 + cleared session cookie
+  else Idle or absolute timeout is reached
+    W->>B: GET /api/v1/auth/me or protected API
+    B->>D: Validate session and expiry; invalidate expired session
+    B-->>W: 401 AUTHENTICATION_REQUIRED
+    W->>W: Clear frontend auth state
+    W->>B: GET /api/v1/auth/csrf before next login
+  end
+  Note over B,D: Expire after 30m idle or 8h from successful login, whichever comes first
 ```
 
-Session Cookie มีเพียงตัวระบุ Session; รายละเอียด Authentication อยู่ฝั่ง Server ใช้ Spring Security ตามเวอร์ชันที่เลือกเพื่อเปลี่ยน Session ID, บันทึก SecurityContext และ invalidate เมื่อ Logout ไม่เก็บ TU password หลังการตรวจ และไม่เก็บไว้ใน Session/Logs
+Session Cookie มีเพียงตัวระบุ Session; รายละเอียด Authentication อยู่ฝั่ง Server เปลี่ยน Session ID เมื่อ Login สำเร็จและเมื่อมีการเปลี่ยนระดับสิทธิ์ บันทึก SecurityContext ใน JDBC session และ invalidate เมื่อ Logout หมดอายุ หรือยกเลิกสิทธิ์ ไม่เก็บ TU password หลังการตรวจ และไม่เก็บไว้ใน Session/Logs
 
-CSRF ใช้ Spring Security Token โดยเสนอให้ส่งผ่าน bootstrap endpoint และ Header ใน unsafe requests ต้อง Refresh หลัง Login/Logout การตั้งค่า SPA ต้องเข้ากับ deferred token / token handler ของ Spring Security รุ่นที่ใช้ ไม่ใช้การปิด CSRF เป็นวิธีแก้ปัญหา [Spring Security CSRF](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)
+Session ใช้ idle timeout 30 นาทีและ absolute timeout 8 ชั่วโมงนับจาก Login สำเร็จ แล้วแต่อย่างใดถึงก่อน; activity ไม่เลื่อน absolute deadline เมื่อหมดอายุ Backend ปฏิเสธ Request ที่ต้องยืนยันตัวตนด้วย `401 AUTHENTICATION_REQUIRED` และ Frontend ล้าง Auth State ก่อนเริ่ม Login ใหม่
+
+CSRF ใช้ Spring Security Token โดยรับ token เริ่มต้นจาก bootstrap endpoint และส่งผ่าน Header ใน unsafe requests หลัง Login ที่หมุน Session ID แล้ว Backend คืน CSRF token ใหม่ใน Login response body เพื่อให้ Frontend ใช้ต่อได้ทันที หลัง Logout หรือ Session หมดอายุ ให้ขอ token ใหม่ก่อน Login ครั้งถัดไป การตั้งค่า SPA ต้องเข้ากับ deferred token / token handler ของ Spring Security รุ่นที่ใช้ ไม่ใช้การปิด CSRF เป็นวิธีแก้ปัญหา [Spring Security CSRF](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)
 
 ### 7.2 Authorization Rules
 
