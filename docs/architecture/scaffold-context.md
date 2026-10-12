@@ -247,7 +247,7 @@ Render PostgreSQL อยู่ Region เดียวกับแอป ใช�
 | `SPRING_DATASOURCE_URL` | JDBC URL |
 | `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Credentials ฝั่ง Server |
 | `TU_AUTH_MODE` | mock เฉพาะ dev/test; real สำหรับ delivery |
-| `TU_AUTH_BASE_URL`, `TU_AUTH_APPLICATION_KEY` | ต้องยืนยันจาก TU Contract และตั้งภายนอก Source |
+| `TU_AUTH_ENDPOINT_URL`, `TU_AUTH_APPLICATION_KEY` | URL เต็มของ Authentication endpoint ที่ได้จาก TU Contract และ Application-Key; ตั้งค่าจากภายนอก Source |
 | `TU_AUTH_CONNECT_TIMEOUT`, `TU_AUTH_READ_TIMEOUT` | ระบุหน่วยและผูก Properties ให้ใช้งานจริง |
 | `SESSION_TIMEOUT` | ค่า Technical Default 30m ต้องผูกกับ Session config จริง |
 

@@ -1,3 +1,11 @@
 spring:
   application:
     name: clubhub
+
+tu:
+  auth:
+    mode: ${TU_AUTH_MODE:real}
+    endpoint-url: ${TU_AUTH_ENDPOINT_URL:}
+    application-key: ${TU_AUTH_APPLICATION_KEY:}
+    connect-timeout: ${TU_AUTH_CONNECT_TIMEOUT:3s}
+    read-timeout: ${TU_AUTH_READ_TIMEOUT:5s}
