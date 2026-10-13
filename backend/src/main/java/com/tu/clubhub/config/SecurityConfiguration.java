@@ -10,12 +10,16 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.CompositeSessionAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.csrf.CsrfAuthenticationStrategy;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -39,6 +43,11 @@ public class SecurityConfiguration {
 	}
 
 	@Bean
+	CsrfTokenRequestHandler csrfTokenRequestHandler() {
+		return new XorCsrfTokenRequestAttributeHandler();
+	}
+
+	@Bean
 	SessionAuthenticationStrategy sessionAuthenticationStrategy(CsrfTokenRepository csrfTokenRepository) {
 		return new CompositeSessionAuthenticationStrategy(List.of(
 				new ChangeSessionIdAuthenticationStrategy(),
@@ -50,13 +59,17 @@ public class SecurityConfiguration {
 			HttpSecurity http,
 			SecurityContextRepository securityContextRepository,
 			CsrfTokenRepository csrfTokenRepository,
+			CsrfTokenRequestHandler csrfTokenRequestHandler,
 			ObjectMapper objectMapper) throws Exception {
 		http
 				.securityContext(context -> context
 						.securityContextRepository(securityContextRepository)
 						.requireExplicitSave(true))
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
-				.csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository))
+				.csrf(csrf -> csrf
+						.csrfTokenRepository(csrfTokenRepository)
+						.csrfTokenRequestHandler(csrfTokenRequestHandler))
+				.addFilterAfter(new AbsoluteSessionTimeoutFilter(objectMapper), SecurityContextHolderFilter.class)
 				.authorizeHttpRequests(authorize -> authorize
 						.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/clubs/**").permitAll()
@@ -69,9 +82,13 @@ public class SecurityConfiguration {
 						.authenticationEntryPoint((request, response, exception) -> writeProblem(
 								objectMapper, response, request.getRequestURI(), 401,
 								"Authentication required", "Sign in to access this resource.", "AUTHENTICATION_REQUIRED"))
-						.accessDeniedHandler((request, response, exception) -> writeProblem(
-								objectMapper, response, request.getRequestURI(), 403,
-								"Request rejected", "The CSRF token is missing or invalid.", "CSRF_INVALID")));
+						.accessDeniedHandler((request, response, exception) -> {
+							boolean csrfFailure = exception instanceof CsrfException;
+							writeProblem(objectMapper, response, request.getRequestURI(), 403,
+								csrfFailure ? "Request rejected" : "Access denied",
+								csrfFailure ? "The CSRF token is missing or invalid." : "You are not allowed to access this resource.",
+								csrfFailure ? "CSRF_INVALID" : "ACCESS_DENIED");
+						}));
 		return http.build();
 	}
 

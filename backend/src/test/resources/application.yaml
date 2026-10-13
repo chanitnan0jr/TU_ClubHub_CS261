@@ -2,6 +2,10 @@ spring:
   flyway:
     # PostgreSQL-specific migrations are verified against PostgreSQL, not H2.
     enabled: false
+  session:
+    jdbc:
+      # Test-only schema bootstrap; production/dev session tables are owned by Flyway.
+      initialize-schema: always
 
 tu:
   auth:

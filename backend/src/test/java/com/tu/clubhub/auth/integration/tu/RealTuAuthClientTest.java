@@ -18,6 +18,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest;
 
 class RealTuAuthClientTest {
@@ -46,11 +47,48 @@ class RealTuAuthClientTest {
 		var result = client.authenticate("student-123", "example-password");
 
 		assertTrue(result.isPresent());
-		assertEquals("Student Example", result.orElseThrow().displayName());
+		assertEquals("ชื่อ นามสกุล", result.orElseThrow().displayName(), "Thai name takes precedence over English");
 		assertEquals("student@dome.tu.ac.th", result.orElseThrow().email());
 		assertEquals("student", result.orElseThrow().accountType());
 		assertEquals("Science", result.orElseThrow().faculty());
 		server.verify();
+	}
+
+	@Test
+	void returnsEmptyForDocumentedBadRequestInvalidCredentials() {
+		RestClient.Builder builder = RestClient.builder();
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		server.expect(requestTo(ENDPOINT))
+				.andRespond(withBadRequest().body("""
+						{"status":false,"message":"User or Password Invalid!"}
+						""").contentType(MediaType.APPLICATION_JSON));
+
+		RealTuAuthClient client = new RealTuAuthClient(builder.build(), ENDPOINT, APPLICATION_KEY);
+
+		assertTrue(client.authenticate("student-123", "wrong-password").isEmpty());
+		server.verify();
+	}
+
+	@Test
+	void distinguishesMalformedBadRequestFromInvalidCredentials() {
+		RestClient.Builder builder = RestClient.builder();
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		server.expect(requestTo(ENDPOINT))
+				.andRespond(withBadRequest().body("""
+						{"status":false,"message":"Could not read the request body!"}
+						""").contentType(MediaType.APPLICATION_JSON));
+
+		RealTuAuthClient client = new RealTuAuthClient(builder.build(), ENDPOINT, APPLICATION_KEY);
+
+		assertThrows(TuAuthRequestRejectedException.class,
+				() -> client.authenticate("student-123", "example-password"));
+		server.verify();
+	}
+
+	@Test
+	void fallsBackToEnglishThenUsernameWhenThaiNameIsMissing() {
+		assertDisplayName("\"displayname_en\":\"English name\"", "English name");
+		assertDisplayName("", "student-123");
 	}
 
 	@Test
@@ -81,6 +119,18 @@ class RealTuAuthClientTest {
 				() -> client.authenticate("student-123", "example-password"));
 
 		assertFalse(exception.getMessage().contains("sensitive details"));
+		server.verify();
+	}
+
+	private void assertDisplayName(String names, String expected) {
+		RestClient.Builder builder = RestClient.builder();
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		server.expect(requestTo(ENDPOINT))
+				.andRespond(withSuccess("{\"status\":true,\"message\":\"Success\",\"type\":\"student\""
+						+ (names.isBlank() ? "" : "," + names) + "}", MediaType.APPLICATION_JSON));
+
+		RealTuAuthClient client = new RealTuAuthClient(builder.build(), ENDPOINT, APPLICATION_KEY);
+		assertEquals(expected, client.authenticate("student-123", "example-password").orElseThrow().displayName());
 		server.verify();
 	}
 }
