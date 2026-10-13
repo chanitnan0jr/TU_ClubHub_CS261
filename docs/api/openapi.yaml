@@ -48,13 +48,13 @@ paths:
       summary: Authenticate through the configured TU adapter
       description: >-
         Requires the CSRF header returned by /api/v1/auth/csrf. The public request
-        uses username and password; mapping to the actual TU API payload remains
-        dependent on the official TU API contract. On successful TU verification, the
-        backend creates or refreshes the local user account, rotates the session ID,
-        and saves the authenticated security context in the JDBC session. The session
-        expires after
-        30 minutes of inactivity or 8 hours after successful login, whichever comes
-        first. A fresh CSRF token for the new session is returned in the response body.
+        uses username and password. The adapter maps these to the TU Authentication
+        API's documented UserName and PassWord fields. Successful TU verification
+        creates or refreshes the local user account, rotates the session ID, and saves
+        the authenticated security context in the JDBC session. The session expires
+        after 30 minutes of inactivity or 8 hours after successful login, whichever
+        comes first. A fresh CSRF token for the new session is returned in the response
+        body.
       security:
         - SessionCookie: []
           CsrfHeader: []
