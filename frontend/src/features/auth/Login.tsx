@@ -8,7 +8,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -19,17 +19,17 @@ export default function Login() {
 
     setIsLoading(true);
 
-    // จำลองการส่ง Payload ไปยัง Backend API: POST /api/v1/auth/login
-    setTimeout(() => {
-      login({
-        id: "1",
-        studentId: username,
-        name: "เขมมิกา คงคุณ",
-        email: `${username}@dome.tu.ac.th`,
-        role: "STUDENT",
-      });
+    try {
+      await login(username, password);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      }
+    } finally {
       setIsLoading(false);
-    }, 800);
+    }
   };
 
   return (
@@ -50,11 +50,14 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
               รหัสนักศึกษา / TU Great ID
             </label>
             <input
+              id="username"
+              name="username"
               type="text"
+              autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="เช่น 6809617001"
@@ -63,11 +66,14 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               รหัสผ่าน
             </label>
             <input
+              id="password"
+              name="password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="รหัสผ่านเดียวกับ TU Great App"
