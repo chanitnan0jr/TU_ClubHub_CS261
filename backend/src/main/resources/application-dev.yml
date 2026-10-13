@@ -13,3 +13,13 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false
+
+tu:
+  auth:
+    mode: ${TU_AUTH_MODE:mock}

@@ -248,7 +248,7 @@ Render PostgreSQL อยู่ Region เดียวกับแอป ใช�
 | `SPRING_DATASOURCE_URL` | JDBC URL |
 | `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Credentials ฝั่ง Server |
 | `TU_AUTH_MODE` | mock เฉพาะ dev/test; real สำหรับ delivery |
-| `TU_AUTH_BASE_URL`, `TU_AUTH_APPLICATION_KEY` | ต้องยืนยันจาก TU Contract และตั้งภายนอก Source |
+| `TU_AUTH_ENDPOINT_URL`, `TU_AUTH_APPLICATION_KEY` | URL เต็มของ Authentication endpoint ที่ได้จาก TU Contract และ Application-Key; ตั้งค่าจากภายนอก Source |
 | `TU_AUTH_CONNECT_TIMEOUT`, `TU_AUTH_READ_TIMEOUT` | ระบุหน่วยและผูก Properties ให้ใช้งานจริง |
 | `SPRING_SESSION_TIMEOUT` | Idle timeout ของ Spring Session; ค่าเริ่มต้น 30 นาที |
 | `SESSION_ABSOLUTE_TIMEOUT` | อายุสูงสุด 8 ชั่วโมงนับจาก Login สำเร็จ; ต้อง enforce ฝั่ง Backend ไม่ใช่แค่ cookie expiry |

@@ -92,7 +92,10 @@ The token is opaque. Clients must not parse it or derive a token from the sessio
 
 ### `POST /api/v1/auth/login`
 
-Verifies the credentials through the configured TU adapter, creates or updates the local account after successful verification, rotates the session ID, and establishes the authenticated session. The public TU adapter request format is intentionally not specified here; its URL, headers, payload, and response mapping require the official TU API contract.
+Verifies credentials through the configured TU adapter, creates or updates the local account after successful verification, rotates the session ID, and establishes the authenticated session. The adapter maps this endpoint's `username` and `password` to the TU Authentication API's documented `UserName` and `PassWord` JSON fields, sends the `Application-Key` header, and reads the documented identity response. See the [TU Authentication API documentation](https://restapi.tu.ac.th/home/documents/Authen.html). The full channel-specific endpoint URL and Application-Key are supplied through environment configuration and are never committed.
+
+Local and CI runs use the fixed-account mock adapter. They do not call the TU service. Real mode requires `TU_AUTH_ENDPOINT_URL` and `TU_AUTH_APPLICATION_KEY`; if they are missing, application startup fails instead of falling back to mock authentication.
+With the `dev` or `test` profile, the fixed demo credentials are `student-demo` / `tu-clubhub-demo`.
 
 **Request** (`application/json`; CSRF header required)
 
@@ -118,7 +121,9 @@ Verifies the credentials through the configured TU adapter, creates or updates t
 }
 ```
 
-The `username` field is the TU account identifier entered by the user. Backend code maps it to the official TU API request only after that external contract is available. The password must not be logged, stored, returned, or copied into the session.
+The `username` field is the TU account identifier entered by the user. The backend adapter maps it to the official TU API request format. The password must not be logged, stored, returned, or copied into the session.
+
+After TU verification succeeds, the backend creates a local `users` row on first login, keyed by the unique TU username. Later successful logins refresh the display name, email, and `last_login_at`; they preserve the local `system_role` and `account_status`. New accounts start as `USER` and `ACTIVE`. A suspended account is rejected after identity verification. Login never creates a `student_profiles` row because TU authentication currently does not provide an agreed, normalized student eligibility status.
 
 ### `GET /api/v1/auth/me`
 
@@ -278,7 +283,7 @@ Update this Markdown contract, the OpenAPI document, backend DTOs, and frontend 
 
 ## 10. Open integration and product decisions
 
-1. Obtain the official TU Authentication API contract and approved request/response/error examples before implementing the production adapter.
+1. Provision the TU API channel, obtain its endpoint URL and Application-Key, and verify access/quota with the project owner before enabling real authentication. The public request/response mapping follows the official TU API documentation; local and CI runs remain on the mock adapter.
 2. Approve the proposed ERD and confirm club and recruitment DTO fields against it.
 3. Agree how TU student status maps to local student eligibility.
 4. Agree application quota, result publication, offer deadlines, and membership transitions.

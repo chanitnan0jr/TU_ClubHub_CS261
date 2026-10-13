@@ -2,3 +2,13 @@ spring:
   flyway:
     # PostgreSQL-specific migrations are verified against PostgreSQL, not H2.
     enabled: false
+
+tu:
+  auth:
+    mode: mock
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false
