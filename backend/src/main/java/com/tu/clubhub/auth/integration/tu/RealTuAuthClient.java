@@ -5,13 +5,16 @@ import java.util.Optional;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.http.MediaType;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Real HTTP adapter for the documented TU Authentication request/response format. */
 public final class RealTuAuthClient implements TuAuthClient {
 
 	private static final String APPLICATION_KEY_HEADER = "Application-Key";
+	private static final JsonMapper ERROR_JSON_MAPPER = JsonMapper.builder().build();
 
 	private final RestClient restClient;
 	private final URI endpoint;
@@ -38,6 +41,11 @@ public final class RealTuAuthClient implements TuAuthClient {
 					.body(new TuAuthRequest(username, password))
 					.retrieve()
 					.body(TuAuthResponse.class);
+		} catch (HttpClientErrorException.BadRequest exception) {
+			if (isInvalidCredentials(exception.getResponseBodyAsString())) {
+				return Optional.empty();
+			}
+			throw new TuAuthRequestRejectedException();
 		} catch (RestClientException exception) {
 			// Avoid propagating upstream response bodies or credentials through exception messages.
 			throw new TuAuthProviderUnavailableException("TU Authentication API request failed");
@@ -50,8 +58,8 @@ public final class RealTuAuthClient implements TuAuthClient {
 			return Optional.empty();
 		}
 
-		String displayName = firstNonBlank(response.displayNameEnglish(), response.displayNameThai());
-		if (displayName == null || response.type() == null || response.type().isBlank()) {
+		String displayName = firstNonBlank(response.displayNameThai(), response.displayNameEnglish(), username);
+		if (response.type() == null || response.type().isBlank()) {
 			throw new TuAuthProviderUnavailableException("TU Authentication API returned an incomplete identity");
 		}
 
@@ -64,11 +72,22 @@ public final class RealTuAuthClient implements TuAuthClient {
 				response.faculty()));
 	}
 
-	private static String firstNonBlank(String first, String second) {
-		if (first != null && !first.isBlank()) {
-			return first;
+	private static boolean isInvalidCredentials(String body) {
+		try {
+			TuAuthErrorResponse error = ERROR_JSON_MAPPER.readValue(body, TuAuthErrorResponse.class);
+			return Boolean.FALSE.equals(error.status()) && "User or Password Invalid!".equals(error.message());
+		} catch (Exception ignored) {
+			return false;
 		}
-		return second == null || second.isBlank() ? null : second;
+	}
+
+	private static String firstNonBlank(String... values) {
+		for (String value : values) {
+			if (value != null && !value.isBlank()) {
+				return value;
+			}
+		}
+		return values[values.length - 1];
 	}
 
 	private record TuAuthRequest(
@@ -86,5 +105,8 @@ public final class RealTuAuthClient implements TuAuthClient {
 			String department,
 			String faculty,
 			String organization) {
+	}
+
+	private record TuAuthErrorResponse(Boolean status, String message) {
 	}
 }

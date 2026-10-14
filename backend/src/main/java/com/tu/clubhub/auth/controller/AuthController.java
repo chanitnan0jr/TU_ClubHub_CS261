@@ -4,14 +4,17 @@ import java.util.List;
 
 import com.tu.clubhub.auth.dto.CsrfTokenResponse;
 import com.tu.clubhub.auth.dto.CurrentUserResponse;
+import com.tu.clubhub.auth.dto.LoginResponse;
 import com.tu.clubhub.auth.dto.LoginRequest;
 import com.tu.clubhub.auth.dto.ProblemResponse;
 import com.tu.clubhub.auth.integration.tu.TuAuthProviderUnavailableException;
+import com.tu.clubhub.auth.integration.tu.TuAuthRequestRejectedException;
 import com.tu.clubhub.auth.service.AccountNotAllowedException;
 import com.tu.clubhub.auth.service.AuthenticationFailedException;
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import com.tu.clubhub.auth.service.InvalidLoginRequestException;
 import com.tu.clubhub.auth.service.LoginService;
+import com.tu.clubhub.config.AbsoluteSessionTimeoutFilter;
 import com.tu.clubhub.user.domain.UserAccount;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -27,6 +30,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -43,14 +48,20 @@ public class AuthController {
 	private final LoginService loginService;
 	private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
 	private final SecurityContextRepository securityContextRepository;
+	private final CsrfTokenRepository csrfTokenRepository;
+	private final CsrfTokenRequestHandler csrfTokenRequestHandler;
 
 	public AuthController(
 			LoginService loginService,
 			SessionAuthenticationStrategy sessionAuthenticationStrategy,
-			SecurityContextRepository securityContextRepository) {
+			SecurityContextRepository securityContextRepository,
+			CsrfTokenRepository csrfTokenRepository,
+			CsrfTokenRequestHandler csrfTokenRequestHandler) {
 		this.loginService = loginService;
 		this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
 		this.securityContextRepository = securityContextRepository;
+		this.csrfTokenRepository = csrfTokenRepository;
+		this.csrfTokenRequestHandler = csrfTokenRequestHandler;
 	}
 
 	@GetMapping("/csrf")
@@ -62,7 +73,7 @@ public class AuthController {
 	}
 
 	@PostMapping("/login")
-	public ResponseEntity<CurrentUserResponse> login(
+	public ResponseEntity<LoginResponse> login(
 			@RequestBody(required = false) LoginRequest request,
 			HttpServletRequest servletRequest,
 			HttpServletResponse servletResponse) {
@@ -80,6 +91,12 @@ public class AuthController {
 
 		// Rotate the pre-authentication session ID and invalidate its old CSRF token.
 		sessionAuthenticationStrategy.onAuthentication(authentication, servletRequest, servletResponse);
+		CsrfToken freshCsrfToken = csrfTokenRepository.generateToken(servletRequest);
+		csrfTokenRepository.saveToken(freshCsrfToken, servletRequest, servletResponse);
+		csrfTokenRequestHandler.handle(servletRequest, servletResponse, () -> freshCsrfToken);
+		CsrfToken responseCsrfToken = (CsrfToken) servletRequest.getAttribute("_csrf");
+		servletRequest.getSession(true).setAttribute(
+				AbsoluteSessionTimeoutFilter.LOGIN_AT_ATTRIBUTE, System.currentTimeMillis());
 		SecurityContext context = SecurityContextHolder.createEmptyContext();
 		context.setAuthentication(authentication);
 		SecurityContextHolder.setContext(context);
@@ -87,7 +104,8 @@ public class AuthController {
 
 		return ResponseEntity.ok()
 				.cacheControl(CacheControl.noStore())
-				.body(toResponse(account));
+				.body(new LoginResponse(toSummary(account),
+						new CsrfTokenResponse(responseCsrfToken.getHeaderName(), responseCsrfToken.getToken())));
 	}
 
 	@GetMapping("/me")
@@ -110,9 +128,8 @@ public class AuthController {
 		return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
 	}
 
-	private static CurrentUserResponse toResponse(UserAccount account) {
-		return new CurrentUserResponse(new CurrentUserResponse.UserSummary(
-				account.getId().toString(), account.getSystemRole()));
+	private static CurrentUserResponse.UserSummary toSummary(UserAccount account) {
+		return new CurrentUserResponse.UserSummary(account.getId().toString(), account.getSystemRole());
 	}
 }
 
@@ -135,6 +152,12 @@ class AuthExceptionHandler {
 	ResponseEntity<ProblemResponse> providerUnavailable(HttpServletRequest request) {
 		return problem(request, 503, "Authentication provider unavailable",
 				"Authentication is temporarily unavailable.", "AUTH_PROVIDER_UNAVAILABLE", List.of());
+	}
+
+	@ExceptionHandler(TuAuthRequestRejectedException.class)
+	ResponseEntity<ProblemResponse> malformedUpstreamRequest(HttpServletRequest request) {
+		return problem(request, 500, "Internal server error",
+				"The request could not be completed.", "INTERNAL_ERROR", List.of());
 	}
 
 	@ExceptionHandler(InvalidLoginRequestException.class)
