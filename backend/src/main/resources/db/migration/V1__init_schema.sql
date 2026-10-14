@@ -1,7 +1,7 @@
 -- TU ClubHub: initial PostgreSQL domain schema (17 tables).
 -- Source: TU-ClubHub-ERD-Updated.dbml provided by the team.
 -- Run ONLY on an empty target schema; Flyway applies this migration once.
--- Spring Session JDBC tables are technical infrastructure created by V3.
+-- Spring Session JDBC tables are outside this domain ERD and need a separate plan.
 
 -- 01 Identity ---------------------------------------------------------------
 CREATE TABLE users (
