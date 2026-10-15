@@ -188,8 +188,9 @@ paths:
       summary: Get public club details
       description: >-
         Public endpoint. Only published recruitment rounds and public profile fields
-        may be returned. Exact profile fields are proposed and must be checked against
-        the approved ERD before implementation.
+        may be returned. Inactive clubs, draft rounds, applicant data, committee-only
+        information, and internal notes are not returned. IDs are decimal strings on
+        the wire even when stored as database bigint values.
       parameters:
         - name: clubId
           in: path
@@ -208,9 +209,19 @@ paths:
                 $ref: '#/components/schemas/ClubDetail'
               example:
                 id: '20001'
+                categoryId: '30001'
                 name: Example Club
                 description: A student club at Thammasat University.
+                objectives: Help students learn and collaborate.
+                contactUrl: https://example.org/contact
+                facebookUrl: null
+                instagramUrl: null
+                contactEmail: club@example.org
+                affiliationLevel: University
+                affiliationName: Thammasat University
                 imageUrl: https://images.example.org/clubs/20001.png
+                bannerUrl: null
+                status: ACTIVE
                 category:
                   id: '30001'
                   name: Technology
@@ -251,6 +262,158 @@ paths:
                 instance: /api/v1/clubs/20001
                 code: CLUB_NOT_FOUND
                 traceId: 01J9EXAMPLE7K4D5
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags: [Clubs]
+      operationId: updateClub
+      summary: Update a club profile
+      description: >-
+        Replaces the editable club profile fields. Requires an authenticated session,
+        the current CSRF header, and an effective COMMITTEE or PRESIDENT assignment
+        for this club and term. Authorization is checked against the current account,
+        membership, assignment status, and assignment time range on every request.
+        Only name, description, objectives, contact/social URLs, contactEmail,
+        imageUrl, and bannerUrl are writable. Category, affiliation, status, tags,
+        and recruitment rounds are read-only through this operation. Omitted or null
+        nullable request fields are cleared. URL fields must use HTTPS.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          description: Decimal string identifier for a club
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+          example: '20001'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClubUpdateRequest'
+            example:
+              name: TU Coding Club Updated
+              description: A club for programming enthusiasts.
+              objectives: Learn and share coding skills.
+              contactUrl: https://example.org/contact
+              facebookUrl: null
+              instagramUrl: https://instagram.com/tucoding
+              contactEmail: tucoding@example.org
+              imageUrl: https://images.example.org/clubs/20001.png
+              bannerUrl: null
+      responses:
+        '200':
+          description: Club profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClubDetail'
+              example:
+                id: '20001'
+                categoryId: '30001'
+                name: TU Coding Club Updated
+                description: A club for programming enthusiasts.
+                objectives: Learn and share coding skills.
+                contactUrl: https://example.org/contact
+                facebookUrl: null
+                instagramUrl: https://instagram.com/tucoding
+                contactEmail: tucoding@example.org
+                affiliationLevel: University
+                affiliationName: Thammasat University
+                imageUrl: https://images.example.org/clubs/20001.png
+                bannerUrl: null
+                status: ACTIVE
+                category:
+                  id: '30001'
+                  name: Technology
+                tags: []
+                recruitmentRounds: []
+        '400':
+          description: Invalid club identifier or request fields failed validation
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validationFailed:
+                  summary: One or more request fields are invalid
+                  value:
+                    type: urn:tuclubhub:problem:validation-error
+                    title: Request validation failed
+                    status: 400
+                    detail: One or more request fields are invalid.
+                    instance: /api/v1/clubs/20001
+                    code: VALIDATION_FAILED
+                    fieldErrors:
+                      - field: name
+                        code: REQUIRED
+                        message: Club name is required.
+                    traceId: 01J9EXAMPLE7K4D5
+                invalidId:
+                  summary: Club ID is not a decimal string
+                  value:
+                    type: urn:tuclubhub:problem:invalid-resource-id
+                    title: Invalid resource identifier
+                    status: 400
+                    detail: clubId must be a decimal string.
+                    instance: /api/v1/clubs/abc
+                    code: INVALID_RESOURCE_ID
+                    traceId: 01J9EXAMPLE7K4D5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller is not an effective club committee member, or CSRF check failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                accessDenied:
+                  summary: Caller does not have an active assignment for this club and term
+                  value:
+                    type: urn:tuclubhub:problem:access-denied
+                    title: Access denied
+                    status: 403
+                    detail: You are not allowed to update this club.
+                    instance: /api/v1/clubs/20001
+                    code: ACCESS_DENIED
+                    traceId: 01J9EXAMPLE7K4D5
+                csrfInvalid:
+                  summary: CSRF token is missing, expired, or invalid
+                  value:
+                    type: urn:tuclubhub:problem:csrf-invalid
+                    title: Request rejected
+                    status: 403
+                    detail: The CSRF token is missing or invalid.
+                    instance: /api/v1/clubs/20001
+                    code: CSRF_INVALID
+                    traceId: 01J9EXAMPLE7K4D5
+        '404':
+          description: Club does not exist
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:club-not-found
+                title: Club not found
+                status: 404
+                detail: No club was found for this identifier.
+                instance: /api/v1/clubs/9999
+                code: CLUB_NOT_FOUND
+                traceId: 01J9EXAMPLE7K4D5
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         default:
           $ref: '#/components/responses/ServerError'
   /actuator/health:
@@ -338,19 +501,61 @@ components:
           enum: [USER, ADMIN]
     ClubDetail:
       type: object
-      required: [id, name, description, imageUrl, category, tags, recruitmentRounds]
+      required: [id, categoryId, name, description, objectives, contactUrl, facebookUrl, instagramUrl, contactEmail, affiliationLevel, affiliationName, imageUrl, bannerUrl, status, category, tags, recruitmentRounds]
       properties:
         id:
           type: string
           pattern: '^[0-9]+$'
+          description: Decimal string representing a database bigint identifier.
+        categoryId:
+          type: string
+          pattern: '^[0-9]+$'
         name:
           type: string
+          maxLength: 200
         description:
+          type: string
+        objectives:
           type: [string, 'null']
+        contactUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        facebookUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        instagramUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        contactEmail:
+          type: [string, 'null']
+          format: email
+          maxLength: 254
+        affiliationLevel:
+          type: [string, 'null']
+          maxLength: 30
+        affiliationName:
+          type: [string, 'null']
+          maxLength: 200
         imageUrl:
           type: [string, 'null']
           format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
           description: If present, must use HTTPS. The backend does not fetch the URL.
+        bannerUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
         category:
           oneOf:
             - $ref: '#/components/schemas/ClubCategory'
@@ -363,6 +568,55 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PublicRecruitmentRound'
+    ClubUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, description]
+      description: >-
+        Full replacement of editable club profile fields. name and description are
+        required and non-blank. Omitted or null nullable fields are cleared. Fields
+        not listed here, including category, affiliations, and status, are read-only.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: '.*\S.*'
+        description:
+          type: string
+          minLength: 1
+          pattern: '.*\S.*'
+        objectives:
+          type: [string, 'null']
+        contactUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        facebookUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        instagramUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        contactEmail:
+          type: [string, 'null']
+          format: email
+          maxLength: 254
+        imageUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        bannerUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
     ClubCategory:
       type: object
       required: [id, name]
@@ -496,6 +750,34 @@ components:
             detail: The CSRF token is missing or invalid.
             instance: /api/v1/auth/logout
             code: CSRF_INVALID
+            traceId: 01J9EXAMPLE7K4D5
+    MethodNotAllowed:
+      description: The request method is not supported for this path
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:method-not-allowed
+            title: Method not allowed
+            status: 405
+            detail: The request method is not supported for this resource.
+            instance: /api/v1/clubs/20001
+            code: METHOD_NOT_ALLOWED
+            traceId: 01J9EXAMPLE7K4D5
+    ServiceUnavailable:
+      description: A required dependency, such as the database, is unavailable
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:service-unavailable
+            title: Service unavailable
+            status: 503
+            detail: The request could not be completed because a required service is unavailable.
+            instance: /api/v1/clubs/20001
+            code: SERVICE_UNAVAILABLE
             traceId: 01J9EXAMPLE7K4D5
     ServerError:
       description: Unexpected API failure
