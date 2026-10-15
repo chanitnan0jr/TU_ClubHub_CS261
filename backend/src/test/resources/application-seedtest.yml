@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/tu_clubhub_test
+    url: ${SEEDTEST_DATABASE_URL:jdbc:postgresql://localhost:5432/tu_clubhub_test}
     username: postgres
     password: ${DB_PASSWORD}
 
