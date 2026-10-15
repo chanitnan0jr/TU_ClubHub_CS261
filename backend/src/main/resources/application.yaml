@@ -7,6 +7,7 @@ spring:
       initialize-schema: never
 
 server:
+  port: ${PORT:8080}
   servlet:
     session:
       cookie:
