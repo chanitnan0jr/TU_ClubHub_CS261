@@ -19,14 +19,15 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// ตรวจสอบโหมดทดสอบเฉพาะเครื่อง (Local Mock Gate)
-const isMockAuth = import.meta.env.VITE_ENABLE_MOCK_AUTH === "true";
+// รองรับทั้ง VITE_MOCK_AUTH และ VITE_ENABLE_MOCK_AUTH
+const isMockAuth =
+  import.meta.env.VITE_MOCK_AUTH === "true" ||
+  import.meta.env.VITE_ENABLE_MOCK_AUTH === "true";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // ตรวจสอบ Session กับ Backend API เมื่อเปิดหรือรีเฟรชหน้าเว็บ
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -59,12 +60,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (username: string, password: string) => {
-    // 1. กรณีเปิดใช้งาน Gated Mock สำหรับ Local Test
     if (isMockAuth) {
       const mockUser: User = {
         id: "mock-1",
         studentId: username,
-        name: "เขมจิรา แสนกล้า (Local Test)",
+        name: "นักศึกษา ธรรมศาสตร์ (Test Mode)",
         email: `${username}@dome.tu.ac.th`,
         role: "STUDENT",
       };
@@ -73,7 +73,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // 2. เรียกใช้งาน API ตามสถาปัตยกรรม Backend
     let csrfToken = "";
     const cookieMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
     if (cookieMatch) {
@@ -86,7 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           csrfToken = data.token || data.csrfToken || "";
         }
       } catch {
-        // ข้ามหาก Backend ส่งเฉพาะ HTTP Cookie
+        // Ignore CSRF fetch error if managed by cookies
       }
     }
 
@@ -105,7 +104,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     if (!response.ok) {
-      throw new Error("เข้าสู่ระบบไม่สำเร็จ โปรดตรวจสอบรหัสนักศึกษาหรือรหัสผ่าน");
+      let errorMsg = "เข้าสู่ระบบไม่สำเร็จ โปรดตรวจสอบรหัสนักศึกษาหรือรหัสผ่าน";
+      try {
+        const errData = await response.json();
+        if (errData.message) errorMsg = errData.message;
+      } catch {
+        // Fallback to default error message
+      }
+      throw new Error(errorMsg);
     }
 
     const meResponse = await fetch("/api/v1/auth/me", {
@@ -133,7 +139,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         credentials: "include",
       });
     } catch {
-      // ดำเนินการล้างสถานะหน้าบ้านต่อ
+      // Clear client state anyway
     } finally {
       setUser(null);
     }
