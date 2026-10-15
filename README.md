@@ -37,17 +37,33 @@ Full application submission, review and result publication, offer confirmation o
 
 ## Development setup
 
-The `frontend/` directory contains an initial Vite starter with `dev`, `build`, `lint`, and `preview` scripts. From that directory, run `npm install` and `npm run dev` to install dependencies and start the development server.
+### Full-Stack Local Execution (Docker Compose)
 
-The backend scaffold is in `backend/`. To run it locally, start PostgreSQL, create a database named `tu_clubhub`, set `DB_PASSWORD` to the password for the `postgres` user, then run:
+The recommended way to run the entire system (Application + PostgreSQL database) locally is using Docker Compose:
 
-```sh
-cd backend
-export DB_PASSWORD=your_password
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
-```
+1. Copy `.env.example` to `.env`:
+   ```sh
+   cp .env.example .env
+   ```
+2. Build and run all services:
+   ```sh
+   docker compose up --build
+   ```
+3. Open `http://localhost:8080` in your browser. For comprehensive options and clean-slate resets, see the [Local Demonstration Guide](docs/deployment/local-demo.md).
 
-The `dev` profile enables Flyway and validates the schema with Hibernate. There is no `compose.yaml` yet, so PostgreSQL must be started separately. Backend endpoints and the complete full-stack setup are still in progress.
+### Standalone Local Development
+
+If you prefer to run services individually:
+
+- **Frontend:** From `frontend/`, run `npm install` and `npm run dev` to start the Vite development server on `http://localhost:5173`.
+- **Backend:** From `backend/`, ensure PostgreSQL is running (or run `docker compose up -d db`), set `DB_PASSWORD`, and start Spring Boot:
+  ```sh
+  cd backend
+  export DB_PASSWORD=your_password
+  ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+  ```
+
+The `dev` profile enables Flyway migrations and validates the schema with Hibernate.
 
 ## Contract changes
 
