@@ -1,6 +1,7 @@
 package com.tu.clubhub.config;
 
 import java.util.List;
+import java.time.Clock;
 
 import com.tu.clubhub.auth.dto.ProblemResponse;
 import jakarta.servlet.http.HttpServletResponse;
@@ -8,6 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
@@ -26,7 +28,13 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
+@EnableMethodSecurity
 public class SecurityConfiguration {
+
+	@Bean
+	Clock applicationClock() {
+		return Clock.systemUTC();
+	}
 
 	@Bean
 	SecurityContextRepository securityContextRepository() {

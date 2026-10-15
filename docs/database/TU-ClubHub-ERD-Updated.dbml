@@ -317,7 +317,7 @@ Table club_committee_assignments [headercolor: #15803D] {
     `(revoked_at IS NULL) = (revoked_by IS NULL)`
     `revoked_at IS NULL OR revoked_at >= created_at`
   }
-  Note: 'Java: ClubCommitteeAssignment; @ManyToOne ClubMembership. Each term is a separate retained row. Effective privileges require ACTIVE, starts_at <= now < ends_at, ACTIVE membership and ACTIVE account. End of term is derived from time; no expiration job is required for authorization. Admin provisions assignments. Revoke instead of deleting; role/term corrections use revoke-and-create to preserve history. Prevent overlapping non-revoked terms for the same membership and permission_role in the service or a migration-level exclusion constraint.'
+  Note: 'Java: ClubCommitteeAssignment stores membership_id as a scalar ID owned by the membership module. Each term is a separate retained row. Effective privileges require ACTIVE, starts_at <= now < ends_at, ACTIVE membership and ACTIVE account. End of term is derived from time; no expiration job is required for authorization. Admin provisions assignments. Revoke instead of deleting; role/term corrections use revoke-and-create to preserve history. Prevent overlapping non-revoked terms for the same membership and permission_role in the service or a migration-level exclusion constraint.'
 }
 
 Table membership_history [headercolor: #15803D] {
