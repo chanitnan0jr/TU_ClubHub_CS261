@@ -79,6 +79,20 @@ public class SecurityConfiguration {
 						.csrfTokenRequestHandler(csrfTokenRequestHandler))
 				.addFilterAfter(new AbsoluteSessionTimeoutFilter(objectMapper), SecurityContextHolderFilter.class)
 				.authorizeHttpRequests(authorize -> authorize
+						.requestMatchers(
+								"/",
+								"/index.html",
+								"/favicon.ico",
+								"/assets/**",
+								"/*.svg",
+								"/*.png",
+								"/*.ico",
+								"/*.json",
+								"/login",
+								"/clubs/**",
+								"/profile",
+								"/dashboard/**"
+						).permitAll()
 						.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/clubs/**").permitAll()
 						.anyRequest().authenticated())

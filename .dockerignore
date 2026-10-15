@@ -1,0 +1,37 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# IDE, OS, Editor
+.idea/
+.vscode/
+*.iml
+*.swp
+.DS_Store
+Thumbs.db
+
+# Documentation and scratch files
+docs/
+scratch/
+*.md
+
+# CI
+.github/
+
+# Build artifacts and temporary caches
+**/target/
+**/build/
+**/dist/
+**/node_modules/
+**/.npm/
+**/.turbo/
+
+# Environment files and secrets
+*.env
+*.env.*
+!.env.example
+
+# Logs
+*.log
+**/*.log
