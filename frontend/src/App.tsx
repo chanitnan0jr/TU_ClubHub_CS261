@@ -1,26 +1,32 @@
-import { useAuth, AuthProvider } from "./features/auth/AuthContext";
+import { useAuth } from "./features/auth/AuthContext";
 import Login from "./features/auth/Login";
 
-function MainContent() {
-  const { isAuthenticated, user, logout } = useAuth();
+export default function App() {
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
 
-  if (!isAuthenticated) {
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <p className="text-gray-500 font-medium">กำลังตรวจสอบสถานะการเข้าสู่ระบบ...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
     return <Login />;
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-      <div className="w-full max-w-md p-8 space-y-4 text-center bg-white rounded-2xl shadow-xl">
-        <h1 className="text-2xl font-bold text-green-600">เข้าสู่ระบบสำเร็จ!</h1>
-        <div className="p-4 bg-gray-100 rounded-lg">
-          <p className="font-semibold text-gray-800">ชื่อ: {user?.name}</p>
-          <p className="text-sm text-gray-600">รหัส: {user?.studentId}</p>
-          <p className="text-sm text-gray-600">อีเมล: {user?.email}</p>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
+      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-xl text-center">
+        <h1 className="text-2xl font-bold text-red-700">ยินดีต้อนรับสู่ TU ClubHub</h1>
+        <div className="text-left bg-gray-50 p-4 rounded-lg space-y-2 border">
+          <p><strong>ID ผู้ใช้:</strong> {user.id}</p>
+          <p><strong>สิทธิ์ (Role):</strong> {user.role}</p>
         </div>
-        
         <button
           onClick={logout}
-          className="w-full px-4 py-2 font-semibold text-white transition-colors bg-gray-800 rounded-lg hover:bg-gray-900"
+          className="w-full px-4 py-2 font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
         >
           ออกจากระบบ
         </button>
@@ -28,13 +34,3 @@ function MainContent() {
     </div>
   );
 }
-
-function App() {
-  return (
-    <AuthProvider>
-      <MainContent />
-    </AuthProvider>
-  );
-}
-
-export default App;

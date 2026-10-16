@@ -1,12 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
 
 export type User = {
   id: string;
-  studentId: string;
-  name: string;
-  email: string;
-  role: "STUDENT" | "CLUB_COMMITTEE" | "ADMIN";
+  role: "USER" | "STUDENT" | "CLUB_COMMITTEE" | "ADMIN" | string;
 };
 
 type AuthContextType = {
@@ -19,7 +16,6 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// รองรับทั้ง VITE_MOCK_AUTH และ VITE_ENABLE_MOCK_AUTH
 const isMockAuth =
   import.meta.env.VITE_MOCK_AUTH === "true" ||
   import.meta.env.VITE_ENABLE_MOCK_AUTH === "true";
@@ -27,6 +23,23 @@ const isMockAuth =
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const csrfTokenRef = useRef<string>("");
+
+  // ดึง CSRF Token เริ่มต้น
+  const fetchCsrfToken = async () => {
+    try {
+      const res = await fetch("/api/v1/auth/csrf", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        const token = data.token || data.csrfToken || "";
+        if (token) {
+          csrfTokenRef.current = token;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  };
 
   useEffect(() => {
     const checkSession = async () => {
@@ -36,15 +49,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (testUser) {
             setUser(JSON.parse(testUser));
           }
+          setIsLoading(false);
           return;
         }
+
+        await fetchCsrfToken();
 
         const res = await fetch("/api/v1/auth/me", {
           credentials: "include",
         });
 
         if (res.ok) {
-          const userData = await res.json();
+          const data = await res.json();
+          // รองรับทั้งแบบหุ้ม user: { ... } หรือส่งตรงๆ
+          const userData = data.user || data;
           setUser(userData);
         } else {
           setUser(null);
@@ -62,10 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (username: string, password: string) => {
     if (isMockAuth) {
       const mockUser: User = {
-        id: "mock-1",
-        studentId: username,
-        name: "นักศึกษา ธรรมศาสตร์ (Test Mode)",
-        email: `${username}@dome.tu.ac.th`,
+        id: "mock-id-1",
         role: "STUDENT",
       };
       setUser(mockUser);
@@ -73,27 +88,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    let csrfToken = "";
-    const cookieMatch = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-    if (cookieMatch) {
-      csrfToken = decodeURIComponent(cookieMatch[1]);
-    } else {
-      try {
-        const csrfRes = await fetch("/api/v1/auth/csrf", { credentials: "include" });
-        if (csrfRes.ok) {
-          const data = await csrfRes.json();
-          csrfToken = data.token || data.csrfToken || "";
-        }
-      } catch {
-        // Ignore CSRF fetch error if managed by cookies
-      }
+    if (!csrfTokenRef.current) {
+      await fetchCsrfToken();
     }
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
-    if (csrfToken) {
-      headers["X-CSRF-TOKEN"] = csrfToken;
+    if (csrfTokenRef.current) {
+      headers["X-CSRF-TOKEN"] = csrfTokenRef.current;
     }
 
     const response = await fetch("/api/v1/auth/login", {
@@ -107,22 +110,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       let errorMsg = "เข้าสู่ระบบไม่สำเร็จ โปรดตรวจสอบรหัสนักศึกษาหรือรหัสผ่าน";
       try {
         const errData = await response.json();
-        if (errData.message) errorMsg = errData.message;
+        // รองรับมาตรฐาน RFC 7807 Problem Details (detail / title / message)
+        errorMsg = errData.detail || errData.title || errData.message || errorMsg;
       } catch {
-        // Fallback to default error message
+        // Fallback
       }
       throw new Error(errorMsg);
     }
 
+    // อัปเดต CSRF Token ใหม่จาก Response Body หากมีส่งกลับมา (ตามสเปก PR #8)
+    try {
+      const responseData = await response.json().catch(() => ({}));
+      if (responseData.csrf && responseData.csrf.token) {
+        csrfTokenRef.current = responseData.csrf.token;
+      }
+    } catch {
+      // Ignore parsing if empty
+    }
+
+    // ดึงข้อมูลผู้ใช้ต่อ
     const meResponse = await fetch("/api/v1/auth/me", {
       credentials: "include",
     });
 
     if (meResponse.ok) {
-      const userData = await meResponse.json();
+      const data = await meResponse.json();
+      const userData = data.user || data;
       setUser(userData);
     } else {
-      throw new Error("ไม่สามารถดึงข้อมูลผู้ใช้ได้");
+      throw new Error("ไม่สามารถดึงข้อมูลผู้ใช้ได้หลังเข้าสู่ระบบ");
     }
   };
 
@@ -134,12 +150,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      await fetch("/api/v1/auth/logout", {
+      if (!csrfTokenRef.current) {
+        await fetchCsrfToken();
+      }
+
+      const headers: Record<string, string> = {};
+      if (csrfTokenRef.current) {
+        headers["X-CSRF-TOKEN"] = csrfTokenRef.current;
+      }
+
+      const response = await fetch("/api/v1/auth/logout", {
         method: "POST",
+        headers,
         credentials: "include",
       });
+
+      // ตรวจสอบ Status ตามสเปก (204 No Content หรือ 401) ก่อนล้าง State
+      if (response.status === 204 || response.status === 401 || response.ok) {
+        setUser(null);
+      } else {
+        throw new Error("Server rejected logout");
+      }
     } catch {
-      // Clear client state anyway
+      // หากเกิดข้อผิดพลาดเครือข่าย แต่บังคับล้างเฉพาะเมื่อแน่ใจ หรือเคลียร์ client state
+      setUser(null);
     } finally {
       setUser(null);
     }
