@@ -157,20 +157,30 @@ Invalidates the current server-side session and clears the session cookie. Requi
 
 An upstream timeout or outage must never result in a successful login or an automatic switch to the mock adapter. Mock authentication is restricted to explicit local/test configuration; enabling it in production must prevent application startup.
 
-## 4. Public club detail
+## 4. Club profile
 
 ### `GET /api/v1/clubs/{clubId}`
 
-Returns a public club profile without requiring login. `clubId` is a decimal string ID. The response may include only published recruitment rounds and public profile fields; it must not expose draft rounds, applicant data, committee-only information, or internal notes. The backend does not fetch images or documents from URLs.
+Returns a public club profile without requiring login. `clubId` is a decimal string ID. The response may include only published recruitment rounds and public profile fields; it must not expose draft rounds, applicant data, committee-only information, or internal notes. The backend does not fetch images or documents from URLs. The response includes the public profile columns from `clubs`, the category, tags, and published recruitment rounds. Database `bigint` IDs are decimal strings on the wire.
 
 **`200 OK`** (proposed DTO; confirm exact fields against the approved ERD)
 
 ```json
 {
   "id": "20001",
+  "categoryId": "30001",
   "name": "Example Club",
   "description": "A student club at Thammasat University.",
+  "objectives": "Help students learn and collaborate.",
+  "contactUrl": "https://example.org/contact",
+  "facebookUrl": null,
+  "instagramUrl": null,
+  "contactEmail": "club@example.org",
+  "affiliationLevel": "University",
+  "affiliationName": "Thammasat University",
   "imageUrl": "https://images.example.org/clubs/20001.png",
+  "bannerUrl": null,
+  "status": "ACTIVE",
   "category": {
     "id": "30001",
     "name": "Technology"
@@ -193,12 +203,51 @@ Returns a public club profile without requiring login. `clubId` is a decimal str
 }
 ```
 
-`imageUrl` may be `null`; the frontend displays its bundled default image in that case. If present, it must be an HTTPS URL. The backend returns the URL as data and does not download, preview, or validate the remote resource. `recruitmentRounds` contains published rounds only. Round visibility and field names must match the approved recruitment policy and ERD before the first implementation consumes them.
+`objectives`, contact/social URLs, email, affiliation, image, and banner values may be `null` when not set. `imageUrl` may be `null`; the frontend displays its bundled default image in that case. Contact, social, image, and banner URLs, when present, must use HTTPS. The backend returns URLs as data and does not download or preview the remote resource. `recruitmentRounds` contains published rounds only. `status` is `ACTIVE` for public profiles; inactive clubs are not returned by this public endpoint.
 
 | Status | Code | Meaning |
 |---|---|---|
 | `400` | `INVALID_RESOURCE_ID` | `clubId` is not a valid decimal ID |
 | `404` | `CLUB_NOT_FOUND` | No public club exists for this ID |
+| `405` | `METHOD_NOT_ALLOWED` | The club path does not support the requested method; only `GET` and `PUT` are defined |
+| `503` | `SERVICE_UNAVAILABLE` | The database dependency is unavailable |
+
+IDs containing non-decimal characters or a minus sign return `400 INVALID_RESOURCE_ID`. An empty ID is not a path value; `/api/v1/clubs/` is an unmatched route and returns `404`.
+
+### `PUT /api/v1/clubs/{clubId}`
+
+Replaces the editable profile fields for a club and returns the updated public profile. Requires an authenticated session, the current CSRF header, and an active `COMMITTEE` or `PRESIDENT` assignment for this club and its current term. The server rechecks assignment, membership, and account status on every request. A missing or expired session returns `401`; an authenticated caller without an effective assignment returns `403`.
+
+The caller may update only `name`, `description`, `objectives`, `contactUrl`, `facebookUrl`, `instagramUrl`, `contactEmail`, `imageUrl`, and `bannerUrl`. Category, affiliation, status, IDs, tags, and recruitment rounds are not writable through this endpoint. `name` and `description` are required and non-blank; `name` is limited to 200 characters. Nullable fields omitted or sent as `null` are cleared. URL fields, when provided, must be HTTPS URLs; `contactEmail`, when provided, must be a valid email address. Text is treated as data, not executable HTML; persistence queries must use bound parameters, and clients must escape text when rendering it.
+
+**Request body** (`ClubUpdateRequestDto`):
+
+```json
+{
+  "name": "TU Coding Club Updated",
+  "description": "A club for programming enthusiasts.",
+  "objectives": "Learn and share coding skills.",
+  "contactUrl": "https://example.org/contact",
+  "facebookUrl": null,
+  "instagramUrl": "https://instagram.com/tucoding",
+  "contactEmail": "tucoding@example.org",
+  "imageUrl": "https://images.example.org/clubs/20001.png",
+  "bannerUrl": null
+}
+```
+
+**`200 OK`** returns the updated `ClubResponseDto` public profile using the same shape as `GET /api/v1/clubs/{clubId}`. Errors use the shared `application/problem+json` format and stable codes:
+
+| Status | Code | Meaning |
+|---|---|---|
+| `400` | `INVALID_RESOURCE_ID`, `VALIDATION_FAILED` | Invalid `clubId` or request fields; field details are in `fieldErrors` |
+| `401` | `AUTHENTICATION_REQUIRED` | No authenticated session or session expired |
+| `403` | `ACCESS_DENIED`, `CSRF_INVALID` | Caller lacks an effective committee assignment, or CSRF validation failed |
+| `404` | `CLUB_NOT_FOUND` | No club exists for this ID |
+| `405` | `METHOD_NOT_ALLOWED` | The club path does not support the requested method; only `GET` and `PUT` are defined |
+| `503` | `SERVICE_UNAVAILABLE` | The database dependency is unavailable |
+
+For `VALIDATION_FAILED`, each entry in `fieldErrors` identifies a request field using the shared `field`, `code`, and `message` shape. Do not return database constraint errors or internal details to the client.
 
 ## 5. Health endpoint
 
@@ -237,10 +286,11 @@ All `/api/v1` errors use `Content-Type: application/problem+json`. The response 
 | `401` | `AUTHENTICATION_REQUIRED`, `AUTHENTICATION_FAILED` | Missing/invalid authentication or rejected login credentials |
 | `403` | `FORBIDDEN`, `CSRF_INVALID`, `ACCOUNT_NOT_ALLOWED` | Authenticated user lacks permission, CSRF check fails, or account is not allowed |
 | `404` | `RESOURCE_NOT_FOUND`, `CLUB_NOT_FOUND` | Resource does not exist or is not visible to this caller |
+| `405` | `METHOD_NOT_ALLOWED` | The path exists but does not support the request method |
 | `409` | `RESOURCE_CONFLICT` | Duplicate request or invalid current-state transition |
 | `429` | `RATE_LIMITED` | Request rate limit exceeded; include `Retry-After` when known |
 | `500` | `INTERNAL_ERROR` | Unexpected server failure |
-| `503` | `SERVICE_UNAVAILABLE`, `AUTH_PROVIDER_UNAVAILABLE` | Required upstream dependency is unavailable |
+| `503` | `SERVICE_UNAVAILABLE`, `AUTH_PROVIDER_UNAVAILABLE` | A required dependency such as the database or TU Authentication API is unavailable |
 
 The table is the shared error vocabulary. An endpoint's OpenAPI operation lists the errors relevant to it. If rate limiting is introduced, its actual thresholds and retry policy must be documented before release; no numeric rate limit is set by this contract.
 
@@ -258,7 +308,7 @@ Detailed permissions for result publication, committee self-review, and administ
 
 ## 8. Product APIs to specify before implementation
 
-The product stories identify the following resource areas, but the repository context does not establish enough request fields and policies to make these endpoint contracts final. Before implementation, add the concrete paths, DTOs, status codes, authorization rules, and examples to this document and `docs/api/openapi.yaml`:
+Remaining product stories identify resource areas that still need concrete request fields and policies before implementation. Add their paths, DTOs, status codes, authorization rules, and examples to this document and `docs/api/openapi.yaml`:
 
 | Story | Resource area | Decisions needed |
 |---|---|---|
@@ -266,7 +316,7 @@ The product stories identify the following resource areas, but the repository co
 | US-03 | Application submission | Eligibility, required answers, HTTPS link rules, quota, duplicate behavior, and concurrency handling |
 | US-04 | Applicant application list/detail/history | Which history is visible and how unpublished results are hidden |
 | US-05 | Confirm or decline an offer | Result publication workflow, deadline policy, idempotency, and membership transaction |
-| US-06 | Club profile editing | Editable fields, committee permission, and conflict handling |
+| US-06 | Club profile editing | Conflict handling and concurrent update policy |
 | US-07 | Recruitment rounds | Round publication, schedule validation, and close/reopen policy |
 | US-08 | Recruitment questions | Question types, validation, and freeze/version policy after applications exist |
 | US-09 | Committee application review | Committee scope, field-level privacy, and self-review rule; reading is read-only |
