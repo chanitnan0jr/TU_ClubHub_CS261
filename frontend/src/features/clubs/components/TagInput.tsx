@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ClubTag } from '../types/club';
+import type { ClubTag } from '../types/club';
 
 interface TagInputProps {
   availableTags: ClubTag[];

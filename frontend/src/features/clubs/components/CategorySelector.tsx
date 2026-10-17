@@ -1,4 +1,4 @@
-import { ClubCategory } from '../types/club';
+import type { ClubCategory } from '../types/club';
 
 interface CategorySelectorProps {
   categories: ClubCategory[];
