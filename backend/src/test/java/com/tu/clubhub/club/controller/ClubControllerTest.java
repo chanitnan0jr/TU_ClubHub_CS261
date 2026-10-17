@@ -213,4 +213,32 @@ class ClubControllerTest {
 
         verifyNoInteractions(clubService, clubSecurity);
     }
+
+    @Test
+    void malformedJsonGets400() throws Exception {
+        mockMvc.perform(put("/api/v1/clubs/41")
+                        .with(user("committee"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"name\": "))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(clubService);
+    }
+    @Test
+    void committeeCannotUpdateOtherClub() throws Exception {
+        when(clubSecurity.isCommittee(42L)).thenReturn(false);
+
+        mockMvc.perform(put("/api/v1/clubs/42")
+                        .with(user("committee"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code")
+                        .value("ACCESS_DENIED"));
+
+        verify(clubSecurity).isCommittee(42L);
+        verifyNoInteractions(clubService);
+    }
 }
