@@ -49,7 +49,7 @@ export interface ClubUpdateRequestDto {
   imageUrl?: string;
   bannerUrl?: string;
 }
-// แปะเพิ่มต่อท้ายไฟล์ club.ts
+
 export interface FieldError {
   field: string;
   code: string;
