@@ -57,4 +57,40 @@ class AbsoluteSessionTimeoutFilterTest {
 		assertTrue(continued.get(), "expired login may bootstrap a new CSRF session");
 		assertNull(request.getSession(false), "expired session is invalidated before a new one is created");
 	}
+
+	@Test
+	void allowsNonExpiredAuthenticatedSession() throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockHttpSession session = new MockHttpSession();
+		session.setAttribute(AbsoluteSessionTimeoutFilter.LOGIN_AT_ATTRIBUTE,
+				System.currentTimeMillis() - Duration.ofMinutes(15).toMillis());
+		request.setSession(session);
+		SecurityContextHolder.getContext().setAuthentication(
+				UsernamePasswordAuthenticationToken.authenticated("test-user", null, java.util.List.of()));
+		AtomicBoolean continued = new AtomicBoolean();
+
+		new AbsoluteSessionTimeoutFilter(JsonMapper.builder().build()).doFilter(request, response,
+				(servletRequest, servletResponse) -> continued.set(true));
+
+		assertTrue(continued.get(), "active session continues through filter chain");
+		assertEquals(200, response.getStatus());
+		assertEquals(session, request.getSession(false), "active session is preserved");
+		SecurityContextHolder.clearContext();
+	}
+
+	@Test
+	void ignoresUnauthenticatedSessionWithoutLoginAttribute() throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockHttpSession session = new MockHttpSession();
+		request.setSession(session);
+		AtomicBoolean continued = new AtomicBoolean();
+
+		new AbsoluteSessionTimeoutFilter(JsonMapper.builder().build()).doFilter(request, response,
+				(servletRequest, servletResponse) -> continued.set(true));
+
+		assertTrue(continued.get(), "anonymous session continues through filter chain");
+		assertEquals(session, request.getSession(false));
+	}
 }
