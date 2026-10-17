@@ -1,32 +1,33 @@
-# React + TypeScript + Vite
+# TU ClubHub frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Frontend for TU ClubHub, built with React, TypeScript, Vite, and Tailwind CSS
+v4.
 
-Currently, two official plugins are available:
+## Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+From this directory, install dependencies and start the Vite development
+server:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Run a production build with `npm run build`.
+
+Tailwind is loaded from `src/index.css` and compiled with the
+`@tailwindcss/vite` plugin in `vite.config.ts`.
+
+## Club profile editor
+
+`src/ClubProfileForm.tsx` exports the reusable `ClubProfileForm` component and
+its `ClubProfile` type. Pass the club profile to edit and an `onSave` callback:
+
+```tsx
+<ClubProfileForm profile={club} onSave={saveClubProfile} />
+```
+
+The form keeps the profile ID fixed and only edits the profile supplied by its
+parent. The current app uses local state as a frontend preview; production
+authorization must verify on the server that the signed-in staff member may
+edit that club.
