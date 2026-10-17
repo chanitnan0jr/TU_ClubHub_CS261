@@ -31,3 +31,9 @@ The form keeps the profile ID fixed and only edits the profile supplied by its
 parent. The current app uses local state as a frontend preview; production
 authorization must verify on the server that the signed-in staff member may
 edit that club.
+
+Reusable client-side validators are exported from `src/utils/validation.ts`:
+`isRequired`, `isValidUrl`, `isValidDomeTuEmail`, and
+`isValidClubContactEmail`. The profile form uses them to validate required
+information, optional HTTP(S) URLs, and optional contact emails at the
+`@dome.tu.ac.th`, `@tu.ac.th`, or `@gmail.com` domains before calling `onSave`.

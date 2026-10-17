@@ -1,4 +1,9 @@
 import { useState, type FormEvent } from 'react'
+import {
+  isValidClubContactEmail,
+  isRequired,
+  isValidUrl,
+} from './utils/validation'
 
 export type ClubCategory =
   | 'กีฬา'
@@ -31,6 +36,8 @@ interface FormSectionProps {
   children: React.ReactNode
 }
 
+type FieldErrors = Partial<Record<keyof ClubProfile, string>>
+
 const categories: ClubCategory[] = [
   'กีฬา',
   'วิชาการ',
@@ -40,6 +47,32 @@ const categories: ClubCategory[] = [
 
 const inputClassName =
   'mt-2 block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-tu-maroon focus:ring-4 focus:ring-tu-maroon/10'
+
+function validateProfile(profile: ClubProfile): FieldErrors {
+  const errors: FieldErrors = {}
+
+  if (!isRequired(profile.name)) {
+    errors.name = 'กรุณากรอกชื่อชมรม'
+  }
+  if (!isRequired(profile.category)) {
+    errors.category = 'กรุณาเลือกประเภทชมรม'
+  }
+  if (!isRequired(profile.description)) {
+    errors.description = 'กรุณากรอกรายละเอียดชมรม'
+  }
+  if (profile.email && !isValidClubContactEmail(profile.email)) {
+    errors.email =
+      'กรุณาใช้อีเมล @dome.tu.ac.th, @tu.ac.th หรือ @gmail.com'
+  }
+  if (profile.website && !isValidUrl(profile.website)) {
+    errors.website = 'กรุณากรอก URL ที่ถูกต้อง โดยขึ้นต้นด้วย http:// หรือ https://'
+  }
+  if (profile.logoUrl && !isValidUrl(profile.logoUrl)) {
+    errors.logoUrl = 'กรุณากรอก URL ที่ถูกต้อง โดยขึ้นต้นด้วย http:// หรือ https://'
+  }
+
+  return errors
+}
 
 function FormSection({ title, children }: FormSectionProps) {
   return (
@@ -57,18 +90,28 @@ function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
   function updateField<K extends keyof ClubProfile>(
     field: K,
     value: ClubProfile[K],
   ) {
     setDraft((current) => ({ ...current, [field]: value }))
+    setFieldErrors((currentErrors) =>
+      Object.keys(currentErrors).length
+        ? validateProfile({ ...draft, [field]: value })
+        : currentErrors,
+    )
     setSaved(false)
     setSaveError('')
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const errors = validateProfile(draft)
+    setFieldErrors(errors)
+    if (Object.keys(errors).length > 0) return
+
     const updatedProfile = {
       ...draft,
       name: draft.name.trim(),
@@ -101,6 +144,7 @@ function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
   return (
     <form
       className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_24px_80px_-40px_rgba(35,25,35,0.35)]"
+      noValidate
       onSubmit={handleSubmit}
     >
       <div className="border-b border-slate-100 px-6 py-6 sm:px-9">
@@ -134,17 +178,27 @@ function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
               <input
                 autoComplete="organization"
                 className={inputClassName}
+                aria-describedby={fieldErrors.name ? 'club-name-error' : undefined}
+                aria-invalid={Boolean(fieldErrors.name)}
+                aria-required="true"
                 maxLength={80}
                 onChange={(event) => updateField('name', event.target.value)}
                 placeholder="ชื่อชมรมของคุณ"
-                required
                 value={draft.name}
               />
+              {fieldErrors.name && (
+                <span className="mt-1 block text-xs font-normal text-red-700" id="club-name-error">
+                  {fieldErrors.name}
+                </span>
+              )}
             </label>
             <label className="text-sm font-semibold text-slate-700">
               ประเภทชมรม <span className="text-tu-maroon">*</span>
               <select
                 className={inputClassName}
+                aria-describedby={fieldErrors.category ? 'club-category-error' : undefined}
+                aria-invalid={Boolean(fieldErrors.category)}
+                aria-required="true"
                 onChange={(event) => {
                   const category = categories.find(
                     (option) => option === event.target.value,
@@ -159,6 +213,11 @@ function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
                   </option>
                 ))}
               </select>
+              {fieldErrors.category && (
+                  <span className="mt-1 block text-xs font-normal text-red-700" id="club-category-error">
+                    {fieldErrors.category}
+                  </span>
+              )}
             </label>
             <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
               คำแนะนำชมรม
@@ -174,15 +233,22 @@ function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
               รายละเอียดชมรม <span className="text-tu-maroon">*</span>
               <textarea
                 className={`${inputClassName} min-h-36 resize-y`}
+                aria-describedby={fieldErrors.description ? 'club-description-error' : undefined}
+                aria-invalid={Boolean(fieldErrors.description)}
+                aria-required="true"
                 maxLength={1200}
                 onChange={(event) =>
                   updateField('description', event.target.value)
                 }
                 placeholder="เล่ารายละเอียดกิจกรรมและเป้าหมายของชมรมของคุณ"
-                required
                 rows={5}
                 value={draft.description}
               />
+              {fieldErrors.description && (
+                <span className="mt-1 block text-xs font-normal text-red-700" id="club-description-error">
+                  {fieldErrors.description}
+                </span>
+              )}
               <span className="mt-1.5 block text-right text-xs font-normal text-slate-400">
                 {draft.description.length}/1200
               </span>
@@ -214,11 +280,18 @@ function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
               <input
                 autoComplete="email"
                 className={inputClassName}
+                aria-describedby={fieldErrors.email ? 'club-email-error' : undefined}
+                aria-invalid={Boolean(fieldErrors.email)}
                 onChange={(event) => updateField('email', event.target.value)}
                 placeholder="เช่น club@tu.ac.th"
                 type="email"
                 value={draft.email}
               />
+              {fieldErrors.email && (
+                <span className="mt-1 block text-xs font-normal text-red-700" id="club-email-error">
+                  {fieldErrors.email}
+                </span>
+              )}
             </label>
             <label className="text-sm font-semibold text-slate-700">
               อินสตาแกรม
@@ -235,11 +308,18 @@ function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
               เว็บไซต์
               <input
                 className={inputClassName}
+                aria-describedby={fieldErrors.website ? 'club-website-error' : undefined}
+                aria-invalid={Boolean(fieldErrors.website)}
                 onChange={(event) => updateField('website', event.target.value)}
                 placeholder="เช่น https://yourclub.example"
                 type="url"
                 value={draft.website}
               />
+              {fieldErrors.website && (
+                <span className="mt-1 block text-xs font-normal text-red-700" id="club-website-error">
+                  {fieldErrors.website}
+                </span>
+              )}
             </label>
         </FormSection>
 
@@ -272,11 +352,18 @@ function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
               ลิงก์โลโก้ชมรม
               <input
                 className={inputClassName}
+                aria-describedby={fieldErrors.logoUrl ? 'club-logo-error' : undefined}
+                aria-invalid={Boolean(fieldErrors.logoUrl)}
                 onChange={(event) => updateField('logoUrl', event.target.value)}
                 placeholder="เช่น https://example.com/club-logo.png"
                 type="url"
                 value={draft.logoUrl}
               />
+              {fieldErrors.logoUrl && (
+                <span className="mt-1 block text-xs font-normal text-red-700" id="club-logo-error">
+                  {fieldErrors.logoUrl}
+                </span>
+              )}
             </label>
         </FormSection>
       </fieldset>
