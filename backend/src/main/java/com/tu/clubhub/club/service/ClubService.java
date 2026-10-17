@@ -10,16 +10,80 @@ import java.util.Set;
 import jakarta.validation.Validator;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.tu.clubhub.club.domain.Club;
+import com.tu.clubhub.club.dto.ClubResponseDto;
 import com.tu.clubhub.club.dto.ClubUpdateRequestDto;
+import com.tu.clubhub.club.repository.ClubProfileQueryRepository;
+import com.tu.clubhub.club.repository.ClubRepository;
 
 @Service
 public class ClubService {
 
     private final Validator validator;
+    private final ClubRepository clubRepository;
+    private final ClubProfileQueryRepository profileQueryRepository;
 
-    public ClubService(Validator validator) {
+    public ClubService(
+            Validator validator,
+            ClubRepository clubRepository,
+            ClubProfileQueryRepository profileQueryRepository
+    ) {
         this.validator = validator;
+        this.clubRepository = clubRepository;
+        this.profileQueryRepository = profileQueryRepository;
+    }
+
+    // ตรวจข้อมูล แก้ไข และบันทึกชมรม
+    @Transactional
+    public ClubResponseDto updateClub(
+            Long clubId,
+            ClubUpdateRequestDto request
+    ) {
+        validateUpdateRequest(request);
+
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(ClubNotFoundException::new);
+
+        club.setName(request.name());
+        club.setDescription(request.description());
+        club.setObjectives(request.objectives());
+        club.setContactUrl(request.contactUrl());
+        club.setFacebookUrl(request.facebookUrl());
+        club.setInstagramUrl(request.instagramUrl());
+        club.setContactEmail(request.contactEmail());
+        club.setImageUrl(request.imageUrl());
+        club.setBannerUrl(request.bannerUrl());
+
+        Club savedClub = clubRepository.save(club);
+
+        return toResponse(savedClub);
+    }
+
+    // รวมข้อมูลสำหรับส่งกลับผ่าน API
+    private ClubResponseDto toResponse(Club club) {
+        return new ClubResponseDto(
+                club.getId().toString(),
+                club.getCategoryId() == null
+                        ? null
+                        : club.getCategoryId().toString(),
+                club.getName(),
+                club.getDescription(),
+                club.getObjectives(),
+                club.getContactUrl(),
+                club.getFacebookUrl(),
+                club.getInstagramUrl(),
+                club.getContactEmail(),
+                club.getAffiliationLevel(),
+                club.getAffiliationName(),
+                club.getImageUrl(),
+                club.getBannerUrl(),
+                club.getStatus(),
+                profileQueryRepository.findCategory(club.getCategoryId()),
+                profileQueryRepository.findTags(club.getId()),
+                profileQueryRepository.findPublishedRounds(club.getId())
+        );
     }
 
     // ตรวจข้อมูลทั้งหมดก่อนนำไปบันทึก
@@ -32,7 +96,7 @@ public class ClubService {
             );
         }
 
-        // ใช้ annotation ใน DTO ตรวจชื่อ คำอธิบาย อีเมล และความยาว
+        // ใช้ annotation ใน DTO ตรวจข้อมูล
         for (var violation : validator.validate(request)) {
             errors.putIfAbsent(
                     violation.getPropertyPath().toString(),
@@ -40,23 +104,28 @@ public class ClubService {
             );
         }
 
-        // ตรวจ URL ให้มีโครงสร้างถูกต้องและใช้ HTTPS
         validateHttpsUrl("contactUrl", request.contactUrl(), errors);
         validateHttpsUrl("imageUrl", request.imageUrl(), errors);
         validateHttpsUrl("bannerUrl", request.bannerUrl(), errors);
 
-        // ตรวจ HTTPS และโดเมนของ Social Media
         validateSocialUrl(
                 "facebookUrl",
                 request.facebookUrl(),
-                Set.of("facebook.com", "www.facebook.com", "m.facebook.com"),
+                Set.of(
+                        "facebook.com",
+                        "www.facebook.com",
+                        "m.facebook.com"
+                ),
                 errors
         );
 
         validateSocialUrl(
                 "instagramUrl",
                 request.instagramUrl(),
-                Set.of("instagram.com", "www.instagram.com"),
+                Set.of(
+                        "instagram.com",
+                        "www.instagram.com"
+                ),
                 errors
         );
 
@@ -70,7 +139,7 @@ public class ClubService {
             String value,
             Map<String, String> errors
     ) {
-        // ฟิลด์ไม่บังคับ: null หมายถึงไม่ได้ระบุ / ล้างค่าเดิม
+        // ฟิลด์ไม่บังคับสามารถเป็น null ได้
         if (value == null) {
             return null;
         }
@@ -89,10 +158,14 @@ public class ClubService {
                     && !uri.getHost().isBlank()
                     && uri.getRawUserInfo() == null
                     && (uri.getPort() == -1
-                        || (uri.getPort() >= 1 && uri.getPort() <= 65535));
+                        || (uri.getPort() >= 1
+                            && uri.getPort() <= 65535));
 
             if (!valid) {
-                errors.put(field, "Must be a valid HTTPS URL without credentials");
+                errors.put(
+                        field,
+                        "Must be a valid HTTPS URL without credentials"
+                );
                 return null;
             }
 
@@ -118,19 +191,29 @@ public class ClubService {
 
         String host = uri.getHost().toLowerCase(Locale.ROOT);
 
-        // เปรียบเทียบโดเมนจริง ไม่ใช้ contains()
         if (!allowedHosts.contains(host)) {
-            errors.put(field, "URL must belong to the correct social platform");
+            errors.put(
+                    field,
+                    "URL must belong to the correct social platform"
+            );
             return;
         }
 
-        // Social Media ใช้พอร์ตปกติของ HTTPS
         if (uri.getPort() != -1 && uri.getPort() != 443) {
-            errors.put(field, "Social media URL must use the default HTTPS port");
+            errors.put(
+                    field,
+                    "Social media URL must use the default HTTPS port"
+            );
         }
     }
 
-    // เก็บชื่อฟิลด์และข้อความผิดพลาดให้ชั้น API นำไปตอบกลับ
+    public static class ClubNotFoundException extends RuntimeException {
+
+        public ClubNotFoundException() {
+            super("Club not found");
+        }
+    }
+
     public static class ClubValidationException extends RuntimeException {
 
         private final Map<String, String> fieldErrors;
