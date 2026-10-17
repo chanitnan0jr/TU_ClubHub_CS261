@@ -49,3 +49,20 @@ export interface ClubUpdateRequestDto {
   imageUrl?: string | null;
   bannerUrl?: string | null;
 }
+
+export interface FieldError {
+  field: string;
+  code: string;
+  message: string;
+}
+
+export interface ApiProblemResponse {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  instance?: string;
+  code: string;
+  fieldErrors?: FieldError[];
+  traceId: string;
+}
