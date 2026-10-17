@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class ClubServiceTest {
@@ -253,5 +254,48 @@ class ClubServiceTest {
 
         verify(clubRepository, never()).save(any(Club.class));
         verifyNoInteractions(profileQueryRepository);
+    }
+// Test 10: ไม่อนุญาตให้ส่ง Request เป็น null
+    @Test
+    void nullRequestShouldFail() {
+        var error = assertThrows(
+                ClubValidationException.class,
+                () -> service.updateClub(41L, null)
+        );
+
+        assertEquals(
+                "Request body is required",
+                error.getFieldErrors().get("request")
+        );
+
+        verifyNoInteractions(
+                clubRepository,
+                profileQueryRepository
+        );
+    }
+
+    // Test 11: ไม่อนุญาตให้ Image URL เป็นช่องว่าง
+    @Test
+    void blankImageUrlShouldFail() {
+        var data = request(
+                " ",
+                "club@tu.ac.th",
+                null
+        );
+
+        var error = assertThrows(
+                ClubValidationException.class,
+                () -> service.updateClub(41L, data)
+        );
+
+        assertEquals(
+                "Use null instead of an empty URL",
+                error.getFieldErrors().get("imageUrl")
+        );
+
+        verifyNoInteractions(
+                clubRepository,
+                profileQueryRepository
+        );
     }
 }
