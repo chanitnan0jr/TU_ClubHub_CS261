@@ -1,5 +1,4 @@
-// frontend/src/features/clubs/components/TagInput.tsx
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ClubTag } from '../types/club';
 
 interface TagInputProps {
@@ -9,12 +8,12 @@ interface TagInputProps {
   disabled?: boolean;
 }
 
-export const TagInput: React.FC<TagInputProps> = ({
+export const TagInput = ({
   availableTags,
   selectedTags,
   onChange,
   disabled = false,
-}) => {
+}: TagInputProps) => {
   const [selectedTagId, setSelectedTagId] = useState<string>('');
 
   const handleAddTag = (tagIdToAdd: string) => {

@@ -1,5 +1,3 @@
-// frontend/src/features/clubs/components/CategorySelector.tsx
-import React from 'react';
 import { ClubCategory } from '../types/club';
 
 interface CategorySelectorProps {
@@ -10,13 +8,13 @@ interface CategorySelectorProps {
   error?: string;
 }
 
-export const CategorySelector: React.FC<CategorySelectorProps> = ({
+export const CategorySelector = ({
   categories,
   selectedCategoryId,
   onChange,
   disabled = false,
   error,
-}) => {
+}: CategorySelectorProps) => {
   return (
     <div className="w-full">
       <label className="block text-sm font-medium text-gray-700 mb-1">

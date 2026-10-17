@@ -41,11 +41,11 @@ export interface ClubResponseDto {
 export interface ClubUpdateRequestDto {
   name: string;
   description: string;
-  objectives?: string | null;
-  contactUrl?: string | null;
-  facebookUrl?: string | null;
-  instagramUrl?: string | null;
-  contactEmail?: string | null;
-  imageUrl?: string | null;
-  bannerUrl?: string | null;
+  objectives?: string;
+  contactUrl?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  contactEmail?: string;
+  imageUrl?: string;
+  bannerUrl?: string;
 }
