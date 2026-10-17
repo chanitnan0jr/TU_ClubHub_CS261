@@ -185,6 +185,86 @@ class CommitteeMethodSecurityIntegrationTest {
 			.andExpect(status().isForbidden());
 	}
 
+	@Test
+	void futureAppointmentDoesNotAuthorize() throws Exception {
+		grantCommittee(TARGET_CLUB_ID, "COMMITTEE", Instant.now().plusSeconds(3600), Instant.now().plusSeconds(7200));
+
+		mockMvc.perform(put("/api/v1/test/clubs/{clubId}", TARGET_CLUB_ID)
+				.with(authentication(authenticationFor(committeeAccount)))
+				.with(csrf()))
+			.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void inactiveMembershipDoesNotAuthorizeEvenWithActiveAssignment() throws Exception {
+		ClubMembership membership = membershipRepository.saveAndFlush(
+				new ClubMembership(TARGET_CLUB_ID, committeeAccount.getId(), "INACTIVE"));
+		assignmentRepository.saveAndFlush(new ClubCommitteeAssignment(
+				membership.getId(), "Committee Member", "COMMITTEE",
+				Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600), committeeAccount.getId()));
+
+		mockMvc.perform(put("/api/v1/test/clubs/{clubId}", TARGET_CLUB_ID)
+				.with(authentication(authenticationFor(committeeAccount)))
+				.with(csrf()))
+			.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void endedMembershipDoesNotAuthorizeEvenWithActiveAssignment() throws Exception {
+		ClubMembership membership = membershipRepository.saveAndFlush(
+				new ClubMembership(TARGET_CLUB_ID, committeeAccount.getId(), "ACTIVE"));
+		jdbcTemplate.update("UPDATE club_memberships SET ended_at = ? WHERE id = ?",
+				Instant.now().minusSeconds(60), membership.getId());
+		assignmentRepository.saveAndFlush(new ClubCommitteeAssignment(
+				membership.getId(), "Committee Member", "COMMITTEE",
+				Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600), committeeAccount.getId()));
+
+		mockMvc.perform(put("/api/v1/test/clubs/{clubId}", TARGET_CLUB_ID)
+				.with(authentication(authenticationFor(committeeAccount)))
+				.with(csrf()))
+			.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void activePresidentCanAccessAssignedClub() throws Exception {
+		grantCommittee(TARGET_CLUB_ID, "PRESIDENT", Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
+
+		mockMvc.perform(put("/api/v1/test/clubs/{clubId}", TARGET_CLUB_ID)
+				.with(authentication(authenticationFor(committeeAccount)))
+				.with(csrf())
+				.contentType(MediaType.APPLICATION_JSON))
+			.andExpect(status().isOk());
+	}
+
+	@Test
+	void unauthorizedRoleSuchAsAdvisorDoesNotAuthorize() throws Exception {
+		grantCommittee(TARGET_CLUB_ID, "ADVISOR", Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
+
+		mockMvc.perform(put("/api/v1/test/clubs/{clubId}", TARGET_CLUB_ID)
+				.with(authentication(authenticationFor(committeeAccount)))
+				.with(csrf()))
+			.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void forbiddenResponseMatchesRfc7807ProblemDetailsContract() throws Exception {
+		grantCommittee(OTHER_CLUB_ID, "COMMITTEE", Instant.now().minusSeconds(60), Instant.now().plusSeconds(3600));
+
+		mockMvc.perform(put("/api/v1/test/clubs/{clubId}", TARGET_CLUB_ID)
+				.with(authentication(authenticationFor(committeeAccount)))
+				.with(csrf()))
+			.andExpect(status().isForbidden())
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Type", org.hamcrest.Matchers.containsString("application/problem+json")))
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.type").value("urn:tuclubhub:problem:access-denied"))
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.title").value("Access denied"))
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value(403))
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.detail").value("You are not allowed to access this resource."))
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.instance").value("/api/v1/test/clubs/" + TARGET_CLUB_ID))
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.code").value("ACCESS_DENIED"))
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.traceId").isNotEmpty());
+	}
+
 	private void grantCommittee(Long clubId, String permission, Instant startsAt, Instant endsAt) {
 		ClubMembership membership = membershipRepository.saveAndFlush(
 				new ClubMembership(clubId, committeeAccount.getId(), "ACTIVE"));
