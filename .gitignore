@@ -113,3 +113,7 @@ test-results/
 docker-compose.override.yml
 compose.override.yaml
 pgdata/
+
+# Local Dev / IDE Scratch
+.archify/
+scratch/
