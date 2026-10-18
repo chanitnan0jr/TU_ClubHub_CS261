@@ -29,19 +29,25 @@ export function isValidInstagramUrl(value: string): boolean {
   return isValidSocialUrl(value, ['instagram.com', 'www.instagram.com'])
 }
 
+export function isValidInstagramHandle(value: string): boolean {
+  return /^[a-zA-Z0-9._]+$/.test(value) && value.length <= 30
+}
+
 export function isValidDomeTuEmail(value: string): boolean {
   return hasAllowedEmailDomain(value, ['dome.tu.ac.th'])
 }
 
 export function isValidClubContactEmail(value: string): boolean {
-  return (
-    value.trim().length <= 254 &&
-    hasAllowedEmailDomain(value, [
-      'dome.tu.ac.th',
-      'tu.ac.th',
-      'gmail.com',
-    ])
-  )
+  const parts = value.trim().split('@')
+  if (parts.length !== 2 || value.trim().length > 254) return false
+
+  const domain = parts[1].toLowerCase()
+  const isAllowedDomain =
+    domain === 'gmail.com' ||
+    domain === 'tu.ac.th' ||
+    domain.endsWith('.tu.ac.th')
+
+  return isAllowedDomain && isValidEmailLocalPart(parts[0])
 }
 
 function hasAllowedEmailDomain(
