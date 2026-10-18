@@ -28,3 +28,32 @@ select,
 textarea {
   font: inherit;
 }
+
+@keyframes validation-message-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-4px);
+  }
+
+  50% {
+    transform: translateX(4px);
+  }
+
+  75% {
+    transform: translateX(-2px);
+  }
+}
+
+.validation-message-shake {
+  animation: validation-message-shake 360ms ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .validation-message-shake {
+    animation: none;
+  }
+}
