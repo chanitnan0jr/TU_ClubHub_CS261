@@ -1,0 +1,698 @@
+openapi: 3.0.3
+info:
+  title: TU ClubHub Recruitment Rounds API — proposed contract
+  version: 1.0.0
+  description:
+    US-05. Committee-only management API, separate from existing public
+    recruitment-rounds API. No physical DELETE; CLOSE/CANCEL retain applications.
+    Dates require RFC3339 offset, stored as UTC. Database constraints and additional
+    proposed edit policy documented in README.
+servers:
+  - url: http://localhost:8080
+security:
+  - sessionAuth: []
+paths:
+  /api/v1/clubs/{clubId}/rounds:
+    parameters:
+      - name: clubId
+        in: path
+        required: true
+        description: Positive PostgreSQL BIGINT decimal ID; maximum 9223372036854775807
+        schema:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+    get:
+      operationId: listRounds
+      tags:
+        - Recruitment rounds
+      summary: listRounds
+      responses:
+        "400":
+          description: Invalid JSON, fields, dates or query parameters
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: No valid session (CSRF failure can take precedence)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Not committee of target club, or CSRF_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Club or round belonging to that club not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Version mismatch, invalid state or edit policy conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "200":
+          description: All rounds for authorized committee, including drafts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoundPage"
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: publicationStatus
+          in: query
+          schema:
+            type: string
+            enum:
+              - DRAFT
+              - PUBLISHED
+              - CANCELLED
+      description:
+        "Stable ordering: createdAt DESC, id DESC. Missing club: 404. Empty
+        existing club: 200 with empty items."
+    post:
+      operationId: createRound
+      tags:
+        - Recruitment rounds
+      summary: createRound
+      responses:
+        "400":
+          description: Invalid JSON, fields, dates or query parameters
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: No valid session (CSRF failure can take precedence)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Not committee of target club, or CSRF_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Club or round belonging to that club not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Version mismatch, invalid state or edit policy conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "415":
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "201":
+          description: Draft created atomically with questions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Round"
+          headers:
+            Location:
+              description: URI of created round
+              schema:
+                type: string
+      parameters:
+        - name: X-CSRF-TOKEN
+          in: header
+          required: true
+          description:
+            Obtain current token from GET /api/v1/auth/csrf; renew after
+            login.
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoundWrite"
+  /api/v1/clubs/{clubId}/rounds/{roundId}:
+    parameters:
+      - name: clubId
+        in: path
+        required: true
+        description: Positive PostgreSQL BIGINT decimal ID; maximum 9223372036854775807
+        schema:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+      - name: roundId
+        in: path
+        required: true
+        description: Positive PostgreSQL BIGINT decimal ID; maximum 9223372036854775807
+        schema:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+    get:
+      operationId: getRound
+      tags:
+        - Recruitment rounds
+      summary: getRound
+      responses:
+        "400":
+          description: Invalid JSON, fields, dates or query parameters
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: No valid session (CSRF failure can take precedence)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Not committee of target club, or CSRF_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Club or round belonging to that club not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Version mismatch, invalid state or edit policy conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Round"
+    put:
+      operationId: replaceRound
+      tags:
+        - Recruitment rounds
+      summary: replaceRound
+      responses:
+        "400":
+          description: Invalid JSON, fields, dates or query parameters
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: No valid session (CSRF failure can take precedence)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Not committee of target club, or CSRF_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Club or round belonging to that club not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Version mismatch, invalid state or edit policy conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "415":
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Round"
+      parameters:
+        - name: X-CSRF-TOKEN
+          in: header
+          required: true
+          description:
+            Obtain current token from GET /api/v1/auth/csrf; renew after
+            login.
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoundReplace"
+      description:
+        Replace all editable data; omitted nullable fields become null.
+        Never upsert. Questions replaced atomically only when policy permits. Version
+        checked atomically.
+    patch:
+      operationId: transitionRound
+      tags:
+        - Recruitment rounds
+      summary: transitionRound
+      responses:
+        "400":
+          description: Invalid JSON, fields, dates or query parameters
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "401":
+          description: No valid session (CSRF failure can take precedence)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: Not committee of target club, or CSRF_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          description: Club or round belonging to that club not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Version mismatch, invalid state or edit policy conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "415":
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Round"
+      parameters:
+        - name: X-CSRF-TOKEN
+          in: header
+          required: true
+          description:
+            Obtain current token from GET /api/v1/auth/csrf; renew after
+            login.
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoundPatch"
+      description:
+        "Command-style PATCH using application/json; not JSON Merge Patch.
+        PUBLISH: DRAFT -> PUBLISHED. CLOSE: manually close a currently accepting PUBLISHED
+        round. CANCEL: DRAFT/PUBLISHED -> CANCELLED. Other transitions: 409. Server
+        assigns timestamps. Version checked atomically."
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: SESSION
+      description: Spring Session cookie; confirm deployment cookie name.
+  schemas:
+    QuestionInput:
+      type: object
+      additionalProperties: false
+      properties:
+        prompt:
+          type: string
+          minLength: 1
+          pattern: \S
+        required:
+          type: boolean
+        displayOrder:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        maxLength:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+      required:
+        - prompt
+        - required
+        - displayOrder
+        - maxLength
+    RoundWrite:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: \S
+        academicYear:
+          type: integer
+          minimum: 1
+          maximum: 32767
+        semester:
+          type: integer
+          minimum: 1
+          maximum: 32767
+        description:
+          type: string
+          minLength: 1
+          pattern: \S
+        eligibilityText:
+          type: string
+          nullable: true
+        opensAt:
+          type: string
+          format: date-time
+        closesAt:
+          type: string
+          format: date-time
+        confirmationDeadline:
+          type: string
+          format: date-time
+        resultsScheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionInput"
+      required:
+        - title
+        - academicYear
+        - semester
+        - description
+        - opensAt
+        - closesAt
+        - confirmationDeadline
+        - questions
+    RoundPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        action:
+          type: string
+          enum:
+            - PUBLISH
+            - CLOSE
+            - CANCEL
+      required:
+        - version
+        - action
+    Round:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: \S
+        academicYear:
+          type: integer
+          minimum: 1
+          maximum: 32767
+        semester:
+          type: integer
+          minimum: 1
+          maximum: 32767
+        description:
+          type: string
+          minLength: 1
+          pattern: \S
+        eligibilityText:
+          type: string
+          nullable: true
+        opensAt:
+          type: string
+          format: date-time
+        closesAt:
+          type: string
+          format: date-time
+        confirmationDeadline:
+          type: string
+          format: date-time
+        resultsScheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        questions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              prompt:
+                type: string
+                minLength: 1
+                pattern: \S
+              required:
+                type: boolean
+              displayOrder:
+                type: integer
+                minimum: 1
+                maximum: 2147483647
+              maxLength:
+                type: integer
+                minimum: 1
+                maximum: 2147483647
+              id:
+                type: string
+                pattern: ^[1-9][0-9]*$
+            required:
+              - prompt
+              - required
+              - displayOrder
+              - maxLength
+              - id
+        id:
+          type: string
+          pattern: ^[1-9][0-9]*$
+        clubId:
+          type: string
+          pattern: ^[1-9][0-9]*$
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        publicationStatus:
+          type: string
+          enum:
+            - DRAFT
+            - PUBLISHED
+            - CANCELLED
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        resultsPublishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - title
+        - academicYear
+        - semester
+        - description
+        - eligibilityText
+        - opensAt
+        - closesAt
+        - confirmationDeadline
+        - resultsScheduledAt
+        - questions
+        - id
+        - clubId
+        - version
+        - publicationStatus
+        - closedAt
+        - publishedAt
+        - resultsPublishedAt
+        - createdAt
+        - updatedAt
+    RoundPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Round"
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          format: int64
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+      required:
+        - items
+        - page
+        - size
+        - totalElements
+        - totalPages
+    RoundReplace:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: \S
+        academicYear:
+          type: integer
+          minimum: 1
+          maximum: 32767
+        semester:
+          type: integer
+          minimum: 1
+          maximum: 32767
+        description:
+          type: string
+          minLength: 1
+          pattern: \S
+        eligibilityText:
+          type: string
+          nullable: true
+        opensAt:
+          type: string
+          format: date-time
+        closesAt:
+          type: string
+          format: date-time
+        confirmationDeadline:
+          type: string
+          format: date-time
+        resultsScheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionInput"
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - title
+        - academicYear
+        - semester
+        - description
+        - opensAt
+        - closesAt
+        - confirmationDeadline
+        - questions
+        - version
+    Problem:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+        traceId:
+          type: string
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+            required:
+              - field
+              - code
+              - message
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - instance
+        - code
+        - traceId
+        - fieldErrors
