@@ -11,6 +11,10 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -147,7 +151,7 @@ public class ClubExceptionHandler {
                 .body(response.getBody());
     }
 
-    @ExceptionHandler(DataAccessResourceFailureException.class)
+    @ExceptionHandler({DataAccessResourceFailureException.class, CannotCreateTransactionException.class})
     public ResponseEntity<ProblemResponse> databaseUnavailable(
             HttpServletRequest request
     ) {
@@ -157,6 +161,28 @@ public class ClubExceptionHandler {
                 "Service unavailable",
                 "The database is temporarily unavailable.",
                 "SERVICE_UNAVAILABLE",
+                List.of()
+        );
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ProblemResponse> unexpectedFailure(
+            Exception exception,
+            HttpServletRequest request
+    ) throws Exception {
+        // Preserve security denials and framework HTTP errors instead of relabeling them as 500.
+        if (exception instanceof AuthenticationException
+                || exception instanceof AccessDeniedException
+                || exception instanceof ErrorResponse) {
+            throw exception;
+        }
+
+        return problem(
+                request,
+                500,
+                "Internal server error",
+                "The request could not be completed.",
+                "INTERNAL_ERROR",
                 List.of()
         );
     }
