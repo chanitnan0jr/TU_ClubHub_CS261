@@ -1,6 +1,8 @@
 package com.tu.clubhub.recruitment.service;
 
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
+import com.tu.clubhub.recruitment.dto.QuestionInput;
+import com.tu.clubhub.recruitment.dto.RoundWriteRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +12,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -49,69 +52,15 @@ class RecruitmentRoundServiceIntegrationTest {
 
     @Test
     void closingRoundPreservesApplicationAnswersAndHistory() {
-        String suffix = UUID.randomUUID().toString();
+        TestClub fixture = createClubWithCommittee();
+        OffsetDateTime now = fixture.now();
 
-        OffsetDateTime now =
-                clock.instant().atOffset(ZoneOffset.UTC);
-
-        Long committeeId = jdbc.queryForObject("""
-                INSERT INTO users (tu_username, display_name)
-                VALUES (?, 'Test committee')
-                RETURNING id
-                """, Long.class, "committee-" + suffix);
-
-        Long studentId = jdbc.queryForObject("""
-                INSERT INTO users (tu_username, display_name)
-                VALUES (?, 'Test student')
-                RETURNING id
-                """, Long.class, "student-" + suffix);
+        Long studentId = createUser("student");
 
         jdbc.update("""
                 INSERT INTO student_profiles (user_id, student_code)
                 VALUES (?, ?)
-                """, committeeId, "C-" + suffix.substring(0, 16));
-
-        jdbc.update("""
-                INSERT INTO student_profiles (user_id, student_code)
-                VALUES (?, ?)
-                """, studentId, "S-" + suffix.substring(0, 16));
-
-        Long categoryId = jdbc.queryForObject("""
-                INSERT INTO club_categories (name)
-                VALUES (?)
-                RETURNING id
-                """, Long.class, "category-" + suffix);
-
-        Long clubId = jdbc.queryForObject("""
-                INSERT INTO clubs
-                    (category_id, name, description, created_by)
-                VALUES (?, ?, 'Test club', ?)
-                RETURNING id
-                """, Long.class,
-                categoryId,
-                "club-" + suffix,
-                committeeId);
-
-        Long membershipId = jdbc.queryForObject("""
-                INSERT INTO club_memberships
-                    (club_id, user_id, status, joined_at)
-                VALUES (?, ?, 'ACTIVE', ?)
-                RETURNING id
-                """, Long.class,
-                clubId,
-                committeeId,
-                now.minusDays(1));
-
-        jdbc.update("""
-                INSERT INTO club_committee_assignments
-                    (membership_id, position_name, permission_role,
-                     starts_at, ends_at, assigned_by)
-                VALUES (?, 'Committee', 'COMMITTEE', ?, ?, ?)
-                """,
-                membershipId,
-                now.minusDays(1),
-                now.plusDays(1),
-                committeeId);
+                """, studentId, studentCode());
 
         Long roundId = jdbc.queryForObject("""
                 INSERT INTO recruitment_rounds
@@ -122,22 +71,24 @@ class RecruitmentRoundServiceIntegrationTest {
                 VALUES (?, 'Test round', 2569, 1,
                         'Description', ?, ?, ?, 'PUBLISHED', ?, ?)
                 RETURNING id
-                """, Long.class,
-                clubId,
+                """,
+                Long.class,
+                fixture.clubId(),
                 now.minusHours(1),
                 now.plusHours(1),
                 now.plusDays(1),
                 now.minusHours(2),
-                committeeId);
+                fixture.userId());
 
         Long applicationId = jdbc.queryForObject("""
                 INSERT INTO applications
                     (round_id, club_id, applicant_id, motivation)
                 VALUES (?, ?, ?, 'Original motivation')
                 RETURNING id
-                """, Long.class,
+                """,
+                Long.class,
                 roundId,
-                clubId,
+                fixture.clubId(),
                 studentId);
 
         Long questionId = jdbc.queryForObject("""
@@ -176,18 +127,8 @@ class RecruitmentRoundServiceIntegrationTest {
                 WHERE application_id = ? ORDER BY id
                 """, applicationId);
 
-        var principal = new ClubHubPrincipal(
-                committeeId,
-                "committee-" + suffix,
-                "USER");
-
-        SecurityContextHolder.getContext().setAuthentication(
-                UsernamePasswordAuthenticationToken.authenticated(
-                        principal,
-                        null,
-                        List.of()));
-
-        var result = service.closeRound(clubId, roundId, 0L);
+        var result = service.closeRound(
+                fixture.clubId(), roundId, 0L);
 
         assertNotNull(result.closedAt());
         assertEquals(1L, result.version().longValue());
@@ -223,5 +164,207 @@ class RecruitmentRoundServiceIntegrationTest {
         assertEquals(
                 result.closedAt(),
                 storedClosedAt.toInstant());
+    }
+
+    @Test
+    void createUpdateAndPublishRoundWithQuestions() {
+        TestClub fixture = createClubWithCommittee();
+        OffsetDateTime now = fixture.now();
+        Long clubId = fixture.clubId();
+
+        var createRequest = new RoundWriteRequest(
+                "Original title",
+                2569,
+                1,
+                "Original description",
+                null,
+                now.plusHours(1),
+                now.plusHours(2),
+                now.plusDays(1),
+                null,
+                List.of(new QuestionInput(
+                        "Original question", true, 1, 500)),
+                null);
+
+        var created = service.createRound(clubId, createRequest);
+
+        assertNotNull(created.id());
+        assertEquals("DRAFT", created.publicationStatus());
+        assertEquals(0L, created.version().longValue());
+        assertEquals(fixture.userId(), created.createdBy());
+
+        assertEquals(
+                "Original question",
+                jdbc.queryForObject("""
+                        SELECT prompt FROM application_questions
+                        WHERE round_id = ?
+                        """, String.class, created.id()));
+
+        var updateRequest = new RoundWriteRequest(
+                "Updated title",
+                2569,
+                1,
+                "Updated description",
+                null,
+                now.plusHours(1),
+                now.plusHours(3),
+                now.plusDays(1),
+                null,
+                List.of(new QuestionInput(
+                        "Updated question", false, 1, 1000)),
+                created.version());
+
+        var updated = service.updateRound(
+                clubId, created.id(), updateRequest);
+
+        assertEquals("Updated title", updated.title());
+        assertEquals(1L, updated.version().longValue());
+
+        Long questionCount = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM application_questions
+                WHERE round_id = ?
+                """, Long.class, created.id());
+
+        assertNotNull(questionCount);
+        assertEquals(1L, questionCount.longValue());
+
+        assertEquals(
+                "Updated question",
+                jdbc.queryForObject("""
+                        SELECT prompt FROM application_questions
+                        WHERE round_id = ?
+                        """, String.class, created.id()));
+
+        var published = service.publishRound(
+                clubId, created.id(), updated.version());
+
+        assertEquals("PUBLISHED", published.publicationStatus());
+        assertNotNull(published.publishedAt());
+        assertEquals(2L, published.version().longValue());
+
+        assertEquals(
+                "PUBLISHED",
+                jdbc.queryForObject("""
+                        SELECT publication_status
+                        FROM recruitment_rounds
+                        WHERE id = ?
+                        """, String.class, created.id()));
+
+        var forbiddenUpdate = new RoundWriteRequest(
+                "Forbidden edit",
+                2569,
+                1,
+                "Description",
+                null,
+                now.plusHours(1),
+                now.plusHours(3),
+                now.plusDays(1),
+                null,
+                List.of(),
+                published.version());
+
+        var error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.updateRound(
+                        clubId, created.id(), forbiddenUpdate));
+
+        assertEquals(409, error.getStatusCode().value());
+
+        assertEquals(
+                "Updated title",
+                jdbc.queryForObject("""
+                        SELECT title FROM recruitment_rounds
+                        WHERE id = ?
+                        """, String.class, created.id()));
+    }
+
+    private TestClub createClubWithCommittee() {
+        String suffix = UUID.randomUUID().toString();
+        OffsetDateTime now =
+                clock.instant().atOffset(ZoneOffset.UTC);
+
+        String username = "committee-" + suffix;
+
+        Long userId = jdbc.queryForObject("""
+                INSERT INTO users (tu_username, display_name)
+                VALUES (?, 'Test committee')
+                RETURNING id
+                """, Long.class, username);
+
+        jdbc.update("""
+                INSERT INTO student_profiles (user_id, student_code)
+                VALUES (?, ?)
+                """, userId, studentCode());
+
+        Long categoryId = jdbc.queryForObject("""
+                INSERT INTO club_categories (name)
+                VALUES (?)
+                RETURNING id
+                """, Long.class, "category-" + suffix);
+
+        Long clubId = jdbc.queryForObject("""
+                INSERT INTO clubs
+                    (category_id, name, description, created_by)
+                VALUES (?, ?, 'Test club', ?)
+                RETURNING id
+                """,
+                Long.class,
+                categoryId,
+                "club-" + suffix,
+                userId);
+
+        Long membershipId = jdbc.queryForObject("""
+                INSERT INTO club_memberships
+                    (club_id, user_id, status, joined_at)
+                VALUES (?, ?, 'ACTIVE', ?)
+                RETURNING id
+                """,
+                Long.class,
+                clubId,
+                userId,
+                now.minusDays(1));
+
+        jdbc.update("""
+                INSERT INTO club_committee_assignments
+                    (membership_id, position_name, permission_role,
+                     starts_at, ends_at, assigned_by)
+                VALUES (?, 'Committee', 'COMMITTEE', ?, ?, ?)
+                """,
+                membershipId,
+                now.minusDays(1),
+                now.plusDays(1),
+                userId);
+
+        var principal = new ClubHubPrincipal(
+                userId, username, "USER");
+
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, List.of()));
+
+        return new TestClub(clubId, userId, now);
+    }
+
+    private Long createUser(String prefix) {
+        return jdbc.queryForObject("""
+                INSERT INTO users (tu_username, display_name)
+                VALUES (?, 'Test user')
+                RETURNING id
+                """,
+                Long.class,
+                prefix + "-" + UUID.randomUUID());
+    }
+
+    private String studentCode() {
+        return "T-" + UUID.randomUUID()
+                .toString()
+                .replace("-", "")
+                .substring(0, 16);
+    }
+
+    private record TestClub(
+            Long clubId,
+            Long userId,
+            OffsetDateTime now) {
     }
 }
