@@ -63,7 +63,8 @@ class PublicClubProfileQueryRepositoryTest {
         assertEquals(1, secondPage.size());
         assertEquals("published open", firstPage.get(0).name());
         assertEquals("opens exactly now", secondPage.get(0).name());
-        assertEquals(0L, queries.countOpenPublicRounds(clubB, now));
+        // The other club has one eligible round, but it must not leak into A's page.
+        assertEquals(1L, queries.countOpenPublicRounds(clubB, now));
         assertEquals(0L, queries.countOpenPublicRounds(clubA, now.plusSeconds(60)));
     }
 
