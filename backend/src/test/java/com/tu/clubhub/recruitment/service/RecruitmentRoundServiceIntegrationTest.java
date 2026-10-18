@@ -20,7 +20,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:postgresql://localhost:5432/tu_clubhub_rounds_test",
+        "spring.datasource.url=${ROUNDS_TEST_DATABASE_URL:jdbc:postgresql://localhost:5432/tu_clubhub_test}",
         "spring.datasource.username=postgres",
         "spring.datasource.password=${DB_PASSWORD}",
         "spring.flyway.enabled=true",
