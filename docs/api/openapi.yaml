@@ -3,15 +3,16 @@ info:
   title: TU-ClubHub API
   version: 1.0.0
   description: >-
-    Proposed foundation contract for the TU-ClubHub application. This specification
-    covers the current foundation scope only; product workflow endpoints are tracked
-    in docs/api/API_v1.md and must be specified before implementation.
+    TU-ClubHub API contract for foundation and public club profile endpoints.
+    Additional product workflow endpoints are tracked in docs/api/API_v1.md and
+    must be specified before implementation.
 servers:
   - url: /
     description: Same-origin application server
 tags:
   - name: Authentication
   - name: Clubs
+  - name: Public Clubs
   - name: Operations
 paths:
   /api/v1/auth/csrf:
@@ -179,6 +180,153 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/ServerError'
+  /api/v1/public/clubs/{id}:
+    get:
+      tags: [Public Clubs]
+      operationId: getPublicClubProfile
+      summary: Get an active club's public profile
+      description: >-
+        Public endpoint; authentication is not required. Returns only an ACTIVE
+        club. If the club does not exist or is inactive, return the same 404
+        response so its non-public existence is not disclosed. Only the explicitly
+        listed public profile fields and safe category/tag summaries may be exposed.
+        Database bigint identifiers are decimal strings on the wire. The id path
+        value must contain decimal digits and fit a positive signed 64-bit integer.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Decimal string for a positive database bigint club identifier.
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+            maxLength: 19
+          example: '20001'
+      responses:
+        '200':
+          description: Active club public profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicClubProfile'
+              example:
+                id: '20001'
+                name: Example Club
+                description: A student club at Thammasat University.
+                objectives: Help students learn and collaborate.
+                contactUrl: https://example.org/contact
+                facebookUrl: null
+                instagramUrl: null
+                contactEmail: club@example.org
+                affiliationLevel: University
+                affiliationName: Thammasat University
+                imageUrl: https://images.example.org/clubs/20001.png
+                bannerUrl: null
+                category:
+                  id: '30001'
+                  name: Technology
+                tags:
+                  - id: '40001'
+                    name: Programming
+        '400':
+          $ref: '#/components/responses/InvalidResourceId'
+        '404':
+          $ref: '#/components/responses/PublicClubNotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/ServerError'
+  /api/v1/public/clubs/{id}/recruitment-rounds:
+    get:
+      tags: [Public Clubs]
+      operationId: listOpenPublicClubRecruitmentRounds
+      summary: List currently open public recruitment rounds for an active club
+      description: >-
+        Public endpoint; authentication is not required. The parent club must be
+        ACTIVE or the endpoint returns the same 404 response as for an unknown club.
+        Include only rounds with publicationStatus PUBLISHED, opensAt <= the
+        evaluation instant < closesAt, and closedAt unset. The start is inclusive;
+        the scheduled close is exclusive. Database timestamps are timestamptz
+        instants and response timestamps are serialized as ISO 8601 UTC with Z.
+        Assumption to confirm: evaluate the window against one backend
+        Clock.instant() per request, with deployed hosts synchronized to UTC; the
+        ERD defines the time boundaries but not the clock source or skew tolerance.
+        The response uses the API's standard paginated collection wrapper; an
+        active club with no qualifying rounds returns 200 with items: [] and zero
+        totals.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Decimal string for a positive database bigint club identifier.
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+            maxLength: 19
+          example: '20001'
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page number.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+        - name: size
+          in: query
+          required: false
+          description: Number of rounds per page; maximum 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+      responses:
+        '200':
+          description: Currently open public rounds for the active club; may be empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicRecruitmentRoundPage'
+              examples:
+                roundsAvailable:
+                  summary: At least one published round is currently open
+                  value:
+                    items:
+                      - id: '50001'
+                        name: Academic Year 2026
+                        opensAt: '2026-10-01T00:00:00Z'
+                        closesAt: '2026-10-31T16:59:59Z'
+                    page:
+                      number: 0
+                      size: 20
+                      totalElements: 1
+                      totalPages: 1
+                noRoundsAvailable:
+                  summary: Active club has no rounds in the current open window
+                  value:
+                    items: []
+                    page:
+                      number: 0
+                      size: 20
+                      totalElements: 0
+                      totalPages: 0
+        '400':
+          $ref: '#/components/responses/InvalidResourceId'
+        '404':
+          $ref: '#/components/responses/PublicClubNotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         default:
           $ref: '#/components/responses/ServerError'
   /api/v1/clubs/{clubId}:
@@ -653,6 +801,152 @@ components:
         closedAt:
           type: [string, 'null']
           format: date-time
+    PublicClubProfile:
+      type: object
+      additionalProperties: false
+      description: >-
+        Whitelisted public profile projection for an ACTIVE club. Does not expose
+        persistence metadata, creator identity, committee data, or internal notes.
+      required: [id, name, description, objectives, contactUrl, facebookUrl, instagramUrl, contactEmail, affiliationLevel, affiliationName, imageUrl, bannerUrl, category, tags]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+          maxLength: 19
+          description: Decimal string representing a positive signed 64-bit database identifier.
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          description: Public club description.
+        objectives:
+          type: [string, 'null']
+        contactUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        facebookUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        instagramUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        contactEmail:
+          type: [string, 'null']
+          format: email
+          maxLength: 254
+        affiliationLevel:
+          type: [string, 'null']
+          maxLength: 30
+        affiliationName:
+          type: [string, 'null']
+          maxLength: 200
+        imageUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+          description: If absent, clients may show their bundled default image. The backend does not fetch this URL.
+        bannerUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        category:
+          $ref: '#/components/schemas/PublicClubCategory'
+          description: Public category summary only.
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicClubTag'
+    PublicClubCategory:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+          maxLength: 19
+          description: Decimal string representing a database bigint identifier.
+        name:
+          type: string
+          maxLength: 100
+    PublicClubTag:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+          maxLength: 19
+          description: Decimal string representing a database bigint identifier.
+        name:
+          type: string
+    OpenPublicRecruitmentRound:
+      type: object
+      additionalProperties: false
+      description: >-
+        Public summary returned only while the round is PUBLISHED, opensAt is less
+        than or equal to the evaluation instant, the instant is before closesAt,
+        and closedAt is unset. Timestamps are UTC instants serialized with Z.
+      required: [id, name, opensAt, closesAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+          maxLength: 19
+          description: Decimal string representing a database bigint identifier.
+        name:
+          type: string
+          maxLength: 200
+          description: Public display name mapped from the recruitment round title.
+        opensAt:
+          type: string
+          format: date-time
+          description: Inclusive opening instant, serialized as ISO 8601 UTC with Z.
+          example: '2026-10-01T00:00:00Z'
+        closesAt:
+          type: string
+          format: date-time
+          description: Exclusive scheduled closing instant, serialized as ISO 8601 UTC with Z.
+          example: '2026-10-31T16:59:59Z'
+    PublicRecruitmentRoundPage:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenPublicRecruitmentRound'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PageMetadata:
+      type: object
+      additionalProperties: false
+      required: [number, size, totalElements, totalPages]
+      properties:
+        number:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
     Problem:
       type: object
       required: [type, title, status, code, traceId]
@@ -705,6 +999,34 @@ components:
           type: string
           const: DOWN
   responses:
+    InvalidResourceId:
+      description: The id is not a valid decimal bigint identifier or is out of range
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:invalid-resource-id
+            title: Invalid resource identifier
+            status: 400
+            detail: id must contain decimal digits and fit a positive signed 64-bit integer.
+            instance: /api/v1/public/clubs/abc
+            code: INVALID_RESOURCE_ID
+            traceId: 01J9EXAMPLE7K4D5
+    PublicClubNotFound:
+      description: No active public club exists for this identifier
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:club-not-found
+            title: Club not found
+            status: 404
+            detail: No public club was found for this identifier.
+            instance: /api/v1/public/clubs/20001
+            code: CLUB_NOT_FOUND
+            traceId: 01J9EXAMPLE7K4D5
     ValidationError:
       description: Request body is malformed or fails validation
       content:

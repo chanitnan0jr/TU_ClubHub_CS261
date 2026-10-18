@@ -9,7 +9,7 @@
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
 
-The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](docs/api/openapi.yaml). Keep it in sync with this document and with the DTOs consumed by the frontend. The backend implements the TU authentication adapter and `/api/v1/auth` endpoints, including the 8-hour absolute session timeout and fresh CSRF token in the login response. Production club endpoints are not implemented, so the public club response fields below remain an initial proposal to confirm against the ERD.
+The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](docs/api/openapi.yaml). Keep it in sync with this document and with the DTOs consumed by the frontend. The backend implements the TU authentication adapter and `/api/v1/auth` endpoints, including the 8-hour absolute session timeout and fresh CSRF token in the login response. The public endpoints added below are API contracts only and are not yet implemented; their response fields are limited to values supported by the current club DTOs and ERD.
 
 ## 1. Contract scope
 
@@ -18,7 +18,7 @@ The foundation contract covers:
 - Session-based authentication through the TU Authentication API.
 - CSRF token bootstrap for browser requests.
 - The current user's minimal account identity.
-- Public club detail for the first frontend/backend vertical slice.
+- Public club profiles and currently open recruitment rounds for active clubs.
 - A minimal health endpoint for operations.
 
 Application submission and review, recruitment management, membership decisions, notifications, search, and dashboards are product backlog work. Their request and response schemas are not defined here. They must be added to this contract before either client or server implements those stories. A not-yet-implemented endpoint must not return a success response as a stub.
@@ -39,7 +39,7 @@ Application submission and review, recruitment management, membership decisions,
 
 The browser uses relative URLs and sends the session cookie with requests. It must not call the TU Authentication API directly, store credentials or session IDs in browser storage, or treat frontend role state as authorization. The backend checks authentication and resource permissions on every protected request.
 
-### Collection convention for future endpoints
+### Collection convention
 
 Collection APIs must be paginated. Unless a feature needs a different documented strategy, use zero-based `page` and `size` query parameters, default `page=0`, default `size=20`, and maximum `size=100`. Apply authorization and filters before pagination and before calculating totals.
 
@@ -55,7 +55,7 @@ Collection APIs must be paginated. Unless a feature needs a different documented
 }
 ```
 
-Only return sort fields explicitly supported by the endpoint. The collection wrapper is a convention for future collection endpoints; the foundation currently defines no collection endpoint.
+Only return sort fields explicitly supported by the endpoint. The public recruitment-round endpoint uses this collection wrapper.
 
 ## 3. Authentication, session, and CSRF
 
@@ -158,6 +158,53 @@ Invalidates the current server-side session and clears the session cookie. Requi
 An upstream timeout or outage must never result in a successful login or an automatic switch to the mock adapter. Mock authentication is restricted to explicit local/test configuration; enabling it in production must prevent application startup.
 
 ## 4. Club profile
+
+### Public club API
+
+The following read-only endpoints are public and do not require a session cookie or CSRF token. Both return data only for a club whose `clubs.status` is `ACTIVE`. An unknown or inactive club returns the same `404 CLUB_NOT_FOUND` response to avoid disclosing whether an inactive club exists. The `id` path parameter is a decimal string for a positive signed 64-bit database `bigint`, matching the project's wire convention. Non-decimal values and values outside the supported integer range return `400 INVALID_RESOURCE_ID`.
+
+#### `GET /api/v1/public/clubs/{id}`
+
+Returns the public club profile directly as JSON (`PublicClubProfile`). It includes the profile fields already defined by the club API contract, a category summary, and tag summaries. Nullable profile values are present as `null` when unset. It does not include the club's database status, creator, timestamps, version, committee assignments, or internal notes.
+
+```json
+{
+  "id": "20001",
+  "name": "Example Club",
+  "description": "A student club at Thammasat University.",
+  "objectives": "Help students learn and collaborate.",
+  "contactUrl": "https://example.org/contact",
+  "facebookUrl": null,
+  "instagramUrl": null,
+  "contactEmail": "club@example.org",
+  "affiliationLevel": "University",
+  "affiliationName": "Thammasat University",
+  "imageUrl": "https://images.example.org/clubs/20001.png",
+  "bannerUrl": null,
+  "category": { "id": "30001", "name": "Technology" },
+  "tags": [{ "id": "40001", "name": "Programming" }]
+}
+```
+
+#### `GET /api/v1/public/clubs/{id}/recruitment-rounds`
+
+Returns a paginated `items`/`page` collection of public recruitment round summaries. It includes a round only when `publication_status = 'PUBLISHED'`, `opens_at <= evaluation instant < closes_at`, and `closed_at IS NULL`. The opening instant is inclusive; the scheduled closing instant is exclusive. This uses the open-window rule recorded in the ERD. An active club with no qualifying rounds returns `200 OK` with an empty `items` array and zero totals:
+
+```json
+{
+  "items": [],
+  "page": {
+    "number": 0,
+    "size": 20,
+    "totalElements": 0,
+    "totalPages": 0
+  }
+}
+```
+
+For non-empty pages, each item contains only `id`, `name`, `opensAt`, and `closesAt`. `name` is the public display name for the round (mapped from the ERD's `recruitment_rounds.title`). The contract uses the standard zero-based `page` and `size` parameters (default `0` and `20`, maximum size `100`). Timestamps are `TIMESTAMPTZ` instants serialized as ISO 8601 UTC values ending in `Z`; `opensAt` and `closesAt` are not local wall-clock values. **Implementation assumption to confirm:** evaluate the window using one backend current instant (`Clock.instant()`) per request, with deployed hosts synchronized to UTC. The ERD defines the boundary behavior but does not specify the clock source or clock-skew tolerance.
+
+Both endpoints use the shared `application/problem+json` `Problem` error format for `400 INVALID_RESOURCE_ID`, `404 CLUB_NOT_FOUND`, `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`. Neither endpoint returns `401` or `403` because both are public reads.
 
 ### `GET /api/v1/clubs/{clubId}`
 
