@@ -10,12 +10,10 @@ import type {
   ClubUpdateRequestDto,
 } from './features/clubs/types/club'
 import {
-  isValidFacebookUrl,
-  isValidInstagramHandle,
-  isRequired,
-  isValidClubContactEmail,
-  isValidUrl,
-} from './utils/validation'
+  validateClubProfile,
+  type ClubProfileDraft,
+  type ClubProfileFieldErrors,
+} from './utils/clubProfileValidation'
 
 export type ClubProfile = ClubResponseDto
 
@@ -30,13 +28,10 @@ interface FormSectionProps {
   children: React.ReactNode
 }
 
-type FieldErrors = Partial<Record<keyof ClubUpdateRequestDto, string>>
-type ClubProfileDraft = Omit<ClubUpdateRequestDto, 'instagramUrl'> & {
-  instagramHandle: string
-}
 type FieldName = keyof ClubProfileDraft
 type UploadField = 'imageUrl' | 'bannerUrl'
 type UploadErrors = Partial<Record<UploadField, string>>
+type FieldErrors = ClubProfileFieldErrors
 type SaveToast = { type: 'success' | 'error'; title: string; message: string }
 interface LocalImagePreview {
   file: File
@@ -71,58 +66,6 @@ function getInstagramHandle(instagramUrl: string | null): string {
   } catch {
     return instagramUrl
   }
-}
-
-function validateProfile(profile: ClubProfileDraft): FieldErrors {
-  const errors: FieldErrors = {}
-
-  if (!isRequired(profile.name)) {
-    errors.name = 'กรุณากรอกชื่อชมรม'
-  } else if (profile.name.trim().length > 200) {
-    errors.name = 'ชื่อชมรมต้องมีความยาวไม่เกิน 200 ตัวอักษร'
-  }
-  if (!isRequired(profile.description)) {
-    errors.description = 'กรุณากรอกรายละเอียดชมรม'
-  }
-  if (profile.contactEmail && !isValidClubContactEmail(profile.contactEmail)) {
-    errors.contactEmail =
-      'กรุณากรอกอีเมลที่ถูกต้อง เช่น contact@club.tu.ac.th'
-  }
-  if (
-    profile.instagramHandle &&
-    !isValidInstagramHandle(profile.instagramHandle)
-  ) {
-    errors.instagramUrl =
-      'ใช้ได้เฉพาะตัวอักษร ตัวเลข จุด และขีดล่าง โดยไม่เว้นวรรค'
-  }
-
-  const urlFields: Array<{
-    field: keyof ClubUpdateRequestDto
-    value: string | null | undefined
-    isValid: (value: string) => boolean
-  }> = [
-    { field: 'contactUrl', value: profile.contactUrl, isValid: isValidUrl },
-    {
-      field: 'facebookUrl',
-      value: profile.facebookUrl,
-      isValid: isValidFacebookUrl,
-    },
-    { field: 'imageUrl', value: profile.imageUrl, isValid: isValidUrl },
-    { field: 'bannerUrl', value: profile.bannerUrl, isValid: isValidUrl },
-  ]
-
-  for (const { field, value, isValid } of urlFields) {
-    if (value && !isValid(value)) {
-      errors[field] =
-        field === 'facebookUrl'
-          ? 'กรุณาใช้ลิงก์ Facebook ที่ขึ้นต้นด้วย https://'
-          : field === 'instagramUrl'
-            ? 'กรุณาใช้ลิงก์ Instagram ที่ขึ้นต้นด้วย https://'
-            : 'กรุณากรอก URL HTTPS ที่ถูกต้อง'
-    }
-  }
-
-  return errors
 }
 
 function FormSection({ title, description, children }: FormSectionProps) {
@@ -239,7 +182,7 @@ function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
       setUploadErrors((current) => ({ ...current, bannerUrl: undefined }))
     }
     if (attemptedSubmit || Object.keys(fieldErrors).length > 0) {
-      setFieldErrors(validateProfile(updatedDraft))
+      setFieldErrors(validateClubProfile(updatedDraft))
     }
     setSaved(false)
     setToast(null)
@@ -295,7 +238,7 @@ function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setAttemptedSubmit(true)
-    const errors = validateProfile(draft)
+    const errors = validateClubProfile(draft)
     setFieldErrors(errors)
     const invalidUploads = Object.values(uploadErrors).some(Boolean)
     if (Object.keys(errors).length > 0 || invalidUploads) {
