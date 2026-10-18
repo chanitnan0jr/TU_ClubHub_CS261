@@ -19,8 +19,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import com.tu.clubhub.auth.dto.ProblemResponse;
 import com.tu.clubhub.club.service.ClubService.ClubNotFoundException;
 import com.tu.clubhub.club.service.ClubService.ClubValidationException;
+import com.tu.clubhub.club.service.PublicClubService.InvalidPublicClubIdException;
 
-@RestControllerAdvice(assignableTypes = ClubController.class)
+@RestControllerAdvice(assignableTypes = {ClubController.class, PublicClubController.class})
 public class ClubExceptionHandler {
 
     @ExceptionHandler(ClubValidationException.class)
@@ -63,13 +64,43 @@ public class ClubExceptionHandler {
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ProblemResponse> invalidResourceId(
+            MethodArgumentTypeMismatchException exception,
+            HttpServletRequest request
+    ) {
+        if (!"clubId".equals(exception.getName()) && !"id".equals(exception.getName())) {
+            String field = exception.getName();
+            return problem(
+                    request,
+                    400,
+                    "Request validation failed",
+                    "One or more request parameters are invalid.",
+                    "VALIDATION_FAILED",
+                    List.of(new ProblemResponse.FieldError(
+                            field,
+                            "INVALID",
+                            "Must be a valid integer."
+                    ))
+            );
+        }
+        return problem(
+                request,
+                400,
+                "Invalid resource ID",
+                "clubId must be a valid decimal ID.",
+                "INVALID_RESOURCE_ID",
+                List.of()
+        );
+    }
+
+    @ExceptionHandler(InvalidPublicClubIdException.class)
+    public ResponseEntity<ProblemResponse> invalidPublicResourceId(
             HttpServletRequest request
     ) {
         return problem(
                 request,
                 400,
                 "Invalid resource ID",
-                "clubId must be a valid decimal ID.",
+                "id must be a valid positive decimal ID.",
                 "INVALID_RESOURCE_ID",
                 List.of()
         );

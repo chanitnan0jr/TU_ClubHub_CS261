@@ -58,6 +58,30 @@ class AbsoluteSessionTimeoutFilterTest {
 		assertNull(request.getSession(false), "expired session is invalidated before a new one is created");
 	}
 
+	@org.junit.jupiter.params.ParameterizedTest
+	@org.junit.jupiter.params.provider.ValueSource(strings = {
+			"/api/v1/public/clubs/123",
+			"/api/v1/public/clubs/123/recruitment-rounds"
+	})
+	void expiredSessionDoesNotBlockPublicClubGets(String path) throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		request.setMethod("GET");
+		request.setRequestURI(path);
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		MockHttpSession session = new MockHttpSession();
+		session.setAttribute(AbsoluteSessionTimeoutFilter.LOGIN_AT_ATTRIBUTE,
+				System.currentTimeMillis() - Duration.ofHours(9).toMillis());
+		request.setSession(session);
+		AtomicBoolean continued = new AtomicBoolean();
+
+		new AbsoluteSessionTimeoutFilter(JsonMapper.builder().build()).doFilter(request, response,
+				(servletRequest, servletResponse) -> continued.set(true));
+
+		assertTrue(continued.get(), "expired session must not block public club reads");
+		assertNull(request.getSession(false), "expired session is removed");
+		assertEquals(200, response.getStatus());
+	}
+
 	@Test
 	void allowsNonExpiredAuthenticatedSession() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest();

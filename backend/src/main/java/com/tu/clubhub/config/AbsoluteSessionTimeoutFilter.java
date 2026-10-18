@@ -50,6 +50,8 @@ public final class AbsoluteSessionTimeoutFilter extends OncePerRequestFilter {
 			return false;
 		}
 		String path = request.getRequestURI();
-		return "/api/v1/auth/csrf".equals(path) || path.startsWith("/api/v1/clubs/");
+		return "/api/v1/auth/csrf".equals(path)
+				|| path.startsWith("/api/v1/clubs/")
+				|| path.matches("/api/v1/public/clubs/[^/]+(?:/recruitment-rounds)?");
 	}
 }
