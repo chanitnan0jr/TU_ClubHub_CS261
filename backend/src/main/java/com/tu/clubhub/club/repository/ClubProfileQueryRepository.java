@@ -1,6 +1,7 @@
 package com.tu.clubhub.club.repository;
 
 import java.sql.Timestamp;
+import java.time.OffsetDateTime;
 import java.time.Instant;
 import java.util.List;
 
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import com.tu.clubhub.club.dto.ClubResponseDto.ClubCategoryDto;
 import com.tu.clubhub.club.dto.ClubResponseDto.ClubTagDto;
 import com.tu.clubhub.club.dto.ClubResponseDto.PublicRecruitmentRoundDto;
+import com.tu.clubhub.club.dto.OpenPublicRecruitmentRoundDto;
 
 @Repository
 public class ClubProfileQueryRepository {
@@ -66,7 +68,7 @@ public class ClubProfileQueryRepository {
     ) {
         return jdbcTemplate.query(
                 """
-                SELECT id, name, opens_at, closes_at, closed_at
+                SELECT id, title AS name, opens_at, closes_at, closed_at
                 FROM recruitment_rounds
                 WHERE club_id = ?
                   AND publication_status = 'PUBLISHED'
@@ -83,7 +85,70 @@ public class ClubProfileQueryRepository {
         );
     }
 
+    /**
+     * Returns only rounds for the requested club that are published, currently
+     * open at the supplied instant, and not manually closed. The caller supplies
+     * a single instant so filtering and counting use identical time boundaries.
+     */
+    public List<OpenPublicRecruitmentRoundDto> findOpenPublicRounds(
+            Long clubId,
+            Instant now,
+            int size,
+            long offset
+    ) {
+        OffsetDateTime evaluationTime = OffsetDateTime.ofInstant(now, java.time.ZoneOffset.UTC);
+        return jdbcTemplate.query(
+                """
+                SELECT id, title AS name, opens_at, closes_at
+                FROM recruitment_rounds
+                WHERE club_id = ?
+                  AND publication_status = 'PUBLISHED'
+                  AND opens_at <= ?
+                  AND ? < closes_at
+                  AND closed_at IS NULL
+                ORDER BY opens_at, id
+                LIMIT ? OFFSET ?
+                """,
+                (rs, rowNum) -> new OpenPublicRecruitmentRoundDto(
+                        rs.getString("id"),
+                        rs.getString("name"),
+                        toInstant(rs.getObject("opens_at", OffsetDateTime.class)),
+                        toInstant(rs.getObject("closes_at", OffsetDateTime.class))
+                ),
+                clubId,
+                evaluationTime,
+                evaluationTime,
+                size,
+                offset
+        );
+    }
+
+    /** Counts all qualifying rounds before pagination is applied. */
+    public long countOpenPublicRounds(Long clubId, Instant now) {
+        OffsetDateTime evaluationTime = OffsetDateTime.ofInstant(now, java.time.ZoneOffset.UTC);
+        Long count = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM recruitment_rounds
+                WHERE club_id = ?
+                  AND publication_status = 'PUBLISHED'
+                  AND opens_at <= ?
+                  AND ? < closes_at
+                  AND closed_at IS NULL
+                """,
+                Long.class,
+                clubId,
+                evaluationTime,
+                evaluationTime
+        );
+        return count == null ? 0L : count;
+    }
+
     private static Instant toInstant(Timestamp timestamp) {
+        return timestamp == null ? null : timestamp.toInstant();
+    }
+
+    private static Instant toInstant(OffsetDateTime timestamp) {
         return timestamp == null ? null : timestamp.toInstant();
     }
 }

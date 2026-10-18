@@ -12,6 +12,8 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
 
     Optional<Club> findByName(String name);
 
+    Optional<Club> findByIdAndStatus(Long id, String status);
+
     List<Club> findByStatus(String status);
 
     List<Club> findByCategoryIdAndStatus(

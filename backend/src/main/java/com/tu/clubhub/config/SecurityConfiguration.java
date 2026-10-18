@@ -94,6 +94,9 @@ public class SecurityConfiguration {
 								"/dashboard/**"
 						).permitAll()
 						.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
+						.requestMatchers(HttpMethod.GET,
+								"/api/v1/public/clubs/*",
+								"/api/v1/public/clubs/*/recruitment-rounds").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/clubs/**").permitAll()
 						.anyRequest().authenticated())
 				.requestCache(cache -> cache.disable())
