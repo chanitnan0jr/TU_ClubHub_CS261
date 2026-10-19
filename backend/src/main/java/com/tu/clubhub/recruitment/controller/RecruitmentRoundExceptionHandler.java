@@ -20,6 +20,7 @@ import org.springframework.validation.method.ParameterErrors;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -107,6 +108,9 @@ public class RecruitmentRoundExceptionHandler {
         List<ProblemResponse.FieldError> errors =
                 new ArrayList<>();
 
+        List<ProblemResponse.FieldError> idErrors =
+                new ArrayList<>();
+
         for (var result : exception.getParameterValidationResults()) {
             if (result instanceof ParameterErrors parameterErrors) {
                 for (var error : parameterErrors.getFieldErrors()) {
@@ -131,13 +135,22 @@ public class RecruitmentRoundExceptionHandler {
                     field = "parameter" + parameter.getParameterIndex();
                 }
 
+                var target = parameter.hasParameterAnnotation(
+                        PathVariable.class) ? idErrors : errors;
+
                 for (var error : result.getResolvableErrors()) {
-                    errors.add(new ProblemResponse.FieldError(
+                    target.add(new ProblemResponse.FieldError(
                             field,
                             "INVALID",
                             error.getDefaultMessage()));
                 }
             }
+        }
+
+        // Path IDs that fail validation (such as 0) share the code
+        // used for IDs that cannot be parsed.
+        if (!idErrors.isEmpty()) {
+            return invalidResourceId(request, idErrors);
         }
 
         return problem(
@@ -155,17 +168,12 @@ public class RecruitmentRoundExceptionHandler {
             MethodArgumentTypeMismatchException exception,
             HttpServletRequest request) {
 
-        return problem(
+        return invalidResourceId(
                 request,
-                400,
-                "Invalid request parameter",
-                "A request parameter has an invalid format.",
-                "INVALID_RESOURCE_ID",
                 List.of(new ProblemResponse.FieldError(
                         exception.getName(),
                         "INVALID",
-                        "Must be a valid value of the expected type.")),
-                new HttpHeaders());
+                        "Must be a valid value of the expected type.")));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -196,8 +204,8 @@ public class RecruitmentRoundExceptionHandler {
             case 400 -> "VALIDATION_FAILED";
             case 401 -> "AUTHENTICATION_REQUIRED";
             case 403 -> "ACCESS_DENIED";
-            case 404 -> "ROUND_NOT_FOUND";
-            case 409 -> "ROUND_CONFLICT";
+            case 404 -> "RESOURCE_NOT_FOUND";
+            case 409 -> "RESOURCE_CONFLICT";
             default -> "HTTP_" + status;
         };
 
@@ -276,6 +284,20 @@ public class RecruitmentRoundExceptionHandler {
         }
 
         return internalError(exception, request);
+    }
+
+    private ResponseEntity<ProblemResponse> invalidResourceId(
+            HttpServletRequest request,
+            List<ProblemResponse.FieldError> fieldErrors) {
+
+        return problem(
+                request,
+                400,
+                "Invalid request parameter",
+                "A request parameter has an invalid format.",
+                "INVALID_RESOURCE_ID",
+                fieldErrors,
+                new HttpHeaders());
     }
 
     private ResponseEntity<ProblemResponse> internalError(

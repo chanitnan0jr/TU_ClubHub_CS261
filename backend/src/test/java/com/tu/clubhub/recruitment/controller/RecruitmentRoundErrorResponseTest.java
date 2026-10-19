@@ -110,9 +110,9 @@ class RecruitmentRoundErrorResponseTest {
                 .andExpect(content().contentTypeCompatibleWith(
                         MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.code").value("ROUND_NOT_FOUND"))
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.type")
-                        .value("urn:tuclubhub:problem:round-not-found"))
+                        .value("urn:tuclubhub:problem:resource-not-found"))
                 .andExpect(jsonPath("$.instance").value(PATH))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
@@ -138,10 +138,55 @@ class RecruitmentRoundErrorResponseTest {
                 .andExpect(content().contentTypeCompatibleWith(
                         MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(409))
-                .andExpect(jsonPath("$.code").value("ROUND_CONFLICT"))
+                .andExpect(jsonPath("$.code").value("RESOURCE_CONFLICT"))
                 .andExpect(jsonPath("$.detail").value(
                         "Round was modified; reload before retrying"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
+    void nonPositiveIdsReturnInvalidResourceId() throws Exception {
+        for (String path : List.of(
+                "/api/v1/clubs/0/rounds/10",
+                "/api/v1/clubs/1/rounds/0")) {
+
+            mockMvc.perform(patch(path)
+                            .with(authentication(login()))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"version":0,"action":"PUBLISH"}
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().contentTypeCompatibleWith(
+                            MediaType.APPLICATION_PROBLEM_JSON))
+                    .andExpect(jsonPath("$.code")
+                            .value("INVALID_RESOURCE_ID"))
+                    .andExpect(jsonPath("$.type").value(
+                            "urn:tuclubhub:problem:invalid-resource-id"))
+                    .andExpect(jsonPath("$.instance").value(path))
+                    .andExpect(jsonPath("$.fieldErrors[0].field")
+                            .isNotEmpty());
+        }
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void nonNumericIdReturnsInvalidResourceId() throws Exception {
+        mockMvc.perform(patch("/api/v1/clubs/abc/rounds/10")
+                        .with(authentication(login()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"version":0,"action":"PUBLISH"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_RESOURCE_ID"))
+                .andExpect(jsonPath("$.fieldErrors[0].field")
+                        .value("clubId"));
+
+        verifyNoInteractions(service);
     }
 
     @Test
