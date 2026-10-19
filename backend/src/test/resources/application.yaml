@@ -16,3 +16,15 @@ server:
     session:
       cookie:
         secure: false
+
+# This file replaces src/main/resources/application.yaml in tests; keep the health settings identical.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: false
