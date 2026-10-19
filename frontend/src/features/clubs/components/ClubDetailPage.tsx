@@ -9,6 +9,9 @@ interface ClubDetailPageProps {
   onNavigateToApplication?: (roundId: string) => void;
 }
 
+// รูป Cover สำรอง กรณีที่ชมรมไม่มีรูปหรือโหลดรูปไม่ขึ้น
+const DEFAULT_COVER_IMAGE = 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&q=80&w=1200';
+
 export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
   clubId = 'volunteer',
   isLoggedIn = false,
@@ -17,23 +20,34 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
   const [club, setClub] = useState<ClubDetailData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+  const [imgSrc, setImgSrc] = useState<string>(DEFAULT_COVER_IMAGE);
 
   useEffect(() => {
     setIsLoading(true);
     fetchClubDetailAPI(clubId).then((data) => {
       setClub(data);
+      if (data?.coverImageUrl) {
+        setImgSrc(data.coverImageUrl);
+      } else {
+        setImgSrc(DEFAULT_COVER_IMAGE);
+      }
       setIsLoading(false);
     });
   }, [clubId]);
 
+  // ใช้ ID ของรอบจริง ไม่ Hardcode ค่า
   const handleApplyClick = () => {
+    if (!club?.activeRound) return;
+
+    const targetRoundId = club.activeRound.id || `round-${club.id}`;
+
     if (!isLoggedIn) {
       setShowLoginModal(true);
     } else {
       if (onNavigateToApplication) {
-        onNavigateToApplication('round-1/2567');
+        onNavigateToApplication(targetRoundId);
       } else {
-        alert('นำทางไปยังหน้าแบบฟอร์มสมัครสมาชิกชมรม');
+        alert(`นำทางไปยังแบบฟอร์มสมัครสมาชิกรอบ ID: ${targetRoundId}`);
       }
     }
   };
@@ -57,6 +71,21 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
     );
   }
 
+  // ตัวช่วยสร้าง URL สำหรับปุ่ม Social
+  const formatUrl = (url?: string, type?: 'fb' | 'ig' | 'mail') => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('mailto:')) {
+      return url;
+    }
+    if (type === 'mail') return `mailto:${url}`;
+    if (type === 'ig') return `https://instagram.com/${url.replace('@', '')}`;
+    return `https://${url}`;
+  };
+
+  const facebookUrl = formatUrl(club.contacts?.facebook, 'fb');
+  const instagramUrl = formatUrl(club.contacts?.instagram, 'ig');
+  const emailUrl = formatUrl(club.contacts?.email, 'mail');
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-24">
       {/* Header Bar */}
@@ -75,7 +104,7 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
             <div className="relative">
               <input
                 type="text"
-                placeholder="ค้นหาชมรมอื่น ๆ ที่คุณสนใจ  ⌘ K"
+                placeholder="ค้นหาชมรมอื่น ๆ ที่คุณสนใจ ⌘ K"
                 className="w-full h-9 rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-4 text-xs text-slate-700 focus:outline-none focus:border-rose-400 focus:bg-white transition-all"
               />
               <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
@@ -113,19 +142,18 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
           <span className="text-rose-700 font-semibold">{club.category}</span>
         </div>
 
-        {/* Hero Cover & Profile Banner */}
+        {/* Hero Cover Image & Fallback */}
         <div className="relative rounded-3xl overflow-hidden bg-white border border-slate-200/80 shadow-sm">
-          {/* Cover Image Background */}
           <div className="h-48 sm:h-72 w-full bg-slate-800 relative overflow-hidden">
             <img
-              src="https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&q=80&w=1200"
-              alt="Club Cover"
+              src={imgSrc}
+              onError={() => setImgSrc(DEFAULT_COVER_IMAGE)}
+              alt={club.name}
               className="w-full h-full object-cover opacity-85"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
           </div>
 
-          {/* Profile Header Info */}
           <div className="p-5 sm:p-7 pt-0 relative flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 -mt-10 sm:-mt-14 relative z-10">
               <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-3xl bg-white p-1 shadow-lg border border-slate-100 shrink-0">
@@ -162,9 +190,7 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
 
         {/* Content Layout Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-          {/* Left Main Column (2 Cols) */}
           <div className="lg:col-span-2 flex flex-col gap-5">
-            {/* Objective Section */}
             <section className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-2">
               <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
                 <span className="text-rose-500">❤️</span>
@@ -175,7 +201,6 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
               </p>
             </section>
 
-            {/* Activities Section */}
             <section className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-3">
               <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
                 <span className="text-rose-500">📌</span>
@@ -194,23 +219,26 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
                   </div>
                 ))}
               </div>
-              <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-100 text-xs text-rose-800 font-medium flex items-center gap-2.5 mt-1">
-                <span className="text-sm">✨</span>
-                <span>{club.announcementNote}</span>
-              </div>
+              {club.announcementNote && (
+                <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-100 text-xs text-rose-800 font-medium flex items-center gap-2.5 mt-1">
+                  <span className="text-sm">✨</span>
+                  <span>{club.announcementNote}</span>
+                </div>
+              )}
             </section>
 
-            {/* Active Recruitment Round Card */}
             <section className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
                   <span className="text-rose-500">📅</span>
                   <span>รอบรับสมัครที่เปิดรับสมัครในขณะนี้</span>
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-extrabold flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-                  <span>LIVE</span>
-                </span>
+                {club.activeRound && !club.activeRound.isClosed && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-extrabold flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                    <span>LIVE</span>
+                  </span>
+                )}
               </div>
 
               {club.activeRound && !club.activeRound.isClosed ? (
@@ -237,7 +265,7 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
                       <span className="text-slate-400">🎓</span>
                       <div>
                         <span className="font-semibold text-slate-700">คุณสมบัติผู้สมัคร: </span>
-                        <span>{club.activeRound.qualification}</span>
+                        <span>{club.activeRound.qualification || club.activeRound.qualificationText}</span>
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
@@ -249,7 +277,6 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
                     </div>
                   </div>
 
-                  {/* Main Action Button */}
                   <button
                     onClick={handleApplyClick}
                     className="w-full h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] active:scale-[0.99] text-white text-xs font-bold shadow-md shadow-rose-900/10 transition-all flex items-center justify-center gap-2 mt-2"
@@ -275,9 +302,7 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
             </section>
           </div>
 
-          {/* Right Sidebar Column (1 Col) */}
           <div className="flex flex-col gap-5">
-            {/* Quick Apply Card (Right Bar) */}
             {club.activeRound && !club.activeRound.isClosed && (
               <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-3.5">
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 w-fit">
@@ -304,58 +329,65 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
               </div>
             )}
 
-            {/* Contacts Sidebar */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-3.5">
-              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <span className="text-rose-500">💬</span>
-                <span>ช่องทางการติดต่อ</span>
-              </h3>
-              <p className="text-[11px] text-slate-400">พูดคุยกับเรา และติดตามกิจกรรมของชมรม</p>
-              
-              <div className="flex flex-col gap-2 text-xs pt-1">
-                <a
-                  href={`https://${club.contacts.facebook}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between hover:bg-slate-100/80 transition-colors group"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-blue-600 font-bold">f</span>
-                    <span className="font-semibold text-slate-700">Facebook</span>
-                  </div>
-                  <span className="text-slate-400 group-hover:text-slate-600 text-[11px]">↗</span>
-                </a>
+            {/* ช่องทางการติดต่อ - แสดงเฉพาะช่องทางที่มีข้อมูลจริง */}
+            {(facebookUrl || instagramUrl || emailUrl) && (
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-3.5">
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <span className="text-rose-500">💬</span>
+                  <span>ช่องทางการติดต่อ</span>
+                </h3>
+                <p className="text-[11px] text-slate-400">พูดคุยกับเรา และติดตามกิจกรรมของชมรม</p>
+                
+                <div className="flex flex-col gap-2 text-xs pt-1">
+                  {facebookUrl && (
+                    <a
+                      href={facebookUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between hover:bg-slate-100/80 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-blue-600 font-bold">f</span>
+                        <span className="font-semibold text-slate-700">Facebook</span>
+                      </div>
+                      <span className="text-slate-400 group-hover:text-slate-600 text-[11px]">↗</span>
+                    </a>
+                  )}
 
-                <a
-                  href={`https://instagram.com/${club.contacts.instagram?.replace('@', '')}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between hover:bg-slate-100/80 transition-colors group"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-pink-600 font-bold">📷</span>
-                    <span className="font-semibold text-slate-700">Instagram</span>
-                  </div>
-                  <span className="text-slate-400 group-hover:text-slate-600 text-[11px]">↗</span>
-                </a>
+                  {instagramUrl && (
+                    <a
+                      href={instagramUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between hover:bg-slate-100/80 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-pink-600 font-bold">📷</span>
+                        <span className="font-semibold text-slate-700">Instagram</span>
+                      </div>
+                      <span className="text-slate-400 group-hover:text-slate-600 text-[11px]">↗</span>
+                    </a>
+                  )}
 
-                <a
-                  href={`mailto:${club.contacts.email}`}
-                  className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between hover:bg-slate-100/80 transition-colors group"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-amber-600 font-bold">✉️</span>
-                    <span className="font-semibold text-slate-700">Email</span>
-                  </div>
-                  <span className="text-slate-400 group-hover:text-slate-600 text-[11px]">↗</span>
-                </a>
+                  {emailUrl && (
+                    <a
+                      href={emailUrl}
+                      className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between hover:bg-slate-100/80 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-amber-600 font-bold">✉️</span>
+                        <span className="font-semibold text-slate-700">Email</span>
+                      </div>
+                      <span className="text-slate-400 group-hover:text-slate-600 text-[11px]">↗</span>
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </main>
 
-      {/* Guest Login Modal */}
       <GuestLoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
