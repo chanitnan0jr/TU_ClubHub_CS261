@@ -66,3 +66,34 @@ export interface ApiProblemResponse {
   fieldErrors?: FieldError[];
   traceId: string;
 }
+
+export interface RecruitmentRoundDetail {
+  id: string;
+  title: string;
+  academicYear: number;
+  semester: string;
+  startDateText: string;
+  endDateText: string;
+  qualificationText: string;
+  questionCountText: string;
+  isOpen: boolean;
+}
+
+export interface ClubDetailData {
+  id: string;
+  name: string;
+  category: string;
+  slogan: string;
+  tags: string[];
+  coverImageUrl: string;
+  logoUrl: string;
+  objective: string;
+  activities: string[];
+  welcomeNote: string;
+  contacts: {
+    facebook?: string;
+    instagram?: string;
+    email?: string;
+  };
+  activeRound?: RecruitmentRoundDetail;
+}
