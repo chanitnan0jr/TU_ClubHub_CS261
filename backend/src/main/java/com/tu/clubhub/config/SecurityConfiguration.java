@@ -98,6 +98,7 @@ public class SecurityConfiguration {
 								"/api/v1/public/clubs/*",
 								"/api/v1/public/clubs/*/recruitment-rounds").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/clubs/**").permitAll()
+						.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
 						.anyRequest().authenticated())
 				.requestCache(cache -> cache.disable())
 				.formLogin(form -> form.disable())
