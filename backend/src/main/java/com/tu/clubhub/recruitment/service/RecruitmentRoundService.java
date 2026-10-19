@@ -172,7 +172,7 @@ public class RecruitmentRoundService {
         }
 
         if (round.closedAt() != null) {
-            return round;
+            throw conflict("Round has already been closed");
         }
 
         Instant now = clock.instant();

@@ -86,6 +86,62 @@ class RecruitmentRoundControllerTest {
     }
 
     @Test
+    void nonCommitteeCannotClose() throws Exception {
+        when(clubSecurity.isCommittee(1L)).thenReturn(false);
+
+        mockMvc.perform(patch("/api/v1/clubs/1/rounds/10")
+                        .with(authentication(login()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"version":0,"action":"CLOSE"}
+                                """))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void nonCommitteeCannotCreate() throws Exception {
+        when(clubSecurity.isCommittee(1L)).thenReturn(false);
+
+        mockMvc.perform(post("/api/v1/clubs/1/rounds")
+                        .with(authentication(login()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Test round","academicYear":2569,"semester":1,
+                                 "description":"Test","opensAt":"2026-10-19T08:00:00Z",
+                                 "closesAt":"2026-10-20T08:00:00Z",
+                                 "confirmationDeadline":"2026-10-21T08:00:00Z",
+                                 "questions":[]}
+                                """))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void nonCommitteeCannotUpdate() throws Exception {
+        when(clubSecurity.isCommittee(1L)).thenReturn(false);
+
+        mockMvc.perform(put("/api/v1/clubs/1/rounds/10")
+                        .with(authentication(login()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Test round","academicYear":2569,"semester":1,
+                                 "description":"Test","opensAt":"2026-10-19T08:00:00Z",
+                                 "closesAt":"2026-10-20T08:00:00Z",
+                                 "confirmationDeadline":"2026-10-21T08:00:00Z",
+                                 "questions":[],"version":0}
+                                """))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
     void publishCallsService() throws Exception {
         when(clubSecurity.isCommittee(1L)).thenReturn(true);
 
