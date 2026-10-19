@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -187,6 +188,30 @@ class RecruitmentRoundErrorResponseTest {
                         .value("clubId"));
 
         verifyNoInteractions(service);
+    }
+
+    @Test
+    void databaseFailureReturnsStandard503() throws Exception {
+        when(clubSecurity.isCommittee(1L)).thenReturn(true);
+
+        when(service.publishRound(1L, 10L, 0L))
+                .thenThrow(new DataAccessResourceFailureException(
+                        "jdbc:postgresql://internal-host/db"));
+
+        mockMvc.perform(patch(PATH)
+                        .with(authentication(login()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"version":0,"action":"PUBLISH"}
+                                """))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
+                .andExpect(jsonPath("$.detail").value(
+                        "The database is temporarily unavailable."))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
 
     @Test
