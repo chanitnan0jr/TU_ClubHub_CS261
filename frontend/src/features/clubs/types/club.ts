@@ -1,99 +1,30 @@
-// frontend/src/features/clubs/types/club.ts
-
-export interface ClubCategory {
-  id: string;
-  name: string;
-}
-
-export interface ClubTag {
-  id: string;
-  name: string;
-}
-
-export interface PublicRecruitmentRound {
-  id: string;
-  name: string;
-  opensAt: string;
-  closesAt: string;
-  closedAt: string | null;
-}
-
-export interface ClubResponseDto {
-  id: string;
-  categoryId: string;
-  name: string;
-  description: string;
-  objectives: string | null;
-  contactUrl: string | null;
-  facebookUrl: string | null;
-  instagramUrl: string | null;
-  contactEmail: string | null;
-  affiliationLevel: string | null;
-  affiliationName: string | null;
-  imageUrl: string | null;
-  bannerUrl: string | null;
-  status: string;
-  category: ClubCategory | null;
-  tags: ClubTag[];
-  recruitmentRounds: PublicRecruitmentRound[];
-}
-
-export interface ClubUpdateRequestDto {
-  name: string;
-  description: string;
-  objectives?: string | null;
-  contactUrl?: string | null;
-  facebookUrl?: string | null;
-  instagramUrl?: string | null;
-  contactEmail?: string | null;
-  imageUrl?: string | null;
-  bannerUrl?: string | null;
-}
-
-export interface FieldError {
-  field: string;
-  code: string;
-  message: string;
-}
-
-export interface ApiProblemResponse {
-  type: string;
+export interface RecruitmentRoundData {
+  id?: string;
   title: string;
-  status: number;
-  detail?: string;
-  instance?: string;
-  code: string;
-  fieldErrors?: FieldError[];
-  traceId: string;
-}
-
-export interface RecruitmentRoundDetail {
-  id: string;
-  title: string;
-  academicYear: number;
-  semester: string;
-  startDateText: string;
-  endDateText: string;
-  qualificationText: string;
-  questionCountText: string;
-  isOpen: boolean;
+  term?: string;
+  startDate?: string;
+  endDate?: string;
+  qualificationText?: string;
+  qualification?: string;
+  questionSummary?: string;
+  isClosed?: boolean;
 }
 
 export interface ClubDetailData {
   id: string;
   name: string;
   category: string;
-  slogan: string;
+  tagline?: string;
   tags: string[];
-  coverImageUrl: string;
-  logoUrl: string;
+  logoUrl?: string;
+  coverImageUrl?: string;
   objective: string;
   activities: string[];
-  welcomeNote: string;
+  announcementNote?: string;
   contacts: {
     facebook?: string;
     instagram?: string;
     email?: string;
   };
-  activeRound?: RecruitmentRoundDetail;
+  activeRound?: RecruitmentRoundData;
 }
