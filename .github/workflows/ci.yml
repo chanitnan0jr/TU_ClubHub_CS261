@@ -93,3 +93,13 @@ jobs:
 
       - name: Run Maven verify
         run: ./mvnw clean verify
+
+      - name: Upload backend tests and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-and-coverage
+          path: |
+            backend/target/surefire-reports/
+            backend/target/site/jacoco/
+          if-no-files-found: warn
