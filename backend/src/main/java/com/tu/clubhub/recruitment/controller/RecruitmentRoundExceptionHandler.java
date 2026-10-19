@@ -381,10 +381,13 @@ public class RecruitmentRoundExceptionHandler {
             List<ProblemResponse.FieldError> fieldErrors,
             HttpHeaders headers) {
 
+        // The contract names the validation type validation-error.
+        String typeSuffix = "VALIDATION_FAILED".equals(code)
+                ? "validation-error"
+                : code.toLowerCase(Locale.ROOT).replace('_', '-');
+
         ProblemResponse body = new ProblemResponse(
-                "urn:tuclubhub:problem:"
-                        + code.toLowerCase(Locale.ROOT)
-                                .replace('_', '-'),
+                "urn:tuclubhub:problem:" + typeSuffix,
                 title,
                 status,
                 detail,

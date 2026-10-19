@@ -62,6 +62,8 @@ class RecruitmentRoundErrorResponseTest {
                         "Cache-Control", containsString("no-store")))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.type")
+                        .value("urn:tuclubhub:problem:validation-error"))
                 .andExpect(jsonPath("$.instance").value(PATH))
                 .andExpect(jsonPath("$.traceId").isNotEmpty())
                 .andExpect(jsonPath("$.fieldErrors[0].field")
