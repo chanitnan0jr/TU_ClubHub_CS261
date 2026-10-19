@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { EditQuestionModal } from './EditQuestionModal';
 import { DeleteQuestionModal } from './DeleteQuestionModal';
+import { updateScreeningQuestion, deleteScreeningQuestion } from '../api/questionApi';
 
 interface QuestionItem {
   id: string;
@@ -12,6 +13,9 @@ interface QuestionItem {
 export const QuestionManagementPage = () => {
   const [applicantCount] = useState<number>(12);
   const [showToast, setShowToast] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
   const [questions, setQuestions] = useState<QuestionItem[]>([
     {
       id: 'q1',
@@ -28,24 +32,52 @@ export const QuestionManagementPage = () => {
   const [editingQuestion, setEditingQuestion] = useState<QuestionItem | null>(null);
   const [deletingQuestionId, setDeletingQuestionId] = useState<string | null>(null);
 
-  const handleSaveEdit = (newText: string) => {
+  // ฟังก์ชันบันทึกการแก้ไขพร้อมเชื่อมต่อ API Service
+  const handleSaveEdit = async (newText: string) => {
     if (!editingQuestion) return;
-    setQuestions((prev) =>
-      prev.map((q) =>
-        q.id === editingQuestion.id
-          ? { ...q, questionText: newText, updatedAt: 'วันนี้/เวลา 14:30 น.' }
-          : q
-      )
-    );
-    setEditingQuestion(null);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 4000);
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      // เรียกใช้ API Service
+      await updateScreeningQuestion('round_123', editingQuestion.id, {
+        questionText: newText,
+        isRequired: editingQuestion.isRequired,
+      });
+
+      setQuestions((prev) =>
+        prev.map((q) =>
+          q.id === editingQuestion.id
+            ? { ...q, questionText: newText, updatedAt: 'วันนี้/เวลา 14:30 น.' }
+            : q
+        )
+      );
+      setEditingQuestion(null);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+    } catch (err: any) {
+      // เมื่อเกิดข้อผิดพลาดจาก API แสดง Error Toast
+      setErrorMessage(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
+  // ฟังก์ชันลบคำถามพร้อมเชื่อมต่อ API Service
+  const handleConfirmDelete = async () => {
     if (!deletingQuestionId) return;
-    setQuestions((prev) => prev.filter((q) => q.id !== deletingQuestionId));
-    setDeletingQuestionId(null);
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      await deleteScreeningQuestion('round_123', deletingQuestionId);
+      setQuestions((prev) => prev.filter((q) => q.id !== deletingQuestionId));
+      setDeletingQuestionId(null);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'ไม่สามารถลบคำถามคัดเลือกได้');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleAddQuestion = () => {
@@ -59,12 +91,32 @@ export const QuestionManagementPage = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16">
+      {/* Success Toast */}
       {showToast && (
         <div className="fixed top-5 right-5 z-50 flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-200 px-5 py-4 text-emerald-800 text-sm font-semibold shadow-lg">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white text-xs">
             ✓
           </span>
           <span>อัปเดตคำถามคัดเลือกเรียบร้อยแล้ว (มีผลต่อผู้สมัครรายใหม่)</span>
+        </div>
+      )}
+
+      {/* Error Toast Banner */}
+      {errorMessage && (
+        <div className="fixed top-5 right-5 z-50 flex items-center justify-between gap-3 rounded-xl bg-rose-50 border border-rose-200 px-5 py-4 text-rose-800 text-sm font-semibold shadow-lg">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-600 text-white text-xs font-bold">
+              ✕
+            </span>
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMessage(null)}
+            className="text-rose-500 hover:text-rose-700 ml-4 font-bold"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -118,16 +170,18 @@ export const QuestionManagementPage = () => {
                 <div className="flex items-center gap-2 text-slate-400">
                   <button
                     type="button"
+                    disabled={isLoading}
                     onClick={() => setEditingQuestion(q)}
-                    className="p-1.5 hover:text-slate-600 hover:bg-slate-100 rounded-lg text-sm"
+                    className="p-1.5 hover:text-slate-600 hover:bg-slate-100 rounded-lg text-sm disabled:opacity-50"
                     title="แก้ไขคำถาม"
                   >
                     ✏️
                   </button>
                   <button
                     type="button"
+                    disabled={isLoading}
                     onClick={() => setDeletingQuestionId(q.id)}
-                    className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-sm"
+                    className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-sm disabled:opacity-50"
                     title="ลบคำถาม"
                   >
                     🗑️
@@ -162,8 +216,9 @@ export const QuestionManagementPage = () => {
 
           <button
             type="button"
+            disabled={isLoading}
             onClick={handleAddQuestion}
-            className="flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed border-rose-300 text-rose-600 text-sm font-bold hover:bg-rose-50 transition-colors"
+            className="flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed border-rose-300 text-rose-600 text-sm font-bold hover:bg-rose-50 transition-colors disabled:opacity-50"
           >
             + เพิ่มคำถามคัดเลือก
           </button>
