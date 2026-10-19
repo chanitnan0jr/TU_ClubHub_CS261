@@ -223,12 +223,19 @@ public class RecruitmentRoundExceptionHandler {
             detail = title;
         }
 
-        return problem(
+        String traceId = UUID.randomUUID().toString();
+
+        if (status >= 500) {
+            logServerError(exception, request, traceId);
+        }
+
+        return buildProblem(
                 request,
                 status,
                 title,
                 detail,
                 code,
+                traceId,
                 List.of(),
                 exception.getHeaders());
     }
@@ -238,14 +245,20 @@ public class RecruitmentRoundExceptionHandler {
             CannotCreateTransactionException.class
     })
     public ResponseEntity<ProblemResponse> databaseUnavailable(
+            Exception exception,
             HttpServletRequest request) {
 
-        return problem(
+        String traceId = UUID.randomUUID().toString();
+
+        logServerError(exception, request, traceId);
+
+        return buildProblem(
                 request,
                 503,
                 "Service unavailable",
                 "The database is temporarily unavailable.",
                 "SERVICE_UNAVAILABLE",
+                traceId,
                 List.of(),
                 new HttpHeaders());
     }
@@ -271,7 +284,13 @@ public class RecruitmentRoundExceptionHandler {
                     ? "Request failed"
                     : httpStatus.getReasonPhrase();
 
-            return problem(
+            String traceId = UUID.randomUUID().toString();
+
+            if (status >= 500) {
+                logServerError(exception, request, traceId);
+            }
+
+            return buildProblem(
                     request,
                     status,
                     title,
@@ -279,6 +298,7 @@ public class RecruitmentRoundExceptionHandler {
                             ? "The request could not be completed."
                             : title,
                     "HTTP_" + status,
+                    traceId,
                     List.of(),
                     error.getHeaders());
         }
@@ -306,11 +326,7 @@ public class RecruitmentRoundExceptionHandler {
 
         String traceId = UUID.randomUUID().toString();
 
-        log.error(
-                "Recruitment request failed: traceId={}, path={}",
-                traceId,
-                request.getRequestURI(),
-                exception);
+        logServerError(exception, request, traceId);
 
         return buildProblem(
                 request,
@@ -321,6 +337,18 @@ public class RecruitmentRoundExceptionHandler {
                 traceId,
                 List.of(),
                 new HttpHeaders());
+    }
+
+    private void logServerError(
+            Exception exception,
+            HttpServletRequest request,
+            String traceId) {
+
+        log.error(
+                "Recruitment request failed: traceId={}, path={}",
+                traceId,
+                request.getRequestURI(),
+                exception);
     }
 
     private ResponseEntity<ProblemResponse> problem(
