@@ -1,21 +1,37 @@
 # TU-ClubHub
 
-TU-ClubHub is a planned web platform for Thammasat University students to discover clubs, follow recruitment announcements, apply for membership, and track application outcomes. Club committees will manage club profiles and recruitment rounds, while central staff will view university-wide summaries.
+TU-ClubHub is a web platform in development for Thammasat University students to discover clubs, apply for membership, and track results. Club committees manage profiles and recruitment; central staff reporting is planned.
 
-> **Project status:** This repository contains project documentation and design proposals, a React + TypeScript Vite frontend starter, and a Spring Boot backend scaffold with PostgreSQL and Flyway configuration. The application and full-stack development setup are still in progress.
+> **Status reviewed: 2026-10-19.** Authentication, public club APIs, club profile updates, and recruitment write APIs have implementations. The main frontend currently provides login, account identity, and logout; the other feature components still need integration. The status below describes repository contents, not a deployment or test result.
 
-## Planned technology
+## Current implementation
 
-| Area | Target |
+| Area | Present in the repository | Remaining work |
+|---|---|---|
+| Authentication | TU real/mock adapters; session login/logout/me, CSRF, 30-minute idle and 8-hour absolute expiry; connected login UI | Verify real TU access and map verified student status into `student_profiles` |
+| Public clubs (US-02) | Public profile and paginated currently open rounds APIs backed by the database | Club-detail UI still uses mock data and is not mounted in the main app; club listing/search is absent |
+| Club profile (US-06) | `PUT /api/v1/clubs/{clubId}` with committee guard; editor components and API client | `GET /api/v1/clubs/{clubId}` is contract-only; route integration, category/tag writes, and remaining permission checks |
+| Recruitment (US-07) | Create, replace, publish, and close APIs with version checks; form component | Committee list/detail `GET`, `CANCEL`, self-review checks, and frontend integration |
+| Questions (US-08) | Questions saved with round `POST`/`PUT`; question UI components | Frontend still targets unsupported per-question endpoints; align it with the round contract |
+| Applications (US-03) | Submission contract, database tables, and a form prototype | Submission API/client and real question data; the prototype does not persist applications |
+| Later workflows | Schema and design for review, results, membership, notifications, and reporting | Application history, decisions, confirmation/decline, Admin APIs, and dashboards |
+| Runtime | Flyway migrations, health endpoint, Docker/Compose, and CI workflow | Deployment and verification of the selected release |
+
+See the [permission matrix implementation gaps](docs/security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย). An implemented endpoint does not mean the entire story or adopted authorization policy is complete.
+
+## Technology in use
+
+| Area | Repository configuration |
 |---|---|
-| Frontend | React, TypeScript, Vite, and Tailwind CSS; client-rendered, feature-based SPA |
-| Backend | Java 21 and Spring Boot 4.x; feature-based modular monolith |
-| Database | PostgreSQL, Spring Data JPA, and Flyway |
+| Frontend | React 19, TypeScript 6, Vite 8, Tailwind CSS 4; client-rendered SPA |
+| Backend | Java 21, Spring Boot 4.1.1, Spring Security; feature packages in one application |
+| Database | PostgreSQL; JPA and JDBC repositories; Flyway V1 business schema and V3 session tables |
 | Authentication | TU Authentication API with server-side Spring Session JDBC and CSRF protection |
-| API | REST JSON under `/api/v1`; frontend and backend share the same API contract |
-| Delivery | Render Web Service and PostgreSQL; frontend build served by Spring Boot |
+| API | REST JSON under `/api/v1`; Markdown and OpenAPI contracts include implementation status |
+| Local delivery | Root Dockerfile embeds the frontend in Spring Boot; Compose uses PostgreSQL 17 |
+| Deployment target | Render Web Service and PostgreSQL; no deployment is established by this README |
 
-These are the current target choices from the architecture documents. Details may change as implementation progresses.
+Dependency versions are recorded in [frontend/package.json](frontend/package.json), its lockfile, and [backend/pom.xml](backend/pom.xml). Docker builds use Node 22.14 and Java 21. CI provisions PostgreSQL 18; local Compose uses 17.
 
 ## Project documentation
 
@@ -23,26 +39,25 @@ These are the current target choices from the architecture documents. Details ma
 |---|---|
 | [Commit rules](COMMIT_RULES.md) | Conventional Commit format and project commit guidance |
 | [API v1 contract](docs/api/API_v1.md) | Shared endpoint, session, CSRF, response, and error conventions |
-| [OpenAPI specification](docs/api/openapi.yaml) | Machine-readable foundation API proposal |
+| [Main OpenAPI specification](docs/api/openapi.yaml) | Authentication, clubs, health, and the pending application-submission endpoint |
+| [Recruitment OpenAPI specification](docs/api/rounds.openapi.yaml) | Round/question writes plus pending committee reads and cancellation |
 | [System architecture](docs/architecture/system-architecture.md) | System boundaries, modules, security, workflows, and deployment target |
 | [Permission matrix](docs/security/permission-matrix.md) | Adopted Student, Club Committee, and Admin permissions; Active status, term dates, self-review, and implementation gaps |
-| [Scaffold context](docs/architecture/scaffold-context.md) | Foundation requirements, repository layout, and implementation scope |
+| [Repository context](docs/architecture/scaffold-context.md) | Current layout, integration gaps, configuration, and next work |
 | [Architecture diagram](docs/architecture/TU-ClubHub-Architecture.drawio) | Editable system architecture diagrams |
-| [Database design](docs/database/TU-ClubHub-ERD-Updated.dbml) | Proposed PostgreSQL domain model; this DBML is not an executable migration |
-
-## Foundation scope
-
-The first implementation milestone is intended to provide a runnable frontend and backend, PostgreSQL migrations, a minimal health endpoint, session login/logout/current-user endpoints, and a club-detail page backed by the database. Mock TU authentication is restricted to local and test environments. The club-detail page is expected to use the real backend and database rather than a mock API.
-
-Full application submission, review and result publication, offer confirmation or decline, membership workflows, dashboards, and notifications are later product work. Their policies and API schemas still need to be agreed before implementation.
+| [Database design](docs/database/TU-ClubHub-ERD-Updated.dbml) / [migrations](backend/src/main/resources/db/migration) | Domain model and executable schema; migrations are authoritative |
+| [User stories](docs/stories) / [sequence diagrams](docs/diagrams/sequence) | Acceptance requirements and Happy path exchanges, including pending workflows |
+| [Local demonstration guide](docs/deployment/local-demo.md) | Compose modes, demo login, persistence, and reset instructions |
+| [Frontend guide](frontend/README.md) | Current screens, components, and API integration gaps |
+| [Test reports and handoffs](docs/testing) | Historical results for the revision/date recorded in each report |
 
 ## Development setup
 
 ### Full-Stack Local Execution (Docker Compose)
 
-The recommended way to run the entire system (Application + PostgreSQL database) locally is using Docker Compose:
+Use Docker Engine/Desktop with Compose V2. Run from the repository root:
 
-1. Copy `.env.example` to `.env`:
+1. On first setup, copy `.env.example` to `.env`; keep an existing local configuration:
    ```sh
    cp .env.example .env
    ```
@@ -50,21 +65,55 @@ The recommended way to run the entire system (Application + PostgreSQL database)
    ```sh
    docker compose up --build
    ```
-3. Open `http://localhost:8080` in your browser. For comprehensive options and clean-slate resets, see the [Local Demonstration Guide](docs/deployment/local-demo.md).
+3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` / `tu-clubhub-demo`. Health is available at `http://localhost:8080/actuator/health`.
+
+Migrations create the schema without demo clubs, memberships, or committee assignments. Login provisions a local user, not an eligible student profile or committee permissions. The club/profile/recruitment screens are not yet reachable through the main app. See the [local guide](docs/deployment/local-demo.md) for Compose options and resets.
 
 ### Standalone Local Development
 
-If you prefer to run services individually:
+Use Java 21 and Node 22.14+ on the Node 22 line. Start PostgreSQL from the root:
 
-- **Frontend:** From `frontend/`, run `npm install` and `npm run dev` to start the Vite development server on `http://localhost:5173`.
-- **Backend:** From `backend/`, ensure PostgreSQL is running (or run `docker compose up -d db`), set `DB_PASSWORD`, and start Spring Boot:
-  ```sh
-  cd backend
-  export DB_PASSWORD=your_password
-  ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
-  ```
+```sh
+docker compose up -d db
+```
 
-The `dev` profile enables Flyway migrations and validates the schema with Hibernate.
+In one terminal, start the backend. This password matches `.env.example`; use your configured `POSTGRES_PASSWORD` if changed:
+
+```sh
+cd backend
+export DB_PASSWORD=tu_clubhub_dev_secret
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+In another terminal:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open `http://localhost:5173`; Vite proxies `/api` to `http://localhost:8080`. Use the backend URL directly for `/actuator/health`. The `dev` profile runs Flyway and Hibernate schema validation. Spring Boot does not automatically load the root `.env` file.
+
+### Configuration
+
+| Variable | Current use |
+|---|---|
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST_PORT` | Compose database settings; host port defaults to 5432 |
+| `DB_PASSWORD` | Password for direct JVM startup with the `dev` profile |
+| `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Override the JDBC connection when database name, host port, or credentials differ; Compose supplies these to containers |
+| `SPRING_PROFILES_ACTIVE` | Compose defaults to `dev`; production must use real TU authentication |
+| `PORT` | Spring HTTP port; keep 8080 with the current Compose `app` port mapping |
+| `TU_AUTH_MODE` | `mock` for dev/test, `real` for TU integration |
+| `TU_AUTH_ENDPOINT_URL`, `TU_AUTH_APPLICATION_KEY` | Required in real mode; server environment only |
+| `TU_AUTH_CONNECT_TIMEOUT`, `TU_AUTH_READ_TIMEOUT` | Backend defaults: `3s` and `5s` |
+| `SPRING_SESSION_TIMEOUT` | Idle session timeout; default `30m`. Absolute expiry is fixed at 8 hours in code |
+
+### Available checks and CI
+
+Frontend scripts are `dev`, `build`, `test`, `lint`, and `preview`. `build` runs TypeScript checking before Vite; there are no separate `typecheck` or `test:run` scripts. The current `test` script covers club-profile and recruitment-round validation.
+
+[CI](.github/workflows/ci.yml) runs frontend `npm ci`, `npm run lint`, and `npm run build`, plus backend `./mvnw clean verify` and uploads test/JaCoCo reports. It does not currently invoke frontend `npm test`. Backend tests use H2 and PostgreSQL; the `seedtest` profile covers migrations/public data, and recruitment integration tests also use PostgreSQL. Documentation-only changes are excluded by the workflow path filters.
 
 ### Graphify code knowledge graph
 
@@ -97,6 +146,8 @@ environment is active, then remove the local `.venv-graphify/` and
 ## Contract changes
 
 When adding an endpoint, update the Markdown API contract and OpenAPI specification together with the backend DTO and frontend types. Backend authorization remains authoritative; frontend route guards and role displays are for user experience only.
+
+For contract-only work, mark implementation as pending. Update this README and the affected story/diagram when a handler or frontend connection is added. Test reports describe their recorded revision and are not evidence that later changes have passed.
 
 The [permission matrix](docs/security/permission-matrix.md) is the authorization policy adopted on 2026-10-19. Committee permissions require an active account, student profile, club, membership, and an unrevoked assignment within `starts_at <= now < ends_at`. Only an effective `PRESIDENT` may publish selection results. Admin manages aggregate reporting and committee appointments without bypassing club permissions or self-review restrictions. The matrix records remaining implementation work; adopting the policy does not mean every workflow is available.
 
