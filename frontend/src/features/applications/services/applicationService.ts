@@ -1,22 +1,29 @@
 export interface SubmitApplicationPayload {
   roundId: string;
   reason: string;
-  answers: Array<{ questionId: string; answerText: string }>;
+  answers: {
+    questionId: string;
+    answerText: string;
+  }[];
   documentTitle?: string;
   documentUrl?: string;
 }
 
+export interface SubmitApplicationResponse {
+  success: boolean;
+  message: string;
+  applicationId?: string;
+}
+
 export const submitApplicationAPI = async (
   payload: SubmitApplicationPayload
-): Promise<{ success: boolean; applicationId: string }> => {
-  // จำลองการใช้ payload เพื่อไม่ให้เกิด Warning ts(6133)
-  console.log('Submitting application payload:', payload);
-
-  // จำลองการยิง API ไปยัง Backend /api/v1/applications (Delay 1.5 วินาที)
+): Promise<SubmitApplicationResponse> => {
   return new Promise((resolve) => {
     setTimeout(() => {
+      console.log('Submitting application payload:', payload);
       resolve({
         success: true,
+        message: 'ส่งใบสมัครสำเร็จเรียบร้อยแล้ว',
         applicationId: 'APP-' + Math.floor(100000 + Math.random() * 900000),
       });
     }, 1500);
