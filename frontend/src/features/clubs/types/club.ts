@@ -1,99 +1,136 @@
-// frontend/src/features/clubs/types/club.ts
+// ==========================================
+// 1. Core Category & Tag Types
+// ==========================================
 
-export interface ClubCategory {
-  id: string;
-  name: string;
+export interface CategoryDto {
+  id?: string;
+  name?: string;
 }
+
+export type ClubCategory = CategoryDto & string;
 
 export interface ClubTag {
   id: string;
-  name: string;
+  name?: string;
 }
 
-export interface PublicRecruitmentRound {
-  id: string;
-  name: string;
-  opensAt: string;
-  closesAt: string;
-  closedAt: string | null;
-}
-
-export interface ClubResponseDto {
-  id: string;
-  categoryId: string;
-  name: string;
-  description: string;
-  objectives: string | null;
-  contactUrl: string | null;
-  facebookUrl: string | null;
-  instagramUrl: string | null;
-  contactEmail: string | null;
-  affiliationLevel: string | null;
-  affiliationName: string | null;
-  imageUrl: string | null;
-  bannerUrl: string | null;
-  status: string;
-  category: ClubCategory | null;
-  tags: ClubTag[];
-  recruitmentRounds: PublicRecruitmentRound[];
-}
-
-export interface ClubUpdateRequestDto {
-  name: string;
-  description: string;
-  objectives?: string | null;
-  contactUrl?: string | null;
-  facebookUrl?: string | null;
-  instagramUrl?: string | null;
-  contactEmail?: string | null;
-  imageUrl?: string | null;
-  bannerUrl?: string | null;
-}
-
-export interface FieldError {
+export interface FieldErrorDto {
   field: string;
-  code: string;
   message: string;
 }
 
 export interface ApiProblemResponse {
-  type: string;
-  title: string;
-  status: number;
+  title?: string;
+  status?: number;
   detail?: string;
-  instance?: string;
-  code: string;
-  fieldErrors?: FieldError[];
-  traceId: string;
+  code?: string;
+  fieldErrors?: FieldErrorDto[];
 }
 
-export interface RecruitmentRoundDetail {
+// ==========================================
+// 2. Club DTOs (แก้ instagramUrl & recruitmentRounds)
+// ==========================================
+
+export interface ClubResponseDto {
   id: string;
+  name: string;
+  status?: string | null;
+  categoryId?: string;
+  category?: CategoryDto | any;
+  tagline?: string | null;
+  description: string;
+  objective?: string | null;
+  objectives?: string | null;
+  activities?: string[];
+  announcementNote?: string | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  imageUrl?: string | null;
+  bannerUrl?: string | null;
+  contactUrl?: string | null;
+  facebookUrl?: string | null;
+  instagramUrl: string | null; // กำหนดบังคับเป็น string | null แน่นอน (ไม่มี undefined)
+  contactEmail?: string | null;
+  affiliationLevel?: string | null;
+  affiliationName?: string | null;
+  recruitmentRounds?: any[]; // เพิ่ม recruitmentRounds สำหรับ ClubProfilePreview
+  tags: (ClubTag | any)[];
+  contacts?: {
+    facebook?: string;
+    instagram?: string;
+    email?: string;
+  };
+}
+
+export interface ClubUpdateRequestDto {
+  name: string;
+  status?: string | null;
+  categoryId?: string;
+  category?: CategoryDto | any;
+  tagline?: string | null;
+  description: string;
+  objective?: string | null;
+  objectives?: string | null;
+  activities?: string[];
+  announcementNote?: string | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  imageUrl?: string | null;
+  bannerUrl?: string | null;
+  contactUrl?: string | null;
+  facebookUrl?: string | null;
+  instagramUrl?: string | null;
+  contactEmail?: string | null;
+  affiliationLevel?: string | null;
+  affiliationName?: string | null;
+  recruitmentRounds?: any[];
+  tags?: (ClubTag | any)[];
+  contacts?: {
+    facebook?: string;
+    instagram?: string;
+    email?: string;
+  };
+}
+
+export interface ClubProfileDraft extends Partial<ClubUpdateRequestDto> {
+  name: string;
+  description: string;
+  instagramHandle?: string;
+  tags?: (ClubTag | any)[];
+  instagramUrl: string | null;
+}
+
+// ==========================================
+// 3. Types สำหรับ Task36 (Club Detail & Recruitment)
+// ==========================================
+
+export interface RecruitmentRoundData {
+  id?: string;
   title: string;
-  academicYear: number;
-  semester: string;
-  startDateText: string;
-  endDateText: string;
-  qualificationText: string;
-  questionCountText: string;
-  isOpen: boolean;
+  term?: string;
+  startDate?: string;
+  endDate?: string;
+  qualificationText?: string;
+  qualification?: string;
+  questionSummary?: string;
+  isClosed?: boolean;
 }
 
 export interface ClubDetailData {
   id: string;
   name: string;
   category: string;
-  slogan: string;
+  tagline?: string;
   tags: string[];
-  coverImageUrl: string;
-  logoUrl: string;
+  logoUrl?: string;
+  coverImageUrl?: string;
   objective: string;
   activities: string[];
-  welcomeNote: string;
+  announcementNote?: string;
   contacts: {
     facebook?: string;
     instagram?: string;
     email?: string;
   };
-  activeRound?: RecruitmentRoundDetail;
+  activeRound?: RecruitmentRoundData;
 }
