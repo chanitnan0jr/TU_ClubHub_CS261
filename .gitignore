@@ -60,6 +60,12 @@ nbdist/
 # ==========================================
 .agent/
 .agents/
+.codex/
+/AGENTS.md
+
+# Graphify local environment and generated graphs
+.venv-graphify/
+graphify-out/
 
 # ==========================================
 # Environment Variables & Secrets

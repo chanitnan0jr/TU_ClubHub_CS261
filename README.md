@@ -66,6 +66,34 @@ If you prefer to run services individually:
 
 The `dev` profile enables Flyway migrations and validates the schema with Hibernate.
 
+### Graphify code knowledge graph
+
+Graphify is an optional local developer tool. Install the official `graphifyy`
+package into a dedicated environment from the repository root (requires Python
+3.10+ and [uv](https://docs.astral.sh/uv/)):
+
+```sh
+uv venv .venv-graphify
+uv pip install --python .venv-graphify/bin/python 'graphifyy[sql]==0.9.92'
+source .venv-graphify/bin/activate
+graphify install --project --platform codex
+```
+
+Activate that environment in each new terminal before starting Codex. Restart
+the Codex session after installation to discover the project skill, then invoke
+`$graphify`. To build and query a code-only graph directly, without an API key:
+
+```sh
+graphify extract . --code-only --max-workers 2
+graphify query "club profile"
+```
+
+The environment and generated `graphify-out/` directory are ignored by Git.
+`.graphifyignore` excludes local credentials, agent files, and build artifacts.
+To remove the integration, run `graphify codex uninstall --project` while the
+environment is active, then remove the local `.venv-graphify/` and
+`graphify-out/` directories if no longer needed.
+
 ## Contract changes
 
 When adding an endpoint, update the Markdown API contract and OpenAPI specification together with the backend DTO and frontend types. Backend authorization remains authoritative; frontend route guards and role displays are for user experience only.
