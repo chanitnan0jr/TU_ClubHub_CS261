@@ -17,6 +17,17 @@ server:
         same-site: lax
         path: /
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: false
+
 tu:
   auth:
     mode: ${TU_AUTH_MODE:real}
