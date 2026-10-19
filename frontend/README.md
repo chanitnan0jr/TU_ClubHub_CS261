@@ -18,10 +18,6 @@ Run a production build with `npm run build`.
 Tailwind is loaded from `src/index.css` and compiled with the
 `@tailwindcss/postcss` plugin configured in `postcss.config.js`.
 
-While the backend is unavailable, open `http://localhost:5173/club-profile-preview`
-in development to try the club profile form without authentication or API
-requests. Saves on this page update local component state only.
-
 ## Club profile editor
 
 `src/ClubProfileForm.tsx` exports the reusable `ClubProfileForm` component and
@@ -45,5 +41,4 @@ the API's HTTPS and social-host restrictions and accepts contact emails at the
 The profile form uses the `ClubResponseDto` and emits a
 `ClubUpdateRequestDto` containing only fields writable through
 `PUT /api/v1/clubs/{clubId}`. Category and tags are displayed as read-only;
-blank optional values are sent as `null` to clear them. The local preview
-doesn't send this payload to the backend.
+blank optional values are sent as `null` to clear them.
