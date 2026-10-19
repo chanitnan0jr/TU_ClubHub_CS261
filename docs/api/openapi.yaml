@@ -6,6 +6,9 @@ info:
     TU-ClubHub API contract for foundation and public club profile endpoints.
     Additional product workflow endpoints are tracked in docs/api/API_v1.md and
     must be specified before implementation.
+    Authorization policy adopted on 2026-10-19 is defined in the
+    [Permission Matrix](../security/permission-matrix.md), including Active status,
+    committee terms, self-review restrictions, and remaining enforcement work.
 servers:
   - url: /
     description: Same-origin application server
@@ -133,6 +136,10 @@ paths:
       description: >-
         The role is for UI presentation only; the backend rechecks authorization for
         every request. Expired sessions return 401 AUTHENTICATION_REQUIRED.
+        The adopted policy requires a current ACTIVE account and the current
+        database global role. A suspended account returns 403 ACCOUNT_NOT_ALLOWED
+        and its session is invalidated. The permission matrix records the
+        remaining account and role revalidation implementation work.
       security:
         - SessionCookie: []
       responses:
@@ -153,6 +160,8 @@ paths:
                   role: USER
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccountNotAllowed'
         default:
           $ref: '#/components/responses/ServerError'
   /api/v1/auth/logout:
@@ -423,8 +432,13 @@ paths:
       description: >-
         Replaces the editable club profile fields. Requires an authenticated session,
         the current CSRF header, and an effective COMMITTEE or PRESIDENT assignment
-        for this club and term. Authorization is checked against the current account,
-        membership, assignment status, and assignment time range on every request.
+        for this club. The adopted policy requires ACTIVE account, student profile,
+        club, membership, and assignment; membership joined_at <= now and
+        ended_at IS NULL; assignment revoked_at IS NULL and starts_at <= now < ends_at.
+        The start is inclusive and the end exclusive, using backend UTC time.
+        Check current database state on every request and inside the write transaction.
+        ADMIN alone grants no access. The permission matrix records guard additions
+        still required in the implementation.
         Only name, description, objectives, contact/social URLs, contactEmail,
         imageUrl, and bannerUrl are writable. Category, affiliation, status, tags,
         and recruitment rounds are read-only through this operation. Omitted or null
@@ -518,7 +532,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Caller is not an effective club committee member, or CSRF check failed
+          description: Active or term requirements fail (ACCESS_DENIED), account is suspended (ACCOUNT_NOT_ALLOWED), or CSRF check failed (CSRF_INVALID)
           content:
             application/problem+json:
               schema:
@@ -533,6 +547,16 @@ paths:
                     detail: You are not allowed to update this club.
                     instance: /api/v1/clubs/20001
                     code: ACCESS_DENIED
+                    traceId: 01J9EXAMPLE7K4D5
+                accountNotAllowed:
+                  summary: Current account is suspended; invalidate its session
+                  value:
+                    type: urn:tuclubhub:problem:account-not-allowed
+                    title: Account not allowed
+                    status: 403
+                    detail: This account is not allowed to use TU-ClubHub.
+                    instance: /api/v1/clubs/20001
+                    code: ACCOUNT_NOT_ALLOWED
                     traceId: 01J9EXAMPLE7K4D5
                 csrfInvalid:
                   summary: CSRF token is missing, expired, or invalid
@@ -1044,6 +1068,20 @@ components:
               - field: username
                 code: REQUIRED
                 message: Username is required.
+            traceId: 01J9EXAMPLE7K4D5
+    AccountNotAllowed:
+      description: Current account is suspended; invalidate its session
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:account-not-allowed
+            title: Account not allowed
+            status: 403
+            detail: This account is not allowed to use TU-ClubHub.
+            instance: /api/v1/auth/me
+            code: ACCOUNT_NOT_ALLOWED
             traceId: 01J9EXAMPLE7K4D5
     Unauthorized:
       description: Authentication is missing, invalid, or expired

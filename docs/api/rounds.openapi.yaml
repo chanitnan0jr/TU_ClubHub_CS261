@@ -2,11 +2,24 @@ openapi: 3.0.3
 info:
   title: TU ClubHub Recruitment Rounds API — proposed contract
   version: 1.0.0
-  description:
-    US-05. Committee-only management API, separate from existing public
+  description: >-
+    US-07/US-08. Committee-only management API, separate from existing public
     recruitment-rounds API. No physical DELETE; CLOSE/CANCEL retain applications.
     Dates require RFC3339 offset, stored as UTC. Database constraints and additional
-    proposed edit policy documented in README.
+    state/edit rules apply alongside the authorization policy adopted on 2026-10-19
+    in the [Permission Matrix](../security/permission-matrix.md).
+    Every operation requires an ACTIVE account, student profile, club, membership,
+    and assignment for the actual target club. Membership must have joined_at <= now
+    and ended_at IS NULL; assignment must have revoked_at IS NULL and
+    starts_at <= now < ends_at, evaluated with backend UTC time on every request
+    and again inside write transactions. ADMIN alone grants no access.
+    A caller with an application in a round, in any status, cannot manage or read
+    that round as committee; exclude such rounds before listing/pagination/counts.
+    COMMITTEE or PRESIDENT can create, edit, publish, and close rounds; CANCEL
+    requires an effective PRESIDENT, an unpublished result, and an audited reason.
+    Selection-result publication is a separate future workflow, not PUBLISH here.
+    GET operations and CANCEL are not implemented yet; CANCEL also needs its reason
+    field specified before implementation. The matrix lists remaining guard work.
 servers:
   - url: http://localhost:8080
 security:
@@ -40,7 +53,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Not committee of target club, or CSRF_INVALID
+          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
@@ -107,7 +120,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Not committee of target club, or CSRF_INVALID
+          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
@@ -192,7 +205,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Not committee of target club, or CSRF_INVALID
+          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
@@ -234,7 +247,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Not committee of target club, or CSRF_INVALID
+          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
@@ -302,7 +315,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Not committee of target club, or CSRF_INVALID
+          description: Active/term/committee/PRESIDENT/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
@@ -350,8 +363,12 @@ paths:
       description:
         "Command-style PATCH using application/json; not JSON Merge Patch.
         PUBLISH: DRAFT -> PUBLISHED. CLOSE: manually close a currently accepting PUBLISHED
-        round. CANCEL: DRAFT/PUBLISHED -> CANCELLED. Other transitions: 409. Server
-        assigns timestamps. Version checked atomically."
+        round. Both require COMMITTEE or PRESIDENT. CANCEL: DRAFT/PUBLISHED -> CANCELLED,
+        requires PRESIDENT and no published selection results; preserve all application
+        records and audit a reason. CANCEL is not implemented and its reason field
+        must be specified before implementation. Other transitions: 409. Server
+        assigns timestamps. Version checked atomically. PUBLISH publishes recruitment,
+        not selection results. All actions enforce the matrix self-review restriction."
 components:
   securitySchemes:
     sessionAuth:

@@ -1,6 +1,6 @@
 # TU-ClubHub — System Architecture
 
-วันที่: 11 ตุลาคม 2026 · Version: 1.0 · สถานะ: Target Architecture สำหรับทีมพัฒนา
+วันที่: 11 ตุลาคม 2026 · ปรับปรุงนโยบายสิทธิ์: 19 ตุลาคม 2026 · Version: 1.1 · สถานะ: Target Architecture สำหรับทีมพัฒนา
 
 เอกสารนี้อธิบายระบบที่ตั้งใจสร้าง ไม่ใช่หลักฐานว่าระบบ Deploy แล้วหรือทุก Feature เสร็จแล้ว ใช้ร่วมกับ [Scaffold context](scaffold-context.md), [API contract](../api/API_v1.md), [OpenAPI specification](../api/openapi.yaml) และ [ERD ที่เสนอ](../database/TU-ClubHub-ERD-Updated.dbml)
 
@@ -190,7 +190,7 @@ sequenceDiagram
   Note over B,D: Expire after 30m idle or 8h from successful login, whichever comes first
 ```
 
-Session Cookie มีเพียงตัวระบุ Session; รายละเอียด Authentication อยู่ฝั่ง Server เปลี่ยน Session ID เมื่อ Login สำเร็จและเมื่อมีการเปลี่ยนระดับสิทธิ์ บันทึก SecurityContext ใน JDBC session และ invalidate เมื่อ Logout หมดอายุ หรือยกเลิกสิทธิ์ ไม่เก็บ TU password หลังการตรวจ และไม่เก็บไว้ใน Session/Logs
+Session Cookie มีเพียงตัวระบุ Session; รายละเอียด Authentication อยู่ฝั่ง Server เปลี่ยน Session ID เมื่อ Login สำเร็จ บันทึก SecurityContext ใน JDBC session และ invalidate เมื่อ Logout หมดอายุ หรือบัญชีถูกระงับ การเปลี่ยน global role ต้อง refresh หรือยกเลิก session ที่มี authorities เก่า; การถอนหรือหมดวาระเฉพาะชมรมตรวจจากฐานข้อมูลทุก request โดยไม่จำเป็นต้อง logout ทั้งระบบ ไม่เก็บ TU password หลังการตรวจ และไม่เก็บไว้ใน Session/Logs
 
 Session ใช้ idle timeout 30 นาทีและ absolute timeout 8 ชั่วโมงนับจาก Login สำเร็จ แล้วแต่อย่างใดถึงก่อน; activity ไม่เลื่อน absolute deadline เมื่อหมดอายุ Backend ปฏิเสธ Request ที่ต้องยืนยันตัวตนด้วย `401 AUTHENTICATION_REQUIRED` และ Frontend ล้าง Auth State ก่อนเริ่ม Login ใหม่
 
@@ -198,18 +198,22 @@ CSRF ใช้ Spring Security Token โดยรับ token เริ่มต
 
 ### 7.2 Authorization Rules
 
+ใช้ [Permission Matrix](../security/permission-matrix.md) เป็นนโยบายที่กำหนดแล้ว ณ 19 ตุลาคม 2026 สำหรับสิทธิ์ Active, Term Date, self-review และ Admin override รวมถึงตัวอย่าง boundary และรายการ implementation ที่ยังขาด
+
 | Resource / Action | กฎหลัก |
 |---|---|
-| Public club/round | ส่งเฉพาะข้อมูลที่เปิดเผยและรอบที่เผยแพร่แล้ว |
-| Submit application | บัญชีใช้งานได้ นักศึกษาผ่านเกณฑ์ รอบเปิดจริง และกฎสมัครที่ตกลงแล้ว |
-| Read own application | เจ้าของใบสมัครเท่านั้น |
-| Committee read/write | ตรวจบัญชี สมาชิกภาพ Assignment ชมรม และช่วงวาระทุก Request |
-| Confirm/decline | เจ้าของใบสมัคร ผลผ่านที่เผยแพร่แล้ว และยังอยู่ก่อน Deadline |
-| Central dashboard | Global ADMIN และขอบเขตข้อมูลตาม Use Case |
+| Public club/round | ชมรม Active และข้อมูลที่เปิดเผยตาม public endpoint; ไม่ต้อง Login |
+| Submit application | บัญชีและ student profile Active, ชมรม Active, รอบเปิดจริง และผ่านกฎสมัคร |
+| Read own application | บัญชี Active และเป็นเจ้าของ; ซ่อนผลที่ยังไม่ประกาศและบันทึกภายใน |
+| Committee read/write | บัญชี นักศึกษา ชมรม สมาชิกภาพ และ assignment ต้อง Active; membership เริ่มแล้วและยังไม่สิ้นสุด; assignment ไม่ถูกถอนและ `starts_at <= now < ends_at` |
+| Internal decisions | COMMITTEE/PRESIDENT ของชมรม หลังปิดรับและก่อนประกาศผล; ห้ามจัดการรอบที่ตนมีใบสมัครไม่ว่าสถานะใด |
+| Result publication / round cancellation | เฉพาะ PRESIDENT ที่มีผลและไม่มีใบสมัครในรอบนั้น; ตรวจ state/deadline ตาม matrix |
+| Confirm/decline | เจ้าของใบสมัคร ผลผ่านที่ประกาศแล้ว รอบไม่ยกเลิก และก่อน Deadline; การยืนยันต้อง student/club Active ส่วนการสละสิทธิ์ต้อง account Active |
+| Central dashboard / committee appointments | Global ADMIN ที่ account Active; สถิติรวมและแต่งตั้ง/ถอนตาม matrix โดยไม่แต่งตั้งตนเอง |
 
-อย่าถือว่า ADMIN มีสิทธิ์แก้/ประกาศผลทุกชมรมโดยอัตโนมัติ ต้องมี Permission Matrix อนุมัติ การตรวจใน Transaction ที่เขียนข้อมูลสำคัญต้องไม่ใช้สถานะจากหน้าเว็บหรือ Role ที่ Cache ไว้ตอน Login อย่างเดียว
+ADMIN ไม่มีสิทธิ์แก้ชมรม อ่านคำตอบผู้สมัคร หรือประกาศผลจาก global role ต้องมี assignment ของชมรมและผ่านกฎเดียวกับกรรมการ ไม่มีสิทธิ์ override Active, Term Date, ownership, self-review หรือผลที่ประกาศแล้ว การตรวจใน transaction ที่เขียนข้อมูลสำคัญต้องใช้สถานะและเวลา Backend ล่าสุดตาม matrix
 
-Account role ใน ERD คือ USER/ADMIN ส่วน Student eligibility มาจาก Student Profile และ Committee privileges มาจาก Assignment ที่ยังมีผล
+Account role ใน ERD คือ USER/ADMIN ส่วน Student eligibility มาจาก Student Profile และ Committee privileges มาจาก Assignment ที่ยังมีผล สถานะนักศึกษา UNKNOWN/INACTIVE/GRADUATED ไม่ให้สมัครใหม่ ยืนยัน หรือใช้สิทธิ์กรรมการ แต่ยังอ่านข้อมูลส่วนตัวเดิมได้เมื่อบัญชี Active การหมดวาระไม่เปลี่ยนสมาชิกภาพและไม่ต้องรอ job เปลี่ยน assignment.status
 
 ## 8. Data และ Business Workflow
 
@@ -353,10 +357,10 @@ Sprint 1 รวม 20 SP และ Sprint 2 รวม 21 SP เป็น Estimat
 | ID | เรื่องที่ยังต้องตกลง | ผลกระทบ |
 |---|---|---|
 | OD-01 | Quota จำนวนเท่าไร นับต่อรอบ/ภาคเรียน/สมาชิกที่ Active และนับสถานะใด | Submit, confirmation, locking, Test Cases |
-| OD-02 | Story สำหรับบันทึกผลและประกาศผล รวมสิทธิ์ผู้ประกาศ | US-05 ไม่มี Workflow ต้นทางครบหากไม่เพิ่มงานนี้ |
-| OD-03 | Freeze/Version questions เมื่อเผยแพร่หรือมีใบสมัคร | Answer integrity และการแก้ไขฟอร์ม |
-| OD-04 | TU API Contract และการ Normalize student status | Real Auth / eligibility |
-| OD-05 | ห้าม Self-review หรือไม่ และ Admin override อะไรได้ | Authorization Matrix |
+| OD-02 | Story/API สำหรับบันทึกผลและประกาศผล; สิทธิ์กำหนดแล้วใน matrix | COMMITTEE/PRESIDENT บันทึกผล และ PRESIDENT ประกาศ; ยังต้องพัฒนา workflow ต้นทางของ US-05 |
+| OD-03 | การออกแบบ version คำถามหากจะรองรับการแก้หลังเผยแพร่ | นโยบายปัจจุบันอนุญาตแก้เฉพาะ draft ที่ไม่มีใบสมัคร |
+| OD-04 | TU API Contract และ mapping ของ student status ที่ยืนยันได้ | สิทธิ์ใช้ ACTIVE เท่านั้นตาม matrix; ยังต้องทำ integration/normalization |
+| OD-05 (ตัดสินใจแล้ว 19 ต.ค. 2026) | ห้ามใช้สิทธิ์กรรมการกับรอบที่ตนมีใบสมัคร; Admin ไม่มี override | ยึด [Permission Matrix](../security/permission-matrix.md); เหลืองาน implementation ตามช่องว่างที่บันทึกไว้ |
 | OD-06 | การนับคน/ใบสมัคร/สมาชิกตามปีการศึกษาและภาคเรียน | Dashboard correctness |
 | OD-07 | Timeline Sprint/Release ในรายงานและเกณฑ์รายวิชา | วันที่ส่งมอบและชื่อ Release; ไม่อนุมานจาก Sprint number |
 | OD-08 | Dependency versions และบริการ Render ที่ใช้จริง | Compatibility, lifecycle และ deployment guide |
@@ -373,6 +377,7 @@ Sprint 1 รวม 20 SP และ Sprint 2 รวม 21 SP เป็น Estimat
 | React assets ใน Spring Boot | Deploy หนึ่งแอปและใช้ Origin เดียว | Frontend update ต้อง Build/Deploy image ใหม่ |
 | External URLs | ลดการจัดการ File Storage | เอกสารอาจเข้าถึงไม่ได้หรือถูกแก้ไขภายนอก |
 | PostgreSQL + Flyway | Schema versioned และทดสอบ SQL/constraints ได้ | ต้องวาง Migration และ recovery อย่างรอบคอบ |
+| Permission Matrix 2026-10-19 | แยก Student, กรรมการตามชมรม/วาระ และ Admin; ใช้ Active ปัจจุบันและห้าม self-review | ต้องตรวจสิทธิ์จากฐานข้อมูลทุก request และเพิ่ม guards/workflows ตามนโยบาย |
 
 ## 15. เอกสารประกอบและการดูแล
 

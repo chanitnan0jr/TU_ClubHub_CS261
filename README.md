@@ -25,6 +25,7 @@ These are the current target choices from the architecture documents. Details ma
 | [API v1 contract](docs/api/API_v1.md) | Shared endpoint, session, CSRF, response, and error conventions |
 | [OpenAPI specification](docs/api/openapi.yaml) | Machine-readable foundation API proposal |
 | [System architecture](docs/architecture/system-architecture.md) | System boundaries, modules, security, workflows, and deployment target |
+| [Permission matrix](docs/security/permission-matrix.md) | Adopted Student, Club Committee, and Admin permissions; Active status, term dates, self-review, and implementation gaps |
 | [Scaffold context](docs/architecture/scaffold-context.md) | Foundation requirements, repository layout, and implementation scope |
 | [Architecture diagram](docs/architecture/TU-ClubHub-Architecture.drawio) | Editable system architecture diagrams |
 | [Database design](docs/database/TU-ClubHub-ERD-Updated.dbml) | Proposed PostgreSQL domain model; this DBML is not an executable migration |
@@ -68,5 +69,7 @@ The `dev` profile enables Flyway migrations and validates the schema with Hibern
 ## Contract changes
 
 When adding an endpoint, update the Markdown API contract and OpenAPI specification together with the backend DTO and frontend types. Backend authorization remains authoritative; frontend route guards and role displays are for user experience only.
+
+The [permission matrix](docs/security/permission-matrix.md) is the authorization policy adopted on 2026-10-19. Committee permissions require an active account, student profile, club, membership, and an unrevoked assignment within `starts_at <= now < ends_at`. Only an effective `PRESIDENT` may publish selection results. Admin manages aggregate reporting and committee appointments without bypassing club permissions or self-review restrictions. The matrix records remaining implementation work; adopting the policy does not mean every workflow is available.
 
 TU credentials and application keys must remain on the server. The browser must not call the TU Authentication API directly. The platform stores HTTPS document and image URLs; it does not upload files or automatically fetch remote content.

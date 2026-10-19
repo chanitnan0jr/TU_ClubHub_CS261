@@ -2,6 +2,8 @@
 
 วันที่: 11 ตุลาคม 2026 · สถานะ: ข้อกำหนดสำหรับสร้าง Scaffold ยังไม่ใช่รายงานว่าโค้ดถูกสร้างหรือทดสอบแล้ว
 
+นโยบายสิทธิ์ปรับปรุง 19 ตุลาคม 2026: ใช้ [Permission Matrix](../security/permission-matrix.md) เป็นแหล่งอ้างอิงหลักของ Student, Club Committee, Admin, Active และ Term Date
+
 เอกสารนี้ใช้ส่งให้ Coding Agent หรือทีมพัฒนาได้ทั้งไฟล์ อ่านร่วมกับ [System architecture](system-architecture.md), [API contract](../api/API_v1.md), [OpenAPI specification](../api/openapi.yaml) และ [ERD ที่เสนอ](../database/TU-ClubHub-ERD-Updated.dbml)
 
 ## 1. บทบาทและเป้าหมายของผู้สร้าง Scaffold
@@ -20,9 +22,11 @@ TU-ClubHub เป็นเว็บค้นหาชมรมและจัด
 |---|---|
 | นักศึกษา | ค้นหาชมรม อ่านประกาศ สมัคร ดูสถานะ และยืนยันหรือสละสิทธิ์ |
 | กรรมการชมรม | แก้โปรไฟล์ จัดการรอบและคำถาม ตรวจใบสมัคร และดำเนินการคัดเลือกตามสิทธิ์ |
-| เจ้าหน้าที่ส่วนกลาง | ดูสถิติและภาพรวมส่วนกลาง |
+| เจ้าหน้าที่ส่วนกลาง | ดูสถิติส่วนกลางและจัดการการแต่งตั้ง/ถอนกรรมการตาม Permission Matrix |
 
 กรรมการเป็นสิทธิ์ตามชมรมและช่วงวาระ ไม่ใช่ Global Role ที่แก้ได้ทุกชมรม ผู้ได้รับการคัดเลือกยังไม่เป็นสมาชิกจนยืนยันสิทธิ์สำเร็จ
+
+การใช้สิทธิ์กรรมการต้องมีบัญชี นักศึกษา ชมรม สมาชิกภาพ และ assignment Active พร้อมสมาชิกภาพที่เริ่มแล้วและยังไม่สิ้นสุด, assignment ที่ไม่ถูกถอน และ `starts_at <= now < ends_at` ผู้ประกาศผลคัดเลือกต้องเป็น PRESIDENT ที่มีผล ห้ามกรรมการจัดการรอบที่ตนมีใบสมัครทุกสถานะ และ Admin ไม่มีสิทธิ์ override กฎเหล่านี้
 
 ไม่มี File Upload: ใบสมัครเก็บ HTTPS URL ของเอกสาร/Portfolio รูปชมรมใช้ HTTPS URL หรือรูปเริ่มต้นในเว็บ Backend ไม่ดาวน์โหลดไฟล์หรือ Fetch Preview จาก URL เหล่านี้อัตโนมัติ
 
@@ -303,7 +307,7 @@ Foundation นี้เป็นงานร่วม ไม่ใช่กา�
 | โควตามีตัวเลขต่างกันในเอกสาร | ห้าม hardcode 3 หรือ 5; ต้องตกลงจำนวน ช่วงเวลานับ และสถานะที่ถูกนับก่อนทำ Logic |
 | US-09 เป็น read-only | Decision / publication workflow ยังขาด Story/Estimate ต้องเพิ่มหรือปรับ Backlog ก่อนทำ US-05 ให้ครบ |
 | การแก้คำถามหลังเผยแพร่/มีคำตอบ | ต้องตกลง Freeze/Version policy ไม่ลบข้อมูลคำตอบโดยเดาเอง |
-| สิทธิ์ประกาศผลและ Self-review | ต้องยืนยัน Permission Matrix แยกจากสิทธิ์อ่านใบสมัคร |
+| สิทธิ์ประกาศผลและ Self-review (กำหนดแล้ว) | ยึด Permission Matrix: PRESIDENT ประกาศผล; ห้ามจัดการรอบที่ตนมีใบสมัคร; Admin ไม่มี override; ยังต้องเพิ่มงาน decision/publication แยกจาก US-09 ที่เป็น read-only |
 | TU API Contract | ต้องได้รับตัวอย่าง request/response/error ที่อนุญาตให้ใช้; ไม่เดาจากชื่อ Field |
 | เอกสารเก่าระบุ Nginx / Compose บน Render | ยึด Render Web Service ที่เสิร์ฟ React ผ่าน Spring Boot; Compose สำหรับ Local/demo |
 

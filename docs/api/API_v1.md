@@ -4,12 +4,14 @@
 |---|---|
 | Version | `v1` |
 | Contract status | Proposed foundation contract |
-| Last updated | 2026-10-15 |
+| Last updated | 2026-10-19 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
 
-The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](docs/api/openapi.yaml). Keep it in sync with this document and with the DTOs consumed by the frontend. The backend implements the TU authentication adapter and `/api/v1/auth` endpoints, including the 8-hour absolute session timeout and fresh CSRF token in the login response. The public endpoints added below are API contracts only and are not yet implemented; their response fields are limited to values supported by the current club DTOs and ERD.
+Authorization policy was adopted on 2026-10-19 in the [Permission Matrix](../security/permission-matrix.md). Its Active, term, self-review, and Admin rules are decided; the matrix separately records implementation gaps. Adoption does not imply that future product endpoints exist.
+
+The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](openapi.yaml). Keep it in sync with this document and with the DTOs consumed by the frontend. The backend implements the TU authentication adapter and `/api/v1/auth` endpoints, including the 8-hour absolute session timeout and fresh CSRF token in the login response. The public endpoints added below are API contracts only and are not yet implemented; their response fields are limited to values supported by the current club DTOs and ERD.
 
 ## 1. Contract scope
 
@@ -127,7 +129,7 @@ After TU verification succeeds, the backend creates a local `users` row on first
 
 ### `GET /api/v1/auth/me`
 
-Returns the authenticated user's minimal account identity. It returns `401 AUTHENTICATION_REQUIRED` when no authenticated session exists or its idle/absolute lifetime has expired. The response is a UI hint only; the backend still performs authorization for each operation. Committee privileges are assignments scoped to a club and term, not a global user role.
+Returns the authenticated user's minimal account identity. It returns `401 AUTHENTICATION_REQUIRED` when no authenticated session exists or its idle/absolute lifetime has expired. Under the adopted policy, a currently suspended account returns `403 ACCOUNT_NOT_ALLOWED` and its session is invalidated. Read the current global role from the database. The response is a UI hint only; the backend still performs authorization for each operation. Committee privileges are assignments scoped to a club and term, not a global user role. The permission matrix records the remaining account/role revalidation work.
 
 **`200 OK`** with `Cache-Control: no-store`.
 
@@ -140,7 +142,7 @@ Returns the authenticated user's minimal account identity. It returns `401 AUTHE
 }
 ```
 
-`role` is `USER` or `ADMIN`. Student eligibility and normalized TU student status are not included until the TU contract and eligibility policy are agreed. Do not infer committee access from `role`.
+`role` is `USER` or `ADMIN`. Student eligibility is defined by the permission matrix, but normalized TU student status is not included in this response until its integration and response contract are implemented. Do not infer student or committee access from `role`.
 
 ### `POST /api/v1/auth/logout`
 
@@ -263,7 +265,7 @@ IDs containing non-decimal characters or a minus sign return `400 INVALID_RESOUR
 
 ### `PUT /api/v1/clubs/{clubId}`
 
-Replaces the editable profile fields for a club and returns the updated public profile. Requires an authenticated session, the current CSRF header, and an active `COMMITTEE` or `PRESIDENT` assignment for this club and its current term. The server rechecks assignment, membership, and account status on every request. A missing or expired session returns `401`; an authenticated caller without an effective assignment returns `403`.
+Replaces the editable profile fields for a club and returns the updated public profile. Requires an authenticated session, the current CSRF header, and an effective `COMMITTEE` or `PRESIDENT` assignment for this club. Under the adopted permission matrix, account, student profile, club, membership, and assignment must be `ACTIVE`; membership must have `joined_at <= now` and `ended_at IS NULL`; assignment must have `revoked_at IS NULL` and `starts_at <= now < ends_at`. The server rechecks current database state on every request and inside the write transaction. `ADMIN` alone grants no access. A missing or expired session returns `401`; a suspended account returns `403 ACCOUNT_NOT_ALLOWED`; other permission failures return `403 ACCESS_DENIED`. The matrix records the guard additions still required in the implementation.
 
 The caller may update only `name`, `description`, `objectives`, `contactUrl`, `facebookUrl`, `instagramUrl`, `contactEmail`, `imageUrl`, and `bannerUrl`. Category, affiliation, status, IDs, tags, and recruitment rounds are not writable through this endpoint. `name` and `description` are required and non-blank; `name` is limited to 200 characters. Nullable fields omitted or sent as `null` are cleared. URL fields, when provided, must be HTTPS URLs; `contactEmail`, when provided, must be a valid email address. Text is treated as data, not executable HTML; persistence queries must use bound parameters, and clients must escape text when rendering it.
 
@@ -289,7 +291,7 @@ The caller may update only `name`, `description`, `objectives`, `contactUrl`, `f
 |---|---|---|
 | `400` | `INVALID_RESOURCE_ID`, `VALIDATION_FAILED` | Invalid `clubId` or request fields; field details are in `fieldErrors` |
 | `401` | `AUTHENTICATION_REQUIRED` | No authenticated session or session expired |
-| `403` | `ACCESS_DENIED`, `CSRF_INVALID` | Caller lacks an effective committee assignment, or CSRF validation failed |
+| `403` | `ACCESS_DENIED`, `ACCOUNT_NOT_ALLOWED`, `CSRF_INVALID` | Active/term/committee requirements fail, the account is suspended, or CSRF validation failed |
 | `404` | `CLUB_NOT_FOUND` | No club exists for this ID |
 | `405` | `METHOD_NOT_ALLOWED` | The club path does not support the requested method; only `GET` and `PUT` are defined |
 | `503` | `SERVICE_UNAVAILABLE` | The database dependency is unavailable |
@@ -331,7 +333,7 @@ All `/api/v1` errors use `Content-Type: application/problem+json`. The response 
 |---|---|---|
 | `400` | `VALIDATION_FAILED`, `INVALID_RESOURCE_ID` | Malformed JSON, invalid parameter, or field validation failure |
 | `401` | `AUTHENTICATION_REQUIRED`, `AUTHENTICATION_FAILED` | Missing/invalid authentication or rejected login credentials |
-| `403` | `FORBIDDEN`, `CSRF_INVALID`, `ACCOUNT_NOT_ALLOWED` | Authenticated user lacks permission, CSRF check fails, or account is not allowed |
+| `403` | `ACCESS_DENIED`, `CSRF_INVALID`, `ACCOUNT_NOT_ALLOWED` | Authenticated user lacks permission, CSRF check fails, or account is not allowed |
 | `404` | `RESOURCE_NOT_FOUND`, `CLUB_NOT_FOUND` | Resource does not exist or is not visible to this caller |
 | `405` | `METHOD_NOT_ALLOWED` | The path exists but does not support the request method |
 | `409` | `RESOURCE_CONFLICT` | Duplicate request or invalid current-state transition |
@@ -343,15 +345,21 @@ The table is the shared error vocabulary. An endpoint's OpenAPI operation lists 
 
 ## 7. Authorization rules
 
-- Public club detail and published recruitment information can be read without login.
-- `/auth/me` and future applicant operations require an authenticated session.
-- An applicant may read or act on only their own application.
-- Committee access is checked against the club assignment and its active term on every request.
-- Confirmation or decline is limited to the applicant, after results are published, and before the applicable deadline.
-- Central dashboard access is limited to the agreed global `ADMIN` scope. `ADMIN` alone does not imply permission to edit every club or publish its results.
-- The backend does not trust hidden buttons, route guards, cached roles, or client-provided ownership/status values.
+The [Permission Matrix](../security/permission-matrix.md) is authoritative. The following rules are adopted policy, including for product APIs that are not implemented yet:
 
-Detailed permissions for result publication, committee self-review, and administrative overrides remain open decisions. Do not expose write endpoints for those operations until the permission matrix is approved.
+- Public reads require no login and expose only active clubs and recruitment information allowed by the public endpoint.
+- All protected operations require a valid session and an `ACTIVE` account checked against current database state. On detecting suspension, return `403 ACCOUNT_NOT_ALLOWED` and invalidate the session. Public access and session cleanup remain available; unsafe requests still require CSRF.
+- Student eligibility requires a verified `student_profiles.student_status = 'ACTIVE'`. Successful TU login alone does not establish eligibility. Missing or unverified status grants no student or committee privileges.
+- Committee access requires an active account, student profile, club, membership, and assignment for the actual resource's club. Membership must have started and not ended; assignment must be unrevoked with `starts_at <= now < ends_at`. The start is inclusive and the end exclusive, using backend UTC time. Recheck inside write transactions; no scheduled expiry job or client refresh is needed to remove expired privileges.
+- The global role remains `USER` or `ADMIN`; `COMMITTEE`/`PRESIDENT` are club assignment roles. Admin has no term of its own, but acting as committee requires the same effective assignment as anyone else.
+- Applicants may access only their own applications. An active account may read its existing private records even when student or club status is inactive. Hide unpublished results and internal review notes. Applicant access to another person's private resource returns `404 RESOURCE_NOT_FOUND`.
+- Confirming an offer requires active student and club status, ownership, a published accepted result in a non-cancelled round, and `now < confirmation_deadline`. Declining requires active account, ownership, the same result/deadline conditions, but does not require student or club Active status.
+- A user who has an application in a round, in any status, cannot use committee permissions for that round. This includes internal reads, round changes, decisions, cancellation, and publication; withdrawing an application does not lift the restriction. Filter such rounds before committee pagination/counts.
+- COMMITTEE/PRESIDENT may record internal decisions after recruitment closes and before publication. Only an effective PRESIDENT without an application in that round may publish results or cancel a round, subject to the state/time rules in the matrix. Editing published results and accepting/declining on behalf of others are denied.
+- Admin may access aggregate university statistics and manage committee appointments and limited initial membership provisioning. Admin cannot appoint itself, read application content through its global role, or override Active, terms, ownership, self-review, or published decisions. The app does not grant global-role/account-status/club-status management permissions in this scope.
+- The backend verifies resource-parent relationships and current permissions; it does not trust hidden buttons, cached roles, or client-provided ownership/status values. Missing permissions, expired terms, inactive eligibility, and self-review use `403 ACCESS_DENIED`; valid authorization followed by a state/deadline/version conflict uses `409 RESOURCE_CONFLICT`. CSRF rejection may precede these checks.
+
+Recruitment management contracts are in [rounds.openapi.yaml](rounds.openapi.yaml). Defining these permissions does not add the missing application, publication, dashboard, or assignment-management endpoints; those require their own DTOs and implementation.
 
 ## 8. Product APIs to specify before implementation
 
@@ -360,14 +368,15 @@ Remaining product stories identify resource areas that still need concrete reque
 | Story | Resource area | Decisions needed |
 |---|---|---|
 | US-01 | Club search and filters | Search/filter fields, sort options, and category/tag semantics |
-| US-03 | Application submission | Eligibility, required answers, HTTPS link rules, quota, duplicate behavior, and concurrency handling |
-| US-04 | Applicant application list/detail/history | Which history is visible and how unpublished results are hidden |
-| US-05 | Confirm or decline an offer | Result publication workflow, deadline policy, idempotency, and membership transaction |
+| US-03 | Application submission | Student Active is decided in the matrix; define verified status integration, round-specific eligibility, answers, links, quota, duplicates, and concurrency |
+| US-04 | Applicant application list/detail/history | Owner-only access and hiding unpublished results/internal notes are decided; define response/status mapping |
+| US-05 | Confirm or decline an offer | Ownership/Active/deadline permissions are decided; implement publication, idempotency, and membership transaction |
 | US-06 | Club profile editing | Conflict handling and concurrent update policy |
 | US-07 | Recruitment rounds | Round publication, schedule validation, and close/reopen policy |
-| US-08 | Recruitment questions | Question types, validation, and freeze/version policy after applications exist |
-| US-09 | Committee application review | Committee scope, field-level privacy, and self-review rule; reading is read-only |
-| US-10 | Central dashboard | Metrics definitions, academic period, and data scope |
+| US-08 | Recruitment questions | Current policy permits changes only on drafts without applications; define any future question versioning separately |
+| US-09 | Committee application review | Scope, privacy boundaries, and self-review are decided in the matrix; current story remains read-only; decision/publication need separate implementation work |
+| US-10 | Central dashboard | Admin aggregate access is decided; define metrics and academic-period attribution |
+| Backlog | Committee appointment administration | Admin-only authorization is decided; define appointment/revocation/bootstrap APIs and audit storage |
 | Backlog | In-app notifications | Event triggers, read/unread behavior, and ownership |
 
 Application status values referenced by the architecture are `SUBMITTED`, `UNDER_REVIEW`, `ACCEPTED`, `REJECTED`, `CONFIRMED`, `DECLINED`, `WITHDRAWN`, and `EXPIRED`. The presence of a status does not define a permitted transition or mean that its workflow is implemented. Use `SUBMITTED` as the proposed initial status; resolve older `PENDING` references before implementation. Do not publish internal decision data or application history before `resultsPublishedAt`.
@@ -382,9 +391,9 @@ Update this Markdown contract, the OpenAPI document, backend DTOs, and frontend 
 
 1. Provision the TU API channel, obtain its endpoint URL and Application-Key, and verify access/quota with the project owner before enabling real authentication. The public request/response mapping follows the official TU API documentation; local and CI runs remain on the mock adapter.
 2. Approve the proposed ERD and confirm club and recruitment DTO fields against it.
-3. Agree how TU student status maps to local student eligibility.
-4. Agree application quota, result publication, offer deadlines, and membership transitions.
-5. Approve the committee/admin permission matrix, including self-review and override rules.
-6. Agree how recruitment question changes behave after applications have been submitted.
+3. Verify the upstream mapping into local student status. Only verified `ACTIVE` is eligible under the adopted matrix; do not infer this from login success.
+4. Agree application quota and complete publication/confirmation DTOs, scheduling and membership transitions within the adopted permissions.
+5. Implement the decided committee/admin matrix, including PRESIDENT publication, self-review prohibition, no Admin override, and the enforcement gaps listed in the matrix.
+6. Define a separate versioning design if questions must change after publication; current policy permits editing only drafts without applications.
 
-Until these decisions are made, keep affected APIs marked as proposed and do not claim real TU integration or completed product workflows.
+Until the remaining integration and workflow work is complete, keep affected APIs marked as proposed and do not claim real TU integration or completed product workflows. Authorization policy itself is decided by the permission matrix.

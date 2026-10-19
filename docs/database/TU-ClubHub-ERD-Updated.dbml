@@ -9,6 +9,8 @@
 // Java: snake_case columns -> camelCase fields; bigint -> Long;
 // timestamptz -> Instant; status varchar -> Java enum with EnumType.STRING.
 // This is a design proposal, not an inspection of an existing implementation.
+// Authorization policy adopted 2026-10-19: ../security/permission-matrix.md.
+// Policy notes below describe requirements; they do not add SQL constraints or deployed guards.
 // Assumptions: one category per club; text-only selection questions;
 // one application per student per round; one membership per student per club;
 // accepted applicants become members only after confirming their place.
@@ -52,7 +54,7 @@ Table student_profiles [headercolor: #2563EB] {
     `study_year IS NULL OR study_year > 0`
     `student_status IN ('ACTIVE', 'INACTIVE', 'GRADUATED', 'UNKNOWN')`
   }
-  Note: 'Java: StudentProfile; @MapsId with User. Status is our normalized value, not a claim about TU API field names. Only verified eligible students may apply.'
+  Note: 'Java: StudentProfile; @MapsId with User. Status is our normalized value, not a claim about TU API field names. Verified ACTIVE is required to apply, confirm membership, or exercise committee privileges. Login alone does not establish eligibility. An ACTIVE account may still read its own existing records when student status is INACTIVE, GRADUATED or UNKNOWN.'
 }
 
 Table club_categories [headercolor: #0F766E] {
@@ -245,7 +247,7 @@ Table application_reviews [headercolor: #7C3AED] {
   checks {
     `recommendation IN ('ACCEPT', 'REJECT', 'DISCUSS')`
   }
-  Note: 'Java: ApplicationReview. One editable opinion per reviewer per application; not the final decision. Service checks an effective committee assignment and active membership/account for this club. Self-review prohibition is a proposed policy, not an agreed requirement in the supplied Use Cases.'
+  Note: 'Java: ApplicationReview. One editable opinion per reviewer per application; not the final decision. Service checks the effective committee policy, including ACTIVE account, student profile, club and membership, and an unrevoked assignment within its term. Under the policy adopted 2026-10-19, a user with an application in a round cannot access that round as committee in any application status. Internal opinions and unpublished results are hidden from applicant responses; see the permission matrix.'
 }
 
 Table application_status_history [headercolor: #7C3AED] {
@@ -317,7 +319,7 @@ Table club_committee_assignments [headercolor: #15803D] {
     `(revoked_at IS NULL) = (revoked_by IS NULL)`
     `revoked_at IS NULL OR revoked_at >= created_at`
   }
-  Note: 'Java: ClubCommitteeAssignment stores membership_id as a scalar ID owned by the membership module. Each term is a separate retained row. Effective privileges require ACTIVE, starts_at <= now < ends_at, ACTIVE membership and ACTIVE account. End of term is derived from time; no expiration job is required for authorization. Admin provisions assignments. Revoke instead of deleting; role/term corrections use revoke-and-create to preserve history. Prevent overlapping non-revoked terms for the same membership and permission_role in the service or a migration-level exclusion constraint.'
+  Note: 'Java: ClubCommitteeAssignment stores membership_id as a scalar ID owned by the membership module. Each term is a separate retained row. Effective privileges require ACTIVE account, student profile, club and membership; membership joined_at <= now and ended_at IS NULL; assignment ACTIVE, revoked_at IS NULL and starts_at <= now < ends_at. Backend UTC time is authoritative; no expiration job is required. PRESIDENT is required for selection-result publication and round cancellation. A committee member cannot manage any round in which they have an application, in any status. Admin provisions assignments but cannot appoint itself or override club authorization. Revoke instead of deleting; role/term corrections use revoke-and-create. Prevent overlapping non-revoked terms for the same membership and permission_role. See the permission matrix for action and audit requirements; these notes do not implement them.'
 }
 
 Table membership_history [headercolor: #15803D] {
@@ -442,10 +444,12 @@ DiagramView Default {
 
 // BUSINESS RULES NOT FULLY ENFORCED BY FOREIGN KEYS / CHECKS
 // 1. Club management, review and final decisions require an effective assignment:
-//    assignment ACTIVE; starts_at <= now < ends_at; membership and account ACTIVE;
-//    target club matches the membership. Check at execution time on every request.
-//    ADMIN provisions initial memberships/assignments. Do not put committee roles
-//    back into users.system_role or club_memberships.
+//    assignment ACTIVE, revoked_at NULL, starts_at <= now < ends_at; account,
+//    student profile, club and membership ACTIVE; membership joined_at <= now and
+//    ended_at NULL; target club matches the membership. Check every request and
+//    inside write transactions. ADMIN provisions initial memberships/assignments
+//    under the matrix and cannot appoint itself or bypass committee requirements.
+//    Do not put committee roles back into users.system_role or club_memberships.
 // 2. Submit atomically: eligible student/account; active club; round PUBLISHED;
 //    opens_at <= now < closes_at; closed_at IS NULL; required answers and HTTPS
 //    links valid; unique student/round; application quota not exceeded.
@@ -463,9 +467,10 @@ DiagramView Default {
 //    results_published_at is set. Publish in-app result notices with that change.
 //    Confirmation opens at actual publication, not results_scheduled_at.
 // 5. Confirm/decline requires ownership, ACCEPTED, published results, a noncancelled
-//    round, an active club/account and now < confirmation_deadline. Check eligibility
-//    according to the agreed business policy. Create/reactivate membership with its
-//    application and membership histories in one transaction; avoid duplicate rows.
+//    round, an ACTIVE account and now < confirmation_deadline. Confirmation also
+//    requires ACTIVE student profile and club. Decline does not require student or
+//    club Active status. Confirmation creates/reactivates membership with application
+//    and membership histories in one transaction; avoid duplicate rows.
 //    Earlier-round closed_at is not a reason to block confirmation.
 // 6. At the deadline, change unanswered published ACCEPTED applications to EXPIRED
 //    with actor_id NULL and history reason; responded_at remains NULL. The UI shows
@@ -475,19 +480,23 @@ DiagramView Default {
 // 7. Manual close sets closed_at to the actual server time; it does not rewrite
 //    closes_at, cancel the round, delete applications or decide existing applicants.
 //    Concurrency between closing and submission must be controlled transactionally.
-//    A cancelled round blocks submission/review/confirmation; cancellation policy
-//    after result publication is outside the agreed MVP and must be defined first.
+//    A cancelled round blocks submission/review/confirmation. Cancellation requires
+//    an effective PRESIDENT without an application in that round and an audited
+//    reason; deny cancellation after selection results have been published.
 // 8. Assignment periods/permission roles are retained per term. Revoke and create
 //    a new assignment to correct them. Membership LEFT/REMOVED must revoke current
 //    and future assignments transactionally so reactivation cannot revive old powers.
 //    Membership INACTIVE temporarily blocks access. Check overlap and active-member
 //    prerequisites in the service; a foreign key alone does not enforce these rules.
-// 9. POLICY DECISIONS STILL TO AGREE (not new mandatory acceptance criteria):
-//    self-review/self-decision prohibition; need for all applicants to be decided;
-//    publication before scheduled/effective close; edits to published questions or
-//    submitted answers/links; eligibility after application; reapplication rules.
-//    Effective closure is closed_at when set, otherwise closes_at. The removed
-//    results_published_at >= closes_at CHECK must not be silently treated as policy.
+// 9. POLICY ADOPTED 2026-10-19: no committee access to a round in which the actor
+//    has any application, regardless of its status. PRESIDENT publishes selection
+//    results after effective closure, after deciding all applications still under
+//    consideration, and before confirmation_deadline. No edits to published results
+//    and no Admin override. Question edits are limited to drafts without applications.
+//    Effective closure is closed_at when set, otherwise closes_at; early closure
+//    therefore permits publication before the originally scheduled closes_at.
+//    Still to specify separately: submitted-answer/link corrections, reapplication,
+//    and any future question versioning. See ../security/permission-matrix.md.
 //    External document contents can change at their origin; no automatic fetching.
 // 10. Dashboard numbers are computed from clubs/rounds/applications/memberships.
 //     Define unique-person versus application counts and semester membership scope
