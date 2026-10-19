@@ -65,15 +65,54 @@ class CommitteeMethodSecurityIntegrationTest {
 	private UserAccount committeeAccount;
 
 	@BeforeEach
-	void cleanDatabase() {
-		SecurityContextHolder.clearContext();
-		assignmentRepository.deleteAll();
-		membershipRepository.deleteAll();
-		userAccountRepository.deleteAll();
-		committeeAccount = userAccountRepository.saveAndFlush(
-				new UserAccount("committee-test", "Committee Test", null, Instant.now()));
-	}
+void cleanDatabase() {
+    SecurityContextHolder.clearContext();
 
+    // Create the additional table required by committee authorization.
+    jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS student_profiles (
+                user_id BIGINT PRIMARY KEY,
+                student_status VARCHAR(20) NOT NULL
+            )
+            """);
+
+    // Clear previous test fixtures in dependency order.
+    assignmentRepository.deleteAll();
+    membershipRepository.deleteAll();
+    jdbcTemplate.update("DELETE FROM clubs");
+    jdbcTemplate.update("DELETE FROM student_profiles");
+    userAccountRepository.deleteAll();
+
+    // Create an active committee user.
+    committeeAccount = userAccountRepository.saveAndFlush(
+            new UserAccount(
+                    "committee-test",
+                    "Committee Test",
+                    null,
+                    Instant.now()
+            )
+    );
+
+    // The user must have an active student profile.
+    jdbcTemplate.update("""
+            INSERT INTO student_profiles (user_id, student_status)
+            VALUES (?, 'ACTIVE')
+            """, committeeAccount.getId());
+
+    // These tests use fixed club IDs 41 and 42.
+    for (Long clubId : List.of(TARGET_CLUB_ID, OTHER_CLUB_ID)) {
+        jdbcTemplate.update("""
+                INSERT INTO clubs
+                    (id, category_id, name, description, status,
+                     created_by, created_at, updated_at, version)
+                VALUES (?, 1, ?, 'Test club', 'ACTIVE',
+                        ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                """,
+                clubId,
+                "committee-test-club-" + clubId,
+                committeeAccount.getId());
+    }
+}
 	@AfterEach
 	void clearSecurityContext() {
 		SecurityContextHolder.clearContext();
@@ -265,13 +304,37 @@ class CommitteeMethodSecurityIntegrationTest {
 			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.traceId").isNotEmpty());
 	}
 
-	private void grantCommittee(Long clubId, String permission, Instant startsAt, Instant endsAt) {
-		ClubMembership membership = membershipRepository.saveAndFlush(
-				new ClubMembership(clubId, committeeAccount.getId(), "ACTIVE"));
-		assignmentRepository.saveAndFlush(new ClubCommitteeAssignment(
-				membership.getId(), "Committee Member", permission,
-				startsAt, endsAt, committeeAccount.getId()));
-	}
+	private void grantCommittee(
+        Long clubId,
+        String permission,
+        Instant startsAt,
+        Instant endsAt) {
+
+    ClubMembership membership = membershipRepository.saveAndFlush(
+            new ClubMembership(
+                    clubId,
+                    committeeAccount.getId(),
+                    "ACTIVE"
+            )
+    );
+
+    jdbcTemplate.update(
+            "UPDATE club_memberships SET joined_at = ? WHERE id = ?",
+            java.sql.Timestamp.from(Instant.now().minusSeconds(60)),
+            membership.getId()
+    );
+
+    assignmentRepository.saveAndFlush(
+            new ClubCommitteeAssignment(
+                    membership.getId(),
+                    "Committee Member",
+                    permission,
+                    startsAt,
+                    endsAt,
+                    committeeAccount.getId()
+            )
+    );
+}
 
 	private static UsernamePasswordAuthenticationToken authenticationFor(UserAccount account) {
 		ClubHubPrincipal principal = new ClubHubPrincipal(account.getId(), account.getTuUsername(), account.getSystemRole());

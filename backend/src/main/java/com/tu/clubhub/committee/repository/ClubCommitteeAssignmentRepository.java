@@ -15,6 +15,8 @@ public interface ClubCommitteeAssignmentRepository extends JpaRepository<ClubCom
 				FROM club_committee_assignments assignment
 				JOIN club_memberships membership ON membership.id = assignment.membership_id
 				JOIN users account ON account.id = membership.user_id
+				JOIN student_profiles student ON student.user_id = membership.user_id
+				JOIN clubs club ON club.id = membership.club_id
 				WHERE membership.user_id = :userId
 				  AND membership.club_id = :clubId
 				  AND membership.status = 'ACTIVE'
@@ -25,6 +27,9 @@ public interface ClubCommitteeAssignmentRepository extends JpaRepository<ClubCom
 				  AND assignment.starts_at <= :at
 				  AND :at < assignment.ends_at
 				  AND account.account_status = 'ACTIVE'
+				  AND student.student_status = 'ACTIVE'
+				  AND club.status = 'ACTIVE'
+				  AND membership.joined_at <= :at
 			) THEN TRUE ELSE FALSE END
 			""", nativeQuery = true)
 	boolean existsEffectiveAssignment(
