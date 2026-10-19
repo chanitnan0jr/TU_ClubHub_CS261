@@ -3,7 +3,7 @@
 | Property | Value |
 |---|---|
 | Version | `v1` |
-| Contract status | Target contract; application submission implementation pending |
+| Contract status | Partially implemented; endpoint status listed below |
 | Last updated | 2026-10-19 |
 | Audience | Frontend and backend developers |
 
@@ -11,7 +11,24 @@ This document defines the shared HTTP contract for the TU-ClubHub foundation and
 
 Authorization policy was adopted on 2026-10-19 in the [Permission Matrix](../security/permission-matrix.md). Its Active, term, self-review, and Admin rules are decided; the matrix separately records implementation gaps. Adoption does not imply that future product endpoints exist.
 
-The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](openapi.yaml). Keep it in sync with this document and with the DTOs consumed by the frontend. The backend implements the TU authentication adapter and `/api/v1/auth` endpoints, including the 8-hour absolute session timeout and fresh CSRF token in the login response. The public endpoints added below are API contracts only and are not yet implemented; their response fields are limited to values supported by the current club DTOs and ERD.
+The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](openapi.yaml). Recruitment management uses the separate OpenAPI 3.0.3 document [rounds.openapi.yaml](rounds.openapi.yaml). Keep both aligned with their contracts and frontend DTOs.
+
+### Implementation status
+
+Reviewed from source on 2026-10-19; this table records handlers and integration, not test results or complete policy enforcement.
+
+| API | Backend status | Frontend status |
+|---|---|---|
+| Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout | Login/account/logout connected |
+| `GET /api/v1/public/clubs/{id}` and `.../{id}/recruitment-rounds` | Implemented; active clubs and currently open rounds from DB | Club detail still uses mock data and is not mounted |
+| `GET /api/v1/clubs/{clubId}` | Contract-only; no handler | Editor client calls this missing endpoint |
+| `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard | Editor/client exist but are not mounted |
+| Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
+| Committee round `GET` list/detail and `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
+| Application submission (§11) | Contract defined; no handler/service yet | Form prototype only; no submission client |
+| `/actuator/health` | Implemented | Operational endpoint |
+
+The [permission matrix](../security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย) lists remaining Active, PRESIDENT, account-refresh, and self-review checks. Real TU access and verified student-status provisioning still require integration work.
 
 ## 1. Contract scope
 
@@ -205,15 +222,17 @@ Returns a paginated `items`/`page` collection of public recruitment round summar
 }
 ```
 
-For non-empty pages, each item contains only `id`, `name`, `opensAt`, and `closesAt`. `name` is the public display name for the round (mapped from the ERD's `recruitment_rounds.title`). The contract uses the standard zero-based `page` and `size` parameters (default `0` and `20`, maximum size `100`). Timestamps are `TIMESTAMPTZ` instants serialized as ISO 8601 UTC values ending in `Z`; `opensAt` and `closesAt` are not local wall-clock values. **Implementation assumption to confirm:** evaluate the window using one backend current instant (`Clock.instant()`) per request, with deployed hosts synchronized to UTC. The ERD defines the boundary behavior but does not specify the clock source or clock-skew tolerance.
+For non-empty pages, each item contains only `id`, `name`, `opensAt`, and `closesAt`. `name` is the public display name for the round (mapped from `recruitment_rounds.title`). The contract uses the standard zero-based `page` and `size` parameters (default `0` and `20`, maximum size `100`). Timestamps are `TIMESTAMPTZ` instants serialized as ISO 8601 UTC values ending in `Z`. The implementation samples one backend `Clock.instant()` for both the page query and count. Deployment must keep host clocks synchronized; no clock-skew allowance is defined.
 
 Both endpoints use the shared `application/problem+json` `Problem` error format for `400 INVALID_RESOURCE_ID`, `404 CLUB_NOT_FOUND`, `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`. Neither endpoint returns `401` or `403` because both are public reads.
 
 ### `GET /api/v1/clubs/{clubId}`
 
+**Contract-only; no backend handler.** The editor client currently calls this path. The implemented public read APIs are the two `/api/v1/public/clubs/...` endpoints above; they have different response DTOs.
+
 Returns a public club profile without requiring login. `clubId` is a decimal string ID. The response may include only published recruitment rounds and public profile fields; it must not expose draft rounds, applicant data, committee-only information, or internal notes. The backend does not fetch images or documents from URLs. The response includes the public profile columns from `clubs`, the category, tags, and published recruitment rounds. Database `bigint` IDs are decimal strings on the wire.
 
-**`200 OK`** (proposed DTO; confirm exact fields against the approved ERD)
+**`200 OK`** (target DTO for the pending endpoint)
 
 ```json
 {
@@ -362,18 +381,18 @@ The [Permission Matrix](../security/permission-matrix.md) is authoritative. The 
 
 Recruitment management contracts are in [rounds.openapi.yaml](rounds.openapi.yaml), and application submission is defined in [section 11](#11-application-submission). Application reads/review, publication, dashboard, and assignment-management endpoints still require their own contracts and implementation.
 
-## 8. Product APIs to specify before implementation
+## 8. Remaining product contracts and integration
 
-Remaining product stories identify resource areas that still need concrete request fields and policies before implementation. Add their paths, DTOs, status codes, authorization rules, and examples to this document and `docs/api/openapi.yaml`:
+The table includes new APIs and unfinished parts of existing contracts. Define missing paths, DTOs, status codes, permissions, and examples before implementation; preserve the contracts already agreed:
 
 | Story | Resource area | Decisions needed |
 |---|---|---|
 | US-01 | Club search and filters | Search/filter fields, sort options, and category/tag semantics |
 | US-04 | Applicant application list/detail/history | Owner-only access and hiding unpublished results/internal notes are decided; section 11 reserves `GET /api/v1/me/applications` and `GET /api/v1/me/applications/{applicationId}`; define response/status mapping |
 | US-05 | Confirm or decline an offer | Ownership/Active/deadline permissions are decided; implement publication, idempotency, and membership transaction |
-| US-06 | Club profile editing | Conflict handling and concurrent update policy |
-| US-07 | Recruitment rounds | Round publication, schedule validation, and close/reopen policy |
-| US-08 | Recruitment questions | Current policy permits changes only on drafts without applications; define any future question versioning separately |
+| US-06 | Club profile editing extensions | Pending GET integration, category/tag writes, and concurrent update policy; PUT already exists |
+| US-07 | Recruitment management completion | GET list/detail and CANCEL from rounds.openapi.yaml remain pending; define cancellation reason and complete permission checks |
+| US-08 | Recruitment question integration | Use the existing round POST/PUT questions contract; current policy permits changes only on drafts without applications; define any future question versioning separately |
 | US-09 | Committee application review | Scope, privacy boundaries, and self-review are decided in the matrix; current story remains read-only; decision/publication need separate implementation work |
 | US-10 | Central dashboard | Admin aggregate access is decided; define metrics and academic-period attribution |
 | Backlog | Committee appointment administration | Admin-only authorization is decided; define appointment/revocation/bootstrap APIs and audit storage |
@@ -390,13 +409,13 @@ Update this Markdown contract, the OpenAPI document, backend DTOs, and frontend 
 ## 10. Open integration and product decisions
 
 1. Provision the TU API channel, obtain its endpoint URL and Application-Key, and verify access/quota with the project owner before enabling real authentication. The public request/response mapping follows the official TU API documentation; local and CI runs remain on the mock adapter.
-2. Approve the proposed ERD and confirm club and recruitment DTO fields against it.
+2. Keep the DBML and DTO mappings aligned with the executable Flyway schema; add new migrations for future schema changes.
 3. Verify the upstream mapping into local student status. Only verified `ACTIVE` is eligible under the adopted matrix; do not infer this from login success.
 4. Implement the submission limits in section 11 and complete publication/confirmation DTOs, scheduling and membership transitions within the adopted permissions.
 5. Implement the decided committee/admin matrix, including PRESIDENT publication, self-review prohibition, no Admin override, and the enforcement gaps listed in the matrix.
 6. Define a separate versioning design if questions must change after publication; current policy permits editing only drafts without applications.
 
-Until the remaining integration and workflow work is complete, keep affected APIs marked as proposed and do not claim real TU integration or completed product workflows. Authorization policy itself is decided by the permission matrix.
+Mark defined but unimplemented APIs as pending, and keep unresolved schemas identified separately. Live TU integration and completed product workflows require their own verification. Authorization policy itself is decided by the permission matrix.
 
 ## 11. Application submission
 
@@ -508,7 +527,7 @@ Use the shared Problem format with `Cache-Control: no-store`. Error `type` value
 | `500` | `INTERNAL_ERROR` | `internal-error` | Unexpected failure; roll back all submission writes. |
 | `503` | `SERVICE_UNAVAILABLE` | `service-unavailable` | Database unavailable; do not report a successful submission. |
 
-Checks run in this order, and the first failure determines the response. The order follows the proposal in US-03, except that request checks needing no database lookup run before the eligibility check:
+Checks run in this order, and the first failure determines the response. This is the authoritative order for US-03; request checks needing no database lookup run before the eligibility check:
 
 1. CSRF token: `403 CSRF_INVALID`. This check may precede authentication.
 2. Session and account: `401 AUTHENTICATION_REQUIRED`, then `403 ACCOUNT_NOT_ALLOWED`.

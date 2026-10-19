@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: TU ClubHub Recruitment Rounds API — proposed contract
+  title: TU ClubHub Recruitment Rounds API
   version: 1.0.0
   description: >-
     US-07/US-08. Committee-only management API, separate from existing public
@@ -20,6 +20,8 @@ info:
     Selection-result publication is a separate future workflow, not PUBLISH here.
     GET operations and CANCEL are not implemented yet; CANCEL also needs its reason
     field specified before implementation. The matrix lists remaining guard work.
+    Source status reviewed on 2026-10-19: POST, PUT, and PATCH PUBLISH/CLOSE have
+    handlers. Frontend integration and complete permission enforcement remain pending.
 servers:
   - url: http://localhost:8080
 security:
@@ -36,6 +38,7 @@ paths:
           pattern: ^[1-9][0-9]{0,18}$
     get:
       operationId: listRounds
+      x-implementation-status: pending
       tags:
         - Recruitment rounds
       summary: listRounds
@@ -103,6 +106,7 @@ paths:
         existing club: 200 with empty items."
     post:
       operationId: createRound
+      x-implementation-status: implemented
       tags:
         - Recruitment rounds
       summary: createRound
@@ -188,6 +192,7 @@ paths:
           pattern: ^[1-9][0-9]{0,18}$
     get:
       operationId: getRound
+      x-implementation-status: pending
       tags:
         - Recruitment rounds
       summary: getRound
@@ -230,6 +235,7 @@ paths:
                 $ref: "#/components/schemas/Round"
     put:
       operationId: replaceRound
+      x-implementation-status: implemented
       tags:
         - Recruitment rounds
       summary: replaceRound
@@ -298,6 +304,7 @@ paths:
         checked atomically.
     patch:
       operationId: transitionRound
+      x-implementation-status: partial
       tags:
         - Recruitment rounds
       summary: transitionRound

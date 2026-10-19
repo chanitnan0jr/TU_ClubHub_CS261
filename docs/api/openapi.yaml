@@ -5,6 +5,10 @@ info:
   description: >-
     TU-ClubHub API contract for foundation, public club profiles, and application
     submission. The application submission contract is defined; implementation is pending.
+    Source status reviewed on 2026-10-19: auth, public club reads, club profile PUT,
+    and health have handlers. GET /api/v1/clubs/{clubId} remains contract-only.
+    Recruitment management is specified separately in rounds.openapi.yaml.
+    Handler presence does not imply complete frontend or permission-policy integration.
     Additional product workflow endpoints are tracked in docs/api/API_v1.md and
     must be specified before implementation.
     Authorization policy adopted on 2026-10-19 is defined in the
@@ -25,6 +29,7 @@ paths:
     get:
       tags: [Authentication]
       operationId: getCsrfToken
+      x-implementation-status: implemented
       summary: Get a CSRF token for the browser session
       description: Returns an opaque token and the request header name. Response must not be cached.
       security: []
@@ -53,6 +58,7 @@ paths:
     post:
       tags: [Authentication]
       operationId: login
+      x-implementation-status: implemented
       summary: Authenticate through the configured TU adapter
       description: >-
         Requires the CSRF header returned by /api/v1/auth/csrf. The public request
@@ -136,6 +142,7 @@ paths:
     get:
       tags: [Authentication]
       operationId: getCurrentUser
+      x-implementation-status: implemented
       summary: Get the authenticated user's minimal account identity
       description: >-
         The role is for UI presentation only; the backend rechecks authorization for
@@ -172,6 +179,7 @@ paths:
     post:
       tags: [Authentication]
       operationId: logout
+      x-implementation-status: implemented
       summary: Invalidate the current session
       description: Requires both the authenticated session cookie and the current CSRF header.
       security:
@@ -199,6 +207,7 @@ paths:
     get:
       tags: [Public Clubs]
       operationId: getPublicClubProfile
+      x-implementation-status: implemented
       summary: Get an active club's public profile
       description: >-
         Public endpoint; authentication is not required. Returns only an ACTIVE
@@ -258,6 +267,7 @@ paths:
     get:
       tags: [Public Clubs]
       operationId: listOpenPublicClubRecruitmentRounds
+      x-implementation-status: implemented
       summary: List currently open public recruitment rounds for an active club
       description: >-
         Public endpoint; authentication is not required. The parent club must be
@@ -266,9 +276,9 @@ paths:
         evaluation instant < closesAt, and closedAt unset. The start is inclusive;
         the scheduled close is exclusive. Database timestamps are timestamptz
         instants and response timestamps are serialized as ISO 8601 UTC with Z.
-        Assumption to confirm: evaluate the window against one backend
-        Clock.instant() per request, with deployed hosts synchronized to UTC; the
-        ERD defines the time boundaries but not the clock source or skew tolerance.
+        The implementation uses one backend Clock.instant() for the page query
+        and total count. Deployed hosts must keep their clocks synchronized;
+        no clock-skew allowance is defined.
         The response uses the API's standard paginated collection wrapper; an
         active club with no qualifying rounds returns 200 with items: [] and zero
         totals.
@@ -346,8 +356,12 @@ paths:
     get:
       tags: [Clubs]
       operationId: getClub
+      x-implementation-status: pending
       summary: Get public club details
       description: >-
+        Contract-only; no backend handler. The editor client currently calls this
+        path; implemented public reads use /api/v1/public/clubs/{id} and its
+        recruitment-rounds collection with different DTOs.
         Public endpoint. Only published recruitment rounds and public profile fields
         may be returned. Inactive clubs, draft rounds, applicant data, committee-only
         information, and internal notes are not returned. IDs are decimal strings on
@@ -433,6 +447,7 @@ paths:
     put:
       tags: [Clubs]
       operationId: updateClub
+      x-implementation-status: implemented
       summary: Update a club profile
       description: >-
         Replaces the editable club profile fields. Requires an authenticated session,
@@ -863,6 +878,7 @@ paths:
     get:
       tags: [Operations]
       operationId: getHealth
+      x-implementation-status: implemented
       summary: Get the minimum operational health status
       description: Public endpoint; no session is required. Must not expose secrets, environment values, or internal diagnostics.
       security: []
