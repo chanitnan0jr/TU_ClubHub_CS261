@@ -5,7 +5,10 @@ interface QuestionInputRowProps {
   question: ScreeningQuestionInput;
   onChangeText: (index: number, text: string) => void;
   onToggleRequired: (index: number) => void;
+  onMove: (index: number, direction: 'up' | 'down') => void;
   onRemove: (index: number) => void;
+  isFirst: boolean;
+  isLast: boolean;
   disabled?: boolean;
 }
 
@@ -14,20 +17,45 @@ export const QuestionInputRow = ({
   question,
   onChangeText,
   onToggleRequired,
+  onMove,
   onRemove,
+  isFirst,
+  isLast,
   disabled = false,
 }: QuestionInputRowProps) => {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-center gap-3">
         <span className="text-sm font-bold text-gray-500 w-5">{index + 1}</span>
+        <div className="flex shrink-0 flex-col gap-1">
+          <button
+            type="button"
+            onClick={() => onMove(index, 'up')}
+            disabled={disabled || isFirst}
+            aria-label={`เลื่อนคำถามที่ ${index + 1} ขึ้น`}
+            title="เลื่อนขึ้น"
+            className="inline-flex size-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            onClick={() => onMove(index, 'down')}
+            disabled={disabled || isLast}
+            aria-label={`เลื่อนคำถามที่ ${index + 1} ลง`}
+            title="เลื่อนลง"
+            className="inline-flex size-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            ↓
+          </button>
+        </div>
         <input
           type="text"
           value={question.questionText}
           onChange={(e) => onChangeText(index, e.target.value)}
           placeholder="ระบุข้อความคำถามคัดเลือก..."
           disabled={disabled}
-          className="h-[44px] flex-1 rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className="h-[44px] min-w-0 flex-1 rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
         />
         <button
           type="button"
