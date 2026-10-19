@@ -59,7 +59,8 @@ class RecruitmentRoundLifecycleEdgeCasesTest {
         RecruitmentRound after = round("PUBLISHED", before.opensAt(),
                 before.closesAt(), null, 1L);
         when(repository.findForUpdate(CLUB, ROUND))
-                .thenReturn(Optional.of(before), Optional.of(after));
+                .thenReturn(Optional.of(before))
+                .thenReturn(Optional.of(after));
         when(repository.publishRound(CLUB, ROUND, 0L, NOW)).thenReturn(1);
 
         RecruitmentRound result = service.publishRound(CLUB, ROUND, 0L);
@@ -93,7 +94,8 @@ class RecruitmentRoundLifecycleEdgeCasesTest {
         RecruitmentRound after = round("PUBLISHED", NOW,
                 NOW.plusSeconds(3600), NOW, 1L);
         when(repository.findForUpdate(CLUB, ROUND))
-                .thenReturn(Optional.of(before), Optional.of(after));
+                .thenReturn(Optional.of(before))
+                .thenReturn(Optional.of(after));
         when(repository.closeRound(CLUB, ROUND, 0L, NOW)).thenReturn(1);
 
         assertEquals(NOW, service.closeRound(CLUB, ROUND, 0L).closedAt());

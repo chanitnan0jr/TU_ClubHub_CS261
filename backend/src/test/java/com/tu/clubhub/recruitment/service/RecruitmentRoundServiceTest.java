@@ -147,9 +147,8 @@ class RecruitmentRoundServiceTest {
                 1L);
 
         when(repository.findForUpdate(1L, 10L))
-                .thenReturn(
-                        Optional.of(before),
-                        Optional.of(after));
+                .thenReturn(Optional.of(before))
+                .thenReturn(Optional.of(after));
 
         when(repository.closeRound(1L, 10L, 0L, NOW))
                 .thenReturn(1);
