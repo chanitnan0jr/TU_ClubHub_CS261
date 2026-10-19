@@ -3,11 +3,11 @@
 | Property | Value |
 |---|---|
 | Version | `v1` |
-| Contract status | Proposed foundation contract |
+| Contract status | Target contract; application submission implementation pending |
 | Last updated | 2026-10-19 |
 | Audience | Frontend and backend developers |
 
-This document defines the shared HTTP contract for the TU-ClubHub foundation. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
+This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
 
 Authorization policy was adopted on 2026-10-19 in the [Permission Matrix](../security/permission-matrix.md). Its Active, term, self-review, and Admin rules are decided; the matrix separately records implementation gaps. Adoption does not imply that future product endpoints exist.
 
@@ -21,9 +21,10 @@ The foundation contract covers:
 - CSRF token bootstrap for browser requests.
 - The current user's minimal account identity.
 - Public club profiles and currently open recruitment rounds for active clubs.
+- Application submission with answers and document links, including database persistence, as defined in [section 11](#11-application-submission).
 - A minimal health endpoint for operations.
 
-Application submission and review, recruitment management, membership decisions, notifications, search, and dashboards are product backlog work. Their request and response schemas are not defined here. They must be added to this contract before either client or server implements those stories. A not-yet-implemented endpoint must not return a success response as a stub.
+Application review, membership decisions, notifications, search, and dashboards remain product backlog work; their request and response schemas must be defined before implementation. Recruitment management is specified separately in [rounds.openapi.yaml](rounds.openapi.yaml). The submission contract is defined below, but its implementation is still pending. A not-yet-implemented endpoint must not return a success response as a stub.
 
 ## 2. API conventions
 
@@ -302,7 +303,7 @@ For `VALIDATION_FAILED`, each entry in `fieldErrors` identifies a request field 
 
 ### `GET /actuator/health`
 
-Returns the minimum operational health status needed by local tooling and the hosting platform. It is not part of `/api/v1` and must not expose environment variables, secrets, database connection details, or internal diagnostics. Expected responses are `200` when healthy and a non-2xx status when unhealthy, in the framework's configured health format.
+Returns the minimum operational health status needed by local tooling and the hosting platform. It is public and requires no session. It is not part of `/api/v1` and must not expose environment variables, secrets, database connection details, or internal diagnostics. Expected responses are `200` when healthy and a non-2xx status when unhealthy, in the framework's configured health format.
 
 ## 6. Error contract
 
@@ -327,7 +328,7 @@ All `/api/v1` errors use `Content-Type: application/problem+json`. The response 
 }
 ```
 
-`fieldErrors` is omitted when an error is not associated with request fields. Clients should branch on `status` and `code`, not on localized human-readable messages.
+`fieldErrors` is omitted when an error is not associated with request fields. Endpoints may define a `reason` extension to distinguish conflicts under the shared `RESOURCE_CONFLICT` code. Clients should branch on `status`, `code`, and documented `reason` values, not on localized human-readable messages.
 
 | Status | Typical code | Use |
 |---|---|---|
@@ -359,7 +360,7 @@ The [Permission Matrix](../security/permission-matrix.md) is authoritative. The 
 - Admin may access aggregate university statistics and manage committee appointments and limited initial membership provisioning. Admin cannot appoint itself, read application content through its global role, or override Active, terms, ownership, self-review, or published decisions. The app does not grant global-role/account-status/club-status management permissions in this scope.
 - The backend verifies resource-parent relationships and current permissions; it does not trust hidden buttons, cached roles, or client-provided ownership/status values. Missing permissions, expired terms, inactive eligibility, and self-review use `403 ACCESS_DENIED`; valid authorization followed by a state/deadline/version conflict uses `409 RESOURCE_CONFLICT`. CSRF rejection may precede these checks.
 
-Recruitment management contracts are in [rounds.openapi.yaml](rounds.openapi.yaml). Defining these permissions does not add the missing application, publication, dashboard, or assignment-management endpoints; those require their own DTOs and implementation.
+Recruitment management contracts are in [rounds.openapi.yaml](rounds.openapi.yaml), and application submission is defined in [section 11](#11-application-submission). Application reads/review, publication, dashboard, and assignment-management endpoints still require their own contracts and implementation.
 
 ## 8. Product APIs to specify before implementation
 
@@ -368,8 +369,7 @@ Remaining product stories identify resource areas that still need concrete reque
 | Story | Resource area | Decisions needed |
 |---|---|---|
 | US-01 | Club search and filters | Search/filter fields, sort options, and category/tag semantics |
-| US-03 | Application submission | Student Active is decided in the matrix; define verified status integration, round-specific eligibility, answers, links, quota, duplicates, and concurrency |
-| US-04 | Applicant application list/detail/history | Owner-only access and hiding unpublished results/internal notes are decided; define response/status mapping |
+| US-04 | Applicant application list/detail/history | Owner-only access and hiding unpublished results/internal notes are decided; section 11 reserves `GET /api/v1/me/applications` and `GET /api/v1/me/applications/{applicationId}`; define response/status mapping |
 | US-05 | Confirm or decline an offer | Ownership/Active/deadline permissions are decided; implement publication, idempotency, and membership transaction |
 | US-06 | Club profile editing | Conflict handling and concurrent update policy |
 | US-07 | Recruitment rounds | Round publication, schedule validation, and close/reopen policy |
@@ -379,7 +379,7 @@ Remaining product stories identify resource areas that still need concrete reque
 | Backlog | Committee appointment administration | Admin-only authorization is decided; define appointment/revocation/bootstrap APIs and audit storage |
 | Backlog | In-app notifications | Event triggers, read/unread behavior, and ownership |
 
-Application status values referenced by the architecture are `SUBMITTED`, `UNDER_REVIEW`, `ACCEPTED`, `REJECTED`, `CONFIRMED`, `DECLINED`, `WITHDRAWN`, and `EXPIRED`. The presence of a status does not define a permitted transition or mean that its workflow is implemented. Use `SUBMITTED` as the proposed initial status; resolve older `PENDING` references before implementation. Do not publish internal decision data or application history before `resultsPublishedAt`.
+US-03 submission is now specified in [section 11](#11-application-submission); verified student-status integration and endpoint implementation remain required. Application status values referenced by the architecture are `SUBMITTED`, `UNDER_REVIEW`, `ACCEPTED`, `REJECTED`, `CONFIRMED`, `DECLINED`, `WITHDRAWN`, and `EXPIRED`. Submission creates `SUBMITTED`, displayed as Pending; other transitions remain separate workflows. Do not publish internal decision data or application history before `resultsPublishedAt`.
 
 ## 9. Compatibility and change policy
 
@@ -392,8 +392,144 @@ Update this Markdown contract, the OpenAPI document, backend DTOs, and frontend 
 1. Provision the TU API channel, obtain its endpoint URL and Application-Key, and verify access/quota with the project owner before enabling real authentication. The public request/response mapping follows the official TU API documentation; local and CI runs remain on the mock adapter.
 2. Approve the proposed ERD and confirm club and recruitment DTO fields against it.
 3. Verify the upstream mapping into local student status. Only verified `ACTIVE` is eligible under the adopted matrix; do not infer this from login success.
-4. Agree application quota and complete publication/confirmation DTOs, scheduling and membership transitions within the adopted permissions.
+4. Implement the submission limits in section 11 and complete publication/confirmation DTOs, scheduling and membership transitions within the adopted permissions.
 5. Implement the decided committee/admin matrix, including PRESIDENT publication, self-review prohibition, no Admin override, and the enforcement gaps listed in the matrix.
 6. Define a separate versioning design if questions must change after publication; current policy permits editing only drafts without applications.
 
 Until the remaining integration and workflow work is complete, keep affected APIs marked as proposed and do not claim real TU integration or completed product workflows. Authorization policy itself is decided by the permission matrix.
+
+## 11. Application submission
+
+**Contract defined; implementation pending.** This section specifies [US-03](../stories/US-03.md) and [SD-05](../diagrams/sequence/SD-05-submit-application.md). Persistence uses the existing [V1 schema](../../backend/src/main/resources/db/migration/V1__init_schema.sql) and [ERD](../database/TU-ClubHub-ERD-Updated.dbml); no table or column additions are needed for this contract.
+
+Resource model:
+
+| Resource | In this API | Table | Cardinality |
+|---|---|---|---|
+| Application | Created by this `POST`; returned as `ApplicationSubmission` | `applications` | One per student per round |
+| Answer | `answers[]` in the request | `application_answers` | At most one per question of the round |
+| Document link | `links[]` in the request | `application_links` | 0–5 per application, in array order |
+| Status history entry | Not returned | `application_status_history` | One `NULL → SUBMITTED` entry at creation |
+
+Each application belongs to one published recruitment round and, through that round, to one club.
+
+Decisions on the items US-03 left open, adopted on 2026-10-19:
+
+| Topic | Decision | Reason |
+|---|---|---|
+| `motivation` length | 1–2,000 characters | Matches the default `application_questions.max_length`, so every text field an applicant fills in has the same limit. A club that needs a longer essay can add a question with a higher `max_length`. |
+| Document links | Optional; at most 5 per application | US-03 BR-06 allows an empty field, and requiring documents would block applicants who have none. Five links cover a portfolio, a résumé, and a few certificates. |
+| Membership limit scope | Every club recorded in TU-ClubHub, whatever its affiliation level | The project brief sets a five-club limit without distinguishing club types, and `clubs.affiliation_level` is optional with no agreed values. If the university confirms that only university-level clubs count, narrow the count; the API does not change. |
+| `Location` of a new application | `/api/v1/me/applications/{applicationId}`, read through US-04 | The applicant must be able to read the URI it receives. Applicant reads are owner-only and return `404` for other people's IDs, so they belong under `/me`. The round-nested collection stays available for committee reads in US-09. |
+| Inactive target club | `404 RESOURCE_NOT_FOUND` | Public endpoints already hide inactive clubs with `404`, and US-03 BR-02 avoids revealing resources that are not public. `403 ACCESS_DENIED` remains for the applicant's own eligibility. |
+
+### `POST /api/v1/clubs/{clubId}/rounds/{roundId}/applications`
+
+Creates the current student's application. Requires a valid `SESSION` cookie, `X-CSRF-TOKEN`, and `Content-Type: application/json`. Path IDs and `questionId` are positive decimal strings without leading zeroes, up to `9223372036854775807`.
+
+- Require an `ACTIVE` account and a verified `student_profiles.student_status = 'ACTIVE'`; login success alone is insufficient. The target club must be `ACTIVE`; an inactive club returns `404`, as on public endpoints. Committee/Admin callers use the same Student permissions; no committee assignment or term is required for this operation.
+- The round must belong to `clubId`, be `PUBLISHED`, have `published_at` set, satisfy `opens_at <= now < closes_at`, and have `closed_at IS NULL`. Use backend UTC time, sampled after acquiring the round lock.
+- Set the applicant from the session and the club from the verified round. Reject unknown JSON fields at every request-object level, including client-supplied applicant, club/round IDs, status, timestamps, or link ordering.
+- A student may submit once per round, including after a prior application is withdrawn. A repeated submission is a conflict; it does not update or replay the existing application.
+- For this API, the product limit is five distinct clubs with locally recorded memberships satisfying `status = 'ACTIVE'`, `joined_at <= now`, and `ended_at IS NULL`, across all club types. Reject applicants already in the target club or already at that limit. Pending applications do not count, and there is no separate pending-application quota. Confirmation must recheck membership limits; submission creates no membership.
+
+#### Request
+
+```json
+{
+  "motivation": "I would like to help organize club activities.",
+  "answers": [
+    { "questionId": "81001", "answerText": "I have organized student workshops." }
+  ],
+  "links": [
+    { "label": "Portfolio", "url": "https://example.org/portfolio" },
+    { "label": "Resume", "url": "https://example.org/resume.pdf" }
+  ]
+}
+```
+
+| Field | Contract |
+|---|---|
+| `motivation` | Required string of 1–2,000 characters with at least one non-whitespace character; stored trimmed. |
+| `answers` | Required array; `[]` is valid only when no required answers are missing. At most one answer per question; every `questionId` must belong to this round. |
+| `answers[].questionId` | Required positive decimal string; identifies `application_questions.id`. |
+| `answers[].answerText` | Required string for each supplied answer; reject blank, enforce that question's `max_length`, and store it trimmed. Every `is_required = true` question needs an answer. Omit unanswered optional questions from the array. |
+| `links` | Required array of 0–5 objects; use `[]` when attaching no links. Array order is the display order. |
+| `links[].label` | Required string of 1–200 characters with at least one non-whitespace character; stored trimmed. |
+| `links[].url` | Required absolute HTTPS URI with a host, at most 2,048 characters. Scheme matching is case-insensitive. Reject whitespace, control characters, and userinfo such as `user:password@host`. Preserve the accepted URL. |
+
+Length limits count Unicode characters in the submitted value, before trimming, so they match the OpenAPI `maxLength` values. A blank value is empty or contains only whitespace. URLs are validated and stored as supplied, without trimming. Null values are invalid for all request fields. Validate all fields before writing. The backend stores links without opening or downloading them; this API does not accept file uploads. The database HTTPS check is a final safeguard and does not replace URI validation.
+
+#### Success response
+
+Return `201 Created` only after the entire transaction commits, with `Cache-Control: no-store` and `Location: /api/v1/me/applications/{id}`. US-04 implements `GET` at this URI and the applicant's list at `GET /api/v1/me/applications`; their response schemas are not defined here.
+
+```json
+{
+  "id": "90001",
+  "clubId": "20001",
+  "roundId": "70001",
+  "status": "SUBMITTED",
+  "submittedAt": "2026-10-19T09:30:00Z"
+}
+```
+
+All five response fields are required. `id`, `clubId`, and `roundId` use the decimal-string ID format; `status` is always `SUBMITTED`; `submittedAt` is a server-generated ISO 8601 UTC timestamp. The UI displays `SUBMITTED` as “รอพิจารณา (Pending)”. Internal decisions and review notes are not included.
+
+#### Database mapping and transaction
+
+| Table | Values written |
+|---|---|
+| `applications` | Generated `id`; verified `round_id` and `club_id`; session user as `applicant_id`; trimmed `motivation`; `status = 'SUBMITTED'`; server time as `submitted_at` and `updated_at`; `version = 0`. Decision/response fields remain null. |
+| `application_answers` | Generated `id`; new `application_id`; server-validated `round_id` and `question_id`; trimmed `answer_text`. |
+| `application_links` | Generated `id`; new `application_id`; trimmed `label`; validated `url`; `display_order = array index + 1`; server time as `created_at`. |
+| `application_status_history` | Generated `id`; new `application_id`; `from_status = NULL`; `to_status = 'SUBMITTED'`; session user as `actor_id`; `reason = NULL`; submission time as `changed_at`. |
+
+`application_links.url` is `VARCHAR(2048)`, `label` is `VARCHAR(200)`, and `(application_id, display_order)` is unique. Multiple links are separate rows associated with one application. Empty arrays create no answer/link rows.
+
+Recheck authorization, membership eligibility, question membership/requirements, and round state inside the write transaction. Serialize each submission with closing or cancelling the same round by locking the round row before sampling the current time, so a submission either commits before the close takes effect or sees the closed round. Write all four record groups atomically. Failed validation or any failed write leaves none of the new rows committed. No partial-success response is allowed.
+
+Keep `uq_applications_round_applicant` as the final duplicate safeguard: concurrent identical submissions can produce only one application; translate that specific uniqueness conflict into `409` after rolling back. Other database failures must not be mislabeled as duplicates. Composite foreign keys already enforce application/round/club and answer/question/round consistency. Do not modify or create membership records during submission. This contract creates no `notifications` row; if an `APPLICATION_SUBMITTED` notification is added later, insert it in the same transaction (US-03 BR-09).
+
+#### Errors
+
+Use the shared Problem format with `Cache-Control: no-store`. Error `type` values use the stable prefix `urn:tuclubhub:problem:` and the suffixes below.
+
+| HTTP | `code` | Type suffix | Condition |
+|---|---|---|---|
+| `400` | `INVALID_RESOURCE_ID` | `invalid-resource-id` | Invalid/out-of-range path ID. |
+| `400` | `VALIDATION_FAILED` | `validation-error` | Malformed body, unknown fields, missing/invalid answers or links, duplicate question IDs, or a question from another round; include indexed `fieldErrors`, e.g. `links[0].url`. |
+| `401` | `AUTHENTICATION_REQUIRED` | `authentication-required` | Missing, invalid, or expired session. |
+| `403` | `ACCOUNT_NOT_ALLOWED` | `account-not-allowed` | Suspended account; invalidate its session. |
+| `403` | `ACCESS_DENIED` | `access-denied` | Missing verified Active student status. |
+| `403` | `CSRF_INVALID` | `csrf-invalid` | Missing/invalid CSRF header; this check may precede authentication. |
+| `404` | `RESOURCE_NOT_FOUND` | `resource-not-found` | Club missing or not `ACTIVE`, round missing or under another club, or round never published (`published_at IS NULL`). |
+| `409` | `RESOURCE_CONFLICT` | `resource-conflict` | A conflict identified by the required `reason` field below. |
+| `500` | `INTERNAL_ERROR` | `internal-error` | Unexpected failure; roll back all submission writes. |
+| `503` | `SERVICE_UNAVAILABLE` | `service-unavailable` | Database unavailable; do not report a successful submission. |
+
+Checks run in this order, and the first failure determines the response. The order follows the proposal in US-03, except that request checks needing no database lookup run before the eligibility check:
+
+1. CSRF token: `403 CSRF_INVALID`. This check may precede authentication.
+2. Session and account: `401 AUTHENTICATION_REQUIRED`, then `403 ACCOUNT_NOT_ALLOWED`.
+3. Path IDs and request body, without database lookups: `400 INVALID_RESOURCE_ID` or `400 VALIDATION_FAILED`.
+4. Verified Active student status: `403 ACCESS_DENIED`.
+5. Active club and a published round under that club: `404 RESOURCE_NOT_FOUND`.
+6. Round state after the round lock: `409` with `ROUND_CANCELLED`, `ROUND_NOT_OPEN`, or `ROUND_CLOSED`.
+7. Answers checked against the round's questions: `400 VALIDATION_FAILED`.
+8. Existing application and memberships: `409` with `APPLICATION_ALREADY_EXISTS`, `ALREADY_MEMBER`, or `MEMBERSHIP_LIMIT_REACHED`.
+
+Conflict `reason` values, in check order:
+
+| `reason` | Condition |
+|---|---|
+| `ROUND_CANCELLED` | A previously published round was cancelled. |
+| `ROUND_NOT_OPEN` | `now < opens_at`. |
+| `ROUND_CLOSED` | `closed_at IS NOT NULL` or `now >= closes_at`. |
+| `APPLICATION_ALREADY_EXISTS` | An application already exists for this student and round, in any status. |
+| `ALREADY_MEMBER` | The student already has an effective Active membership in this club. |
+| `MEMBERSHIP_LIMIT_REACHED` | The student has effective Active memberships in five distinct clubs. |
+
+For example, a duplicate uses `status: 409`, `code: RESOURCE_CONFLICT`, and `reason: APPLICATION_ALREADY_EXISTS`, with the shared `type`, `title`, `instance`, and `traceId` fields. Do not expose another applicant's identity or any stored answers/links in error bodies. No numeric rate limit is introduced by this contract; any future limiter must follow the shared `429`/`Retry-After` policy before deployment.
+
+Clients must not retry a `4xx` response unchanged. After a lost response or a `5xx`, retrying is safe without an idempotency key because the one-application-per-round rule prevents a second application. The earlier attempt may still have committed, so when such a retry returns `409`, check the applicant's history (US-04) before telling the student that nothing was submitted; `APPLICATION_ALREADY_EXISTS` means the application exists.
