@@ -1,9 +1,10 @@
 openapi: 3.1.0
 info:
   title: TU-ClubHub API
-  version: 1.0.0
+  version: 1.1.0
   description: >-
-    TU-ClubHub API contract for foundation and public club profile endpoints.
+    TU-ClubHub API contract for foundation, public club profiles, and application
+    submission. The application submission contract is defined; implementation is pending.
     Additional product workflow endpoints are tracked in docs/api/API_v1.md and
     must be specified before implementation.
     Authorization policy adopted on 2026-10-19 is defined in the
@@ -16,6 +17,8 @@ tags:
   - name: Authentication
   - name: Clubs
   - name: Public Clubs
+  - name: Applications
+    description: Student application submission (US-03). Application history and review APIs are not defined yet.
   - name: Operations
 paths:
   /api/v1/auth/csrf:
@@ -24,6 +27,7 @@ paths:
       operationId: getCsrfToken
       summary: Get a CSRF token for the browser session
       description: Returns an opaque token and the request header name. Response must not be cached.
+      security: []
       responses:
         '200':
           description: CSRF token created or loaded for the current session
@@ -348,6 +352,7 @@ paths:
         may be returned. Inactive clubs, draft rounds, applicant data, committee-only
         information, and internal notes are not returned. IDs are decimal strings on
         the wire even when stored as database bigint values.
+      security: []
       parameters:
         - name: clubId
           in: path
@@ -588,12 +593,279 @@ paths:
           $ref: '#/components/responses/ServiceUnavailable'
         default:
           $ref: '#/components/responses/ServerError'
+  /api/v1/clubs/{clubId}/rounds/{roundId}/applications:
+    post:
+      tags: [Applications]
+      operationId: submitApplication
+      summary: Submit the current student's application with answers and document links
+      x-implementation-status: pending
+      description: >-
+        Contract defined in API_v1.md section 11; implementation is pending.
+        Requires an ACTIVE account, verified ACTIVE student profile, and ACTIVE
+        target club; an inactive club returns 404 like a missing one.
+        Committee/Admin callers use the same Student permissions;
+        no committee assignment or term is required. Derive the applicant from
+        the session and club from the round; reject unknown request fields.
+        The round must belong to clubId, be PUBLISHED with published_at set,
+        satisfy opens_at <= now < closes_at, and have closed_at IS NULL.
+        Recheck authorization, eligibility, questions, and round state inside
+        one transaction. Serialize with round close/cancel using the same round
+        row lock, sample backend UTC time after locking, then persist the
+        application, answers, links, and initial status history atomically.
+        Respond only after commit. Use uq_applications_round_applicant as the
+        final duplicate safeguard; a repeated POST conflicts rather than
+        updating or replaying an application, including a withdrawn one.
+        Reject existing effective membership in the target club or membership
+        in five distinct locally recorded clubs across all club types.
+        Effective membership means ACTIVE, joined_at <= now, and ended_at IS NULL.
+        Pending applications do not count; there is no separate pending-application
+        quota. Submission creates no membership. Confirmation rechecks the limit.
+        Store URLs without fetching them or accepting file uploads.
+        All responses use Cache-Control no-store. No numeric rate limit is set;
+        a future limiter must document its thresholds and the shared 429 policy.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '20001'
+        - name: roundId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '70001'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationSubmissionRequest'
+            example:
+              motivation: I would like to help organize club activities.
+              answers:
+                - questionId: '81001'
+                  answerText: I have organized student workshops.
+              links:
+                - label: Portfolio
+                  url: https://example.org/portfolio
+                - label: Resume
+                  url: https://example.org/resume.pdf
+      responses:
+        '201':
+          description: Application, answers, links, and initial status history committed
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+            Location:
+              description: >-
+                Applicant-facing URI of the created application. US-04 implements
+                GET at this URI and the applicant's list at /api/v1/me/applications.
+              schema:
+                type: string
+                format: uri-reference
+              example: /api/v1/me/applications/90001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationSubmission'
+              example:
+                id: '90001'
+                clubId: '20001'
+                roundId: '70001'
+                status: SUBMITTED
+                submittedAt: '2026-10-19T09:30:00Z'
+        '400':
+          description: >-
+            INVALID_RESOURCE_ID for invalid/out-of-range path IDs;
+            VALIDATION_FAILED for malformed JSON, unknown fields, invalid or
+            missing answers/links, duplicate question IDs, or questions outside
+            this round. Field errors use indexed paths such as links[0].url.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                validationFailed:
+                  summary: A document link is not a valid HTTPS URL
+                  value:
+                    type: urn:tuclubhub:problem:validation-error
+                    title: Request validation failed
+                    status: 400
+                    detail: One or more application fields are invalid.
+                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    code: VALIDATION_FAILED
+                    fieldErrors:
+                      - field: links[0].url
+                        code: INVALID_HTTPS_URL
+                        message: Use an absolute HTTPS URL with a host and no userinfo or whitespace.
+                    traceId: 01J9EXAMPLE7K4D5
+                invalidResourceId:
+                  summary: A path ID is not a positive decimal bigint
+                  value:
+                    type: urn:tuclubhub:problem:invalid-resource-id
+                    title: Invalid resource identifier
+                    status: 400
+                    detail: roundId must be a positive decimal integer that fits a signed 64-bit value.
+                    instance: /api/v1/clubs/20001/rounds/abc/applications
+                    code: INVALID_RESOURCE_ID
+                    traceId: 01J9EXAMPLE7K4D5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >-
+            ACCOUNT_NOT_ALLOWED for a suspended account (invalidate its session);
+            ACCESS_DENIED for missing verified ACTIVE student status;
+            CSRF_INVALID for a missing/invalid CSRF token.
+            CSRF rejection may precede authentication checks.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                accessDenied:
+                  summary: No verified ACTIVE student profile
+                  value:
+                    type: urn:tuclubhub:problem:access-denied
+                    title: Access denied
+                    status: 403
+                    detail: An active verified student profile is required to apply.
+                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    code: ACCESS_DENIED
+                    traceId: 01J9EXAMPLE7K4D5
+                accountNotAllowed:
+                  summary: Current account is suspended; invalidate its session
+                  value:
+                    type: urn:tuclubhub:problem:account-not-allowed
+                    title: Account not allowed
+                    status: 403
+                    detail: This account is not allowed to use TU-ClubHub.
+                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    code: ACCOUNT_NOT_ALLOWED
+                    traceId: 01J9EXAMPLE7K4D5
+                csrfInvalid:
+                  summary: CSRF token is missing or invalid
+                  value:
+                    type: urn:tuclubhub:problem:csrf-invalid
+                    title: Request rejected
+                    status: 403
+                    detail: The CSRF token is missing or invalid.
+                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    code: CSRF_INVALID
+                    traceId: 01J9EXAMPLE7K4D5
+        '404':
+          description: >-
+            RESOURCE_NOT_FOUND when the club is missing or not ACTIVE, the round
+            is missing or does not belong to clubId, or the round has never been
+            published (published_at IS NULL). Do not reveal whether an inactive
+            club or an unpublished round exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-not-found
+                title: Resource not found
+                status: 404
+                detail: No published recruitment round was found at this path.
+                instance: /api/v1/clubs/20001/rounds/70001/applications
+                code: RESOURCE_NOT_FOUND
+                traceId: 01J9EXAMPLE7K4D5
+        '409':
+          description: >-
+            RESOURCE_CONFLICT with a required reason. After authorization and
+            visibility checks, check cancellation, not-yet-open, closed,
+            duplicate application, existing target-club membership, then the
+            five-club membership limit in that order. Preserve the existing
+            application and roll back all new rows on a duplicate conflict.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApplicationSubmissionConflict'
+              examples:
+                roundCancelled:
+                  summary: The round was cancelled
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Application conflicts with current state
+                    status: 409
+                    detail: This recruitment round has been cancelled.
+                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    code: RESOURCE_CONFLICT
+                    reason: ROUND_CANCELLED
+                    traceId: 01J9EXAMPLE7K4D5
+                roundNotOpen:
+                  summary: The round has not opened yet
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Application conflicts with current state
+                    status: 409
+                    detail: This recruitment round is not open for applications yet.
+                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    code: RESOURCE_CONFLICT
+                    reason: ROUND_NOT_OPEN
+                    traceId: 01J9EXAMPLE7K4D5
+                roundClosed:
+                  summary: The round has closed, on schedule or early
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Application conflicts with current state
+                    status: 409
+                    detail: This recruitment round is closed.
+                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    code: RESOURCE_CONFLICT
+                    reason: ROUND_CLOSED
+                    traceId: 01J9EXAMPLE7K4D5
+                applicationAlreadyExists:
+                  summary: The student already applied to this round, in any status
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Application conflicts with current state
+                    status: 409
+                    detail: You have already submitted an application for this round.
+                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    code: RESOURCE_CONFLICT
+                    reason: APPLICATION_ALREADY_EXISTS
+                    traceId: 01J9EXAMPLE7K4D5
+                alreadyMember:
+                  summary: The student is already an active member of this club
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Application conflicts with current state
+                    status: 409
+                    detail: You are already a member of this club.
+                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    code: RESOURCE_CONFLICT
+                    reason: ALREADY_MEMBER
+                    traceId: 01J9EXAMPLE7K4D5
+                membershipLimitReached:
+                  summary: The student is an active member of five clubs
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Application conflicts with current state
+                    status: 409
+                    detail: You are already an active member of five clubs.
+                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    code: RESOURCE_CONFLICT
+                    reason: MEMBERSHIP_LIMIT_REACHED
+                    traceId: 01J9EXAMPLE7K4D5
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /actuator/health:
     get:
       tags: [Operations]
       operationId: getHealth
       summary: Get the minimum operational health status
-      description: Must not expose secrets, environment values, or internal diagnostics.
+      description: Public endpoint; no session is required. Must not expose secrets, environment values, or internal diagnostics.
+      security: []
       responses:
         '200':
           description: Application is healthy
@@ -622,6 +894,127 @@ components:
       name: X-CSRF-TOKEN
       description: Current opaque token returned by GET /api/v1/auth/csrf or a successful POST /api/v1/auth/login.
   schemas:
+    PositiveBigintId:
+      type: string
+      minLength: 1
+      maxLength: 19
+      pattern: '^[1-9][0-9]*$'
+      description: >-
+        Positive decimal bigint identifier without leading zeroes. The backend
+        must also enforce the signed 64-bit upper bound 9223372036854775807.
+    ApplicationSubmissionRequest:
+      type: object
+      additionalProperties: false
+      required: [motivation, answers, links]
+      properties:
+        motivation:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: '\S'
+          description: >-
+            Reason for applying. Length is measured on input in Unicode
+            characters; trim surrounding whitespace before storing as
+            applications.motivation and reject a blank result.
+        answers:
+          type: array
+          description: >-
+            At most one item per questionId, all belonging to this round.
+            Every required question needs a nonblank answer. Omit unanswered
+            optional questions; an empty array is allowed if none are required.
+            The backend validates question membership, uniqueness, and lengths
+            against application_questions inside the submission transaction.
+          items:
+            $ref: '#/components/schemas/ApplicationAnswerInput'
+        links:
+          type: array
+          maxItems: 5
+          description: >-
+            Optional document attachments represented as links; send an empty
+            array when attaching none. Each item becomes one application_links
+            row. The backend assigns display_order from the array position,
+            starting at 1. No file upload or server-side URL fetch occurs.
+          items:
+            $ref: '#/components/schemas/ApplicationLinkInput'
+    ApplicationAnswerInput:
+      type: object
+      additionalProperties: false
+      required: [questionId, answerText]
+      properties:
+        questionId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        answerText:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: >-
+            Must not exceed the matching application_questions.max_length in
+            Unicode characters on input. Trim before storing as answer_text;
+            a supplied answer cannot be blank even for an optional question.
+    ApplicationLinkInput:
+      type: object
+      additionalProperties: false
+      required: [label, url]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: '\S'
+          description: Measure input length, then trim before storing as application_links.label.
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 2048
+          pattern: '^[hH][tT][tT][pP][sS]://[^\s\x00-\x1F\x7F/?#@]+(?:[/?#][^\s\x00-\x1F\x7F]*)?$'
+          description: >-
+            Absolute HTTPS URI with a host. The pattern matches the scheme
+            case-insensitively, requires an authority without userinfo, and
+            rejects whitespace and control characters. The backend also parses
+            the URI to confirm the host. Do not trim, fetch, or download the
+            URL. Store the accepted value in application_links.url.
+    ApplicationSubmission:
+      type: object
+      additionalProperties: false
+      required: [id, clubId, roundId, status, submittedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveBigintId'
+        clubId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        roundId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        status:
+          type: string
+          const: SUBMITTED
+          description: Initial persisted status, displayed as Pending to the applicant.
+        submittedAt:
+          type: string
+          format: date-time
+          pattern: 'Z$'
+          description: Server-generated submission timestamp in UTC.
+    ApplicationSubmissionConflict:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [reason]
+          properties:
+            type:
+              const: urn:tuclubhub:problem:resource-conflict
+            status:
+              const: 409
+            code:
+              const: RESOURCE_CONFLICT
+            reason:
+              type: string
+              enum:
+                - ROUND_CANCELLED
+                - ROUND_NOT_OPEN
+                - ROUND_CLOSED
+                - APPLICATION_ALREADY_EXISTS
+                - ALREADY_MEMBER
+                - MEMBERSHIP_LIMIT_REACHED
     CsrfTokenResponse:
       type: object
       required: [headerName, token]
