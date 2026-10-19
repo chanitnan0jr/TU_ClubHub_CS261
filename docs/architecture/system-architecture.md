@@ -1,8 +1,10 @@
 # TU-ClubHub — System Architecture
 
-วันที่: 11 ตุลาคม 2026 · ปรับปรุงนโยบายสิทธิ์: 19 ตุลาคม 2026 · Version: 1.1 · สถานะ: Target Architecture สำหรับทีมพัฒนา
+วันที่: 11 ตุลาคม 2026 · ปรับปรุง Context: 19 ตุลาคม 2026 · Version: 1.2 · สถานะ: Target Architecture พร้อมระบุช่องว่างจาก implementation
 
-เอกสารนี้อธิบายระบบที่ตั้งใจสร้าง ไม่ใช่หลักฐานว่าระบบ Deploy แล้วหรือทุก Feature เสร็จแล้ว ใช้ร่วมกับ [Scaffold context](scaffold-context.md), [API contract](../api/API_v1.md), [OpenAPI specification](../api/openapi.yaml) และ [ERD ที่เสนอ](../database/TU-ClubHub-ERD-Updated.dbml)
+เอกสารนี้อธิบายแบบเป้าหมาย ใช้ [README](../../README.md) และ [Repository context](scaffold-context.md) สำหรับสถานะและโครงสร้างปัจจุบัน มี Auth, Public Club APIs, Profile PUT และ Round writes แล้ว แต่ Frontend หลักยังเป็น Login/ข้อมูลผู้ใช้/Logout และยังไม่มี Submission API เอกสารนี้ไม่ใช่หลักฐาน Deploy หรือผลรันทดสอบ
+
+Contract อ้างอิง [API_v1.md](../api/API_v1.md), [Main OpenAPI](../api/openapi.yaml), [Recruitment OpenAPI](../api/rounds.openapi.yaml) และ [ERD](../database/TU-ClubHub-ERD-Updated.dbml); Schema ที่รันจริงอยู่ใน [Flyway migrations](../../backend/src/main/resources/db/migration)
 
 ## 1. วัตถุประสงค์และผู้ใช้งานเอกสาร
 
@@ -30,9 +32,9 @@ TU-ClubHub สนับสนุนการค้นหาชมรม กา�
 - ส่งมอบบน Render Web Service และ Render PostgreSQL; Build React รวมกับ Spring Boot
 - เก็บ URL เอกสารและรูปภาพ ไม่อัปโหลดไฟล์หรือดึงไฟล์อัตโนมัติจาก Backend
 
-### 2.2 Technical Defaults ที่เสนอในเอกสารชุดนี้
+### 2.2 Conventions และงานโครงสร้างที่ยังเหลือ
 
-ค่าเหล่านี้เป็นทางเลือกสำหรับ Scaffold ยังไม่ใช่กฎธุรกิจที่ผู้ใช้ยืนยัน: Fetch wrapper, React Context สำหรับ Auth, SameSite=Lax, CSRF bootstrap endpoint, JSON ID เป็น string, source-based Docker build บน Render และ Manual Deploy หลัง CI
+AuthContext, SameSite=Lax, CSRF bootstrap endpoint และ JSON ID แบบ string ใช้อยู่ใน implementation/contract แล้ว ส่วน Router และ HTTP client กลางยังเป็นเป้าหมาย Frontend ยังเรียก fetch แยกตามฟีเจอร์ Source-based Docker build บน Render และ Manual Deploy หลัง CI เป็นแผนส่งมอบที่ยังต้องตั้งค่าในบริการจริง
 
 หาก Repository หรือ Contract ที่มีอยู่เลือกแนวทางอื่นแล้ว ให้เปรียบเทียบและบันทึก ADR ก่อนเปลี่ยน ไม่สร้าง Convention สองชุดควบคู่กัน
 
@@ -93,7 +95,9 @@ flowchart TB
 
 ### 5.1 โครงสร้างและ Dependency Rules
 
-`src/app/` ประกอบ Router/Providers; `src/pages/` ประกอบหน้าจอ; `src/features/<feature>/` เก็บ components/hooks/api/types/utils ของฟีเจอร์นั้น; ส่วนกลางอยู่ใน `components/`, `lib/`, `hooks/`, `types/`
+โครงสร้างเป้าหมาย: `src/app/` ประกอบ Router/Providers; `src/pages/` ประกอบหน้าจอ; `src/features/<feature>/` เก็บ components/hooks/api/types/utils ของฟีเจอร์นั้น; ส่วนกลางอยู่ใน `components/`, `lib/`, `hooks/`, `types/`
+
+ปัจจุบันใช้ `src/main.tsx` และ `src/App.tsx` ประกอบ AuthProvider/Login โดยยังไม่มี Router; มี `features/auth`, `clubs`, `recruitment`, `applications` และฟอร์ม/preview ที่ root ของ `src` สถานะการเชื่อม API ของแต่ละส่วนอยู่ใน [Frontend README](../../frontend/README.md)
 
 Shared UI ต้องไม่ Import Feature เฉพาะ เช่น Button กลางไม่รู้จัก ApplicationService ส่วน Feature API ต้องเรียก HTTP Client กลาง ไม่สร้าง Fetch/Cookie/CSRF logic ซ้ำในแต่ละหน้า
 
@@ -130,6 +134,8 @@ Client State เช่น Modal และคำตอบระหว่างก
 | `config` / `common` | Framework wiring / รูปแบบ Error และ utility ที่ใช้ร่วมกันจริง |
 
 ERD Reference มี 17 ตารางธุรกิจ ตาราง Session เป็น Infrastructure แยกจาก ERD ธุรกิจ ไม่สร้างตารางสำหรับ Open Call Board หรือ Dashboard เพียงเพราะมีหน้าจอนี้
+
+ตาราง Module ด้านบนเป็นขอบเขตเป้าหมาย ปัจจุบันมี `auth`, `user`, `club`, `committee`, `recruitment`, `membership`, `config`; ยังไม่มี application/notification/dashboard services และ `user` ยัง provision เฉพาะบัญชี ไม่ได้ Sync student profile
 
 ### 6.2 Allowed dependency direction
 
@@ -221,24 +227,24 @@ Account role ใน ERD คือ USER/ADMIN ส่วน Student eligibility �
 
 Flyway SQL ที่ Merge แล้วเป็นแหล่งความจริงของ Schema ที่ใช้งาน; DBML/Data Dictionary ต้องปรับให้ตรงกัน API Spec เป็น Contract ระหว่างทีม DTO และ Frontend Types ต้องสอดคล้องกัน
 
-ใช้ Transaction ใน Service Layer และ DB constraints เป็นด่านสุดท้าย เช่น unique `(student_id, round_id)` ป้องกันใบสมัครซ้ำ Backend เวลาเป็นตัวตัดสิน ไม่ใช้เวลาจาก Browser
+ใช้ Transaction ใน Service Layer และ DB constraints เป็นด่านสุดท้าย เช่น unique `(round_id, applicant_id)` ป้องกันใบสมัครซ้ำ Backend เวลาเป็นตัวตัดสิน ไม่ใช้เวลาจาก Browser
 
 ### 8.2 Submit Application
 
 1. ตรวจ Session, account/student eligibility และ Round ที่เผยแพร่
 2. ตรวจ `opens_at <= now < closes_at` และ `closed_at IS NULL` ตาม ERD
-3. ตรวจ duplicate/quota ตามนโยบายที่ตกลง โดยออกแบบ lock/constraint ให้รองรับคำขอพร้อมกัน
+3. ตรวจใบสมัครซ้ำ สมาชิกภาพของชมรมเป้าหมาย และเพดาน 5 ชมรมที่มีผลอยู่ตาม Contract โดยออกแบบ lock/constraint ให้รองรับคำขอพร้อมกัน
 4. ตรวจ required questions, question ownership และ HTTPS URLs
 5. บันทึกใบสมัคร คำตอบ ลิงก์ และประวัติเริ่มต้นใน Transaction เดียว
 6. Commit แล้วคืนเลขใบสมัคร/สถานะ; Rollback เมื่อส่วนใดล้มเหลว
 
-Scaffold ยังไม่ต้อง Implement workflow นี้ครบ และห้ามให้ Unique constraint ของใบสมัครซ้ำถูกอ้างว่าป้องกัน Quota ข้ามหลายรอบได้ ต้องออกแบบ Concurrency ของ Quota เพิ่มต่างหากเมื่อมีนิยามแล้ว
+[API Contract §11](../api/API_v1.md#11-application-submission) กำหนด Request/Response, validation และการบันทึก 4 ตารางแล้ว แต่ยังไม่มี Backend implementation ใช้ตาราง `application_links` เดิมเก็บลิงก์ ไม่ต้องเพิ่มคอลัมน์ นับสมาชิกภาพทุกประเภทชมรมที่มีผลอยู่ในระบบ ไม่กำหนดโควตาใบสมัครค้าง การยืนยันสิทธิ์ต้องตรวจเพดานสมาชิกภาพซ้ำและป้องกันการยืนยันพร้อมกันข้ามรอบ; Unique ใบสมัครไม่ได้ป้องกันปัญหานี้
 
 ### 8.3 Status, result publication และ membership
 
 ERD ใช้ `SUBMITTED`, `UNDER_REVIEW`, `ACCEPTED`, `REJECTED`, `CONFIRMED`, `DECLINED`, `WITHDRAWN`, `EXPIRED`; การมี Enum ใน ERD ไม่ใช่การยืนยันว่ามีทุก Transition ใน Scope
 
-Task เก่าบางส่วนเรียกสถานะเริ่มต้น PENDING ให้ปรับ Contract ให้ตรงกันก่อน Implement โดยเอกสารชุดนี้ยึด SUBMITTED ตาม ERD เป็นฐาน
+Contract กำหนดสถานะเริ่มต้นเป็น `SUBMITTED` ตาม ERD แล้ว “Pending” เป็นข้อความแสดงรอพิจารณา ไม่ใช่ Enum เพิ่ม
 
 ผลภายในและประวัติที่เปิดเผยผลต้องไม่รั่วก่อน `results_published_at`; Applicant response mapping ต้องพิจารณาทั้งสถานะและเวลาประกาศ ไม่ส่ง Entity/history ทั้งหมดตรง ๆ
 
@@ -256,7 +262,7 @@ Notifications เป็นข้อมูลภายในฐานข้อม
 
 ## 9. API Contract และ Error Handling
 
-| เรื่อง | Convention ที่เสนอ |
+| เรื่อง | Convention ตาม API Contract |
 |---|---|
 | Base path | `/api/v1` |
 | Field names | JSON camelCase; DB snake_case |
@@ -289,7 +295,7 @@ flowchart TB
 
 ### 10.1 Build and run
 
-Root Dockerfile สร้าง React dist ด้วย Node → นำเข้า Static Resources ของ Backend → Maven package JAR → Java runtime image รันแอปเดียว ไม่แยก Nginx
+Root Dockerfile สร้าง React dist ด้วย Node → นำเข้า Static Resources ของ Backend → Maven package JAR → Java runtime image รันแอปเดียว Local Compose มี split profile เพิ่มสำหรับ Nginx + Backend แยก ดู [Local demo](../deployment/local-demo.md); Render ยังเป็นแบบเป้าหมาย
 
 Render รองรับ Docker Web Service และกำหนด Environment/Health Check ผ่าน Platform ให้ Bind `0.0.0.0` และ Port ตาม `PORT`; เชื่อม PostgreSQL ผ่าน internal connection ใน Region เดียวกันตามการตั้งค่าบริการจริง [Render Web Services](https://render.com/docs/web-services)
 
@@ -297,8 +303,8 @@ Render รองรับ Docker Web Service และกำหนด Environmen
 
 | Environment | รูปแบบ | Auth / Data |
 |---|---|---|
-| Development | Vite proxy ไป Spring Boot + PostgreSQL | Explicit mock mode และ dev fixtures |
-| CI/Test | Build/tests + isolated PostgreSQL | Mock TU API เท่านั้น |
+| Development | Vite proxy ไป Spring Boot + PostgreSQL | Mock TU; migrations สร้าง Schema แต่ไม่มี Seed ชมรม/กรรมการ |
+| CI/Test | Build/tests ใช้ H2 และ isolated PostgreSQL สำหรับ seedtest/recruitment integration | Mock TU API เท่านั้น |
 | Local demo | Compose: app + db | ระบุชัดว่า Mock หรือ Real TU API |
 | Render delivery | Web Service + managed PostgreSQL | Real TU adapter เมื่อผ่าน integration check; mock prohibited in prod |
 
@@ -323,7 +329,7 @@ Render รองรับ Docker Web Service และกำหนด Environmen
 ## 11. CI, Review และ Quality Gates
 
 1. Feature branch ส่ง PR โดยแนบ Story/Task และวิธีตรวจ
-2. GitHub Actions ตรวจ Frontend lint/typecheck/tests/build และ Backend `mvnw verify` กับ PostgreSQL แยก
+2. GitHub Actions ปัจจุบันตรวจ Frontend lint/build (`build` รวม `tsc -b`) และ Backend `mvnw clean verify` พร้อม PostgreSQL service; ยังไม่ได้เรียก Frontend `npm test` และข้ามการเปลี่ยนเฉพาะ docs/Markdown
 3. Auth integration tests ใน CI ใช้ Mock TU API ไม่มีการส่ง Credential ไปบริการจริง
 4. สมาชิกอื่น Review อย่างน้อย 1 คน; การเปลี่ยน Auth/Schema/Transaction ให้ Lead BE หรือ SA ที่ไม่ได้เป็นผู้เขียนตรวจ
 5. Merge เมื่อ CI และ Review ผ่าน ไม่บังคับให้ทุก PR ต้องผ่านคนเดียวเป็นคอขวด
@@ -356,16 +362,16 @@ Sprint 1 รวม 20 SP และ Sprint 2 รวม 21 SP เป็น Estimat
 
 | ID | เรื่องที่ยังต้องตกลง | ผลกระทบ |
 |---|---|---|
-| OD-01 | Quota จำนวนเท่าไร นับต่อรอบ/ภาคเรียน/สมาชิกที่ Active และนับสถานะใด | Submit, confirmation, locking, Test Cases |
+| OD-01 (กำหนดแล้ว 19 ต.ค. 2026) | เพดานสมาชิกภาพ 5 ชมรมทุกประเภทที่มีผลในระบบ; ไม่มีโควตาใบสมัครค้าง | ใช้ API Contract §11; ยังต้องทำ submission และตรวจเพดานซ้ำแบบรองรับ concurrency ตอนยืนยัน |
 | OD-02 | Story/API สำหรับบันทึกผลและประกาศผล; สิทธิ์กำหนดแล้วใน matrix | COMMITTEE/PRESIDENT บันทึกผล และ PRESIDENT ประกาศ; ยังต้องพัฒนา workflow ต้นทางของ US-05 |
 | OD-03 | การออกแบบ version คำถามหากจะรองรับการแก้หลังเผยแพร่ | นโยบายปัจจุบันอนุญาตแก้เฉพาะ draft ที่ไม่มีใบสมัคร |
-| OD-04 | TU API Contract และ mapping ของ student status ที่ยืนยันได้ | สิทธิ์ใช้ ACTIVE เท่านั้นตาม matrix; ยังต้องทำ integration/normalization |
+| OD-04 | การเข้าถึง TU จริงและ mapping ของ student status ที่ยืนยันได้ | Auth adapter/Contract มีแล้ว; ยังต้องทำ student-profile integration/normalization โดยใช้ ACTIVE เท่านั้นตาม matrix |
 | OD-05 (ตัดสินใจแล้ว 19 ต.ค. 2026) | ห้ามใช้สิทธิ์กรรมการกับรอบที่ตนมีใบสมัคร; Admin ไม่มี override | ยึด [Permission Matrix](../security/permission-matrix.md); เหลืองาน implementation ตามช่องว่างที่บันทึกไว้ |
 | OD-06 | การนับคน/ใบสมัคร/สมาชิกตามปีการศึกษาและภาคเรียน | Dashboard correctness |
 | OD-07 | Timeline Sprint/Release ในรายงานและเกณฑ์รายวิชา | วันที่ส่งมอบและชื่อ Release; ไม่อนุมานจาก Sprint number |
-| OD-08 | Dependency versions และบริการ Render ที่ใช้จริง | Compatibility, lifecycle และ deployment guide |
+| OD-08 | บริการ Render และการตรวจ compatibility ในสภาพแวดล้อมส่งมอบ | Dependency versions อยู่ใน manifests/lockfile แล้ว; ยังต้องยืนยัน deployment configuration และผลรันจริง |
 
-สำหรับ Scaffold ทำส่วนที่ไม่ขึ้นกับ Business Policy ไปก่อนได้และบันทึก TODO ชัดเจน อย่าสร้างนโยบายเงียบ ๆ เพื่อให้โค้ดดูเสร็จ
+งานต่อให้ใช้ Contract และนโยบายที่กำหนดแล้ว พร้อมอัปเดตช่องว่างใน README/Permission Matrix แยกจากผลการตรวจรับของแต่ละ workflow
 
 ## 14. Architecture decision record สรุป
 
