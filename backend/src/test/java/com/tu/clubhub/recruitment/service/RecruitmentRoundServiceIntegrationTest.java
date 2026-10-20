@@ -292,10 +292,10 @@ class RecruitmentRoundServiceIntegrationTest {
                 """, Long.class, username);
 
         jdbc.update("""
-                INSERT INTO student_profiles (user_id, student_code)
-                VALUES (?, ?)
-                """, userId, studentCode());
-
+        INSERT INTO student_profiles
+            (user_id, student_code, student_status)
+        VALUES (?, ?, 'ACTIVE')
+        """, userId, studentCode());
         Long categoryId = jdbc.queryForObject("""
                 INSERT INTO club_categories (name)
                 VALUES (?)
