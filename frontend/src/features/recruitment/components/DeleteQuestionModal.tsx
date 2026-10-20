@@ -2,16 +2,20 @@ import React, { useState } from 'react';
 
 interface DeleteQuestionModalProps {
   isOpen: boolean;
-  applicantCount: number;
+  // Unknown until the API reports applicants for a round, so the warning is optional.
+  applicantCount?: number;
   isHardBlock?: boolean;
+  isDeleting?: boolean;
   onClose: () => void;
   onConfirmDelete: () => void;
 }
 
+// เปิด modal ด้วย key ของคำถามเสมอ เพื่อให้ช่องติ๊กยืนยันเริ่มต้นเป็นว่าง
 export const DeleteQuestionModal: React.FC<DeleteQuestionModalProps> = ({
   isOpen,
-  applicantCount,
+  applicantCount = 0,
   isHardBlock = false,
+  isDeleting = false,
   onClose,
   onConfirmDelete,
 }) => {
@@ -86,11 +90,11 @@ export const DeleteQuestionModal: React.FC<DeleteQuestionModalProps> = ({
           </button>
           <button
             type="button"
-            disabled={!isChecked}
+            disabled={!isChecked || isDeleting}
             onClick={onConfirmDelete}
             className="h-11 w-full sm:w-auto px-6 rounded-xl bg-rose-600 text-sm font-semibold text-white hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed shadow-sm"
           >
-            ยืนยันลบคำถาม
+            {isDeleting ? 'กำลังลบ...' : 'ยืนยันลบคำถาม'}
           </button>
         </div>
       </div>

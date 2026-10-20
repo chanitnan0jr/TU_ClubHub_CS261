@@ -1,23 +1,34 @@
 import React, { useState } from 'react';
+import type { ScreeningQuestionDraft } from '../api/questionApi';
 
 interface EditQuestionModalProps {
   isOpen: boolean;
-  applicantCount: number;
+  // Unknown until the API reports applicants for a round, so the warning is optional.
+  applicantCount?: number;
   originalQuestion: string;
+  originalRequired: boolean;
+  isSaving?: boolean;
   onClose: () => void;
-  onConfirm: (newQuestionText: string) => void;
+  onConfirm: (draft: ScreeningQuestionDraft) => void;
 }
 
+// เปิด modal ด้วย key ของคำถามเสมอ เพื่อให้ state เริ่มจากคำถามที่เลือก
 export const EditQuestionModal: React.FC<EditQuestionModalProps> = ({
   isOpen,
-  applicantCount,
+  applicantCount = 0,
   originalQuestion,
+  originalRequired,
+  isSaving = false,
   onClose,
   onConfirm,
 }) => {
   const [newText, setNewText] = useState(originalQuestion);
+  const [isRequired, setIsRequired] = useState(originalRequired);
 
   if (!isOpen) return null;
+
+  const trimmed = newText.trim();
+  const isUnchanged = trimmed === originalQuestion && isRequired === originalRequired;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -50,14 +61,30 @@ export const EditQuestionModal: React.FC<EditQuestionModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-amber-700 mb-1">คำถามใหม่ (ที่จะเปลี่ยน)</label>
+            <label
+              htmlFor="edit-question-text"
+              className="block text-xs font-semibold text-amber-700 mb-1"
+            >
+              คำถามใหม่ (ที่จะเปลี่ยน)
+            </label>
             <input
+              id="edit-question-text"
               type="text"
               value={newText}
               onChange={(e) => setNewText(e.target.value)}
               className="w-full rounded-lg border-2 border-amber-500 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-200"
             />
           </div>
+
+          <label className="flex items-center gap-3 text-sm text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isRequired}
+              onChange={(e) => setIsRequired(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-400 text-amber-600 focus:ring-amber-500"
+            />
+            <span>จำเป็นต้องตอบ</span>
+          </label>
         </div>
 
         <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-2">
@@ -70,10 +97,11 @@ export const EditQuestionModal: React.FC<EditQuestionModalProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(newText)}
-            className="h-11 w-full sm:w-auto px-6 rounded-xl bg-amber-700 text-sm font-semibold text-white hover:bg-amber-800 shadow-sm"
+            disabled={!trimmed || isUnchanged || isSaving}
+            onClick={() => onConfirm({ questionText: trimmed, isRequired })}
+            className="h-11 w-full sm:w-auto px-6 rounded-xl bg-amber-700 text-sm font-semibold text-white hover:bg-amber-800 shadow-sm disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
           >
-            ยืนยันการแก้ไข
+            {isSaving ? 'กำลังบันทึก...' : 'ยืนยันการแก้ไข'}
           </button>
         </div>
       </div>

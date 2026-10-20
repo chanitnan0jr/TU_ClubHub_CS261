@@ -1,60 +1,59 @@
-import type { ScreeningQuestionInput } from '../types/recruitment';
+import { apiRequest } from '../../../lib/api.ts';
 
-const API_BASE_URL = '/api/v1/recruitment-rounds';
-
-export interface ApiErrorResponse {
-  message: string;
-  errors?: Record<string, string>;
+// Shape of ApplicationQuestion in docs/api/rounds.openapi.yaml. IDs are decimal
+// strings, and displayOrder starts at 1.
+export interface ScreeningQuestion {
+  id: string;
+  roundId: string;
+  questionText: string;
+  isRequired: boolean;
+  displayOrder: number;
 }
 
-// Service ดึงข้อมูลคำถามคัดเลือก
-export const fetchScreeningQuestions = async (roundId: string) => {
-  const response = await fetch(`${API_BASE_URL}/${roundId}/questions`);
-  if (!response.ok) {
-    const errorData: ApiErrorResponse = await response.json().catch(() => ({
-      message: 'ไม่สามารถโหลดข้อมูลคำถามคัดเลือกได้ กรุณาลองใหม่อีกครั้ง',
-    }));
-    throw new Error(errorData.message);
-  }
-  return response.json();
+export interface ScreeningQuestionDraft {
+  questionText: string;
+  isRequired: boolean;
+}
+
+interface ScreeningQuestionList {
+  items: ScreeningQuestion[];
+}
+
+const questionsUrl = (roundId: string) =>
+  `/api/v1/rounds/${encodeURIComponent(roundId)}/questions`;
+
+const questionUrl = (roundId: string, questionId: string) =>
+  `${questionsUrl(roundId)}/${encodeURIComponent(questionId)}`;
+
+// ดึงคำถามคัดเลือกของรอบ เรียงตาม displayOrder
+export const fetchScreeningQuestions = async (roundId: string): Promise<ScreeningQuestion[]> => {
+  const list = await apiRequest<ScreeningQuestionList>(questionsUrl(roundId));
+  return list.items;
 };
 
-// Service บันทึก/แก้ไขคำถามคัดเลือก
-export const updateScreeningQuestion = async (
+// เพิ่มคำถามต่อท้ายรอบ
+export const createScreeningQuestion = (roundId: string, draft: ScreeningQuestionDraft) =>
+  apiRequest<ScreeningQuestion>(questionsUrl(roundId), { method: 'POST', body: draft });
+
+// แก้ไขข้อความและสถานะจำเป็นต้องตอบ (ต้องส่งครบทั้งสองฟิลด์)
+export const updateScreeningQuestion = (
   roundId: string,
   questionId: string,
-  data: Partial<ScreeningQuestionInput>
-) => {
-  const response = await fetch(`${API_BASE_URL}/${roundId}/questions/${questionId}`, {
+  draft: ScreeningQuestionDraft,
+) => apiRequest<ScreeningQuestion>(questionUrl(roundId, questionId), { method: 'PUT', body: draft });
+
+// ลบคำถาม (204 ไม่มี body)
+export const deleteScreeningQuestion = (roundId: string, questionId: string) =>
+  apiRequest<void>(questionUrl(roundId, questionId), { method: 'DELETE' });
+
+// จัดลำดับใหม่ ต้องส่ง ID ของทุกคำถามในรอบ
+export const reorderScreeningQuestions = async (
+  roundId: string,
+  questionIds: string[],
+): Promise<ScreeningQuestion[]> => {
+  const list = await apiRequest<ScreeningQuestionList>(`${questionsUrl(roundId)}/order`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
+    body: { questionIds },
   });
-
-  if (!response.ok) {
-    const errorData: ApiErrorResponse = await response.json().catch(() => ({
-      message: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูล กรุณาตรวจสอบและลองอีกครั้ง',
-    }));
-    throw errorData;
-  }
-
-  return response.json();
-};
-
-// Service ลบคำถามคัดเลือก
-export const deleteScreeningQuestion = async (roundId: string, questionId: string) => {
-  const response = await fetch(`${API_BASE_URL}/${roundId}/questions/${questionId}`, {
-    method: 'DELETE',
-  });
-
-  if (!response.ok) {
-    const errorData: ApiErrorResponse = await response.json().catch(() => ({
-      message: 'ไม่สามารถลบคำถามได้ เนื่องจากมีผู้สมัครยื่นคำตอบในข้อนี้แล้ว',
-    }));
-    throw errorData;
-  }
-
-  return response.json();
+  return list.items;
 };
