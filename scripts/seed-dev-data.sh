@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# DEV ONLY. Loads local seed data into the compose database: V2__seed_test_data.sql
-# (clubs, fictional users, presidents), then seed-dev-demo.sql (student-demo becomes
-# president of ชมรมเขียนโปรแกรม, plus sample rounds and questions). Safe to run again.
+# DEV ONLY. Loads V2__seed_test_data.sql into the compose database: clubs, fictional
+# users, presidents, and student-demo as president of ชมรมเขียนโปรแกรม with sample
+# rounds and questions. Safe to run again.
 # Start the app once first so Flyway creates the tables: docker compose up --build
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -18,7 +18,6 @@ psql_db() {
 }
 
 psql_db < backend/src/test/resources/db/migration/V2__seed_test_data.sql
-psql_db < scripts/seed-dev-demo.sql
 
 # Self-check: the demo pages need student-demo to be a committee member.
 [[ "$(psql_db -At -c "SELECT EXISTS (
