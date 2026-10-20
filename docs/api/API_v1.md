@@ -4,7 +4,7 @@
 |---|---|
 | Version | `v1` |
 | Contract status | Partially implemented; endpoint status listed below |
-| Last updated | 2026-10-19 |
+| Last updated | 2026-10-20 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
@@ -25,7 +25,8 @@ Reviewed from source on 2026-10-19; this table records handlers and integration,
 | `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard | Editor/client exist but are not mounted |
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
 | Committee round `GET` list/detail and `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
-| Application submission (§11) | Contract defined; no handler/service yet | Form prototype only; no submission client |
+| `GET /api/v1/rounds/{roundId}/application-form` (§12) | Account/student/window policy confirmed by Task42 requester; PO/team review pending; no handler | Form prototype only |
+| `POST /api/v1/rounds/{roundId}/applications` (§11) | Contract defined; no handler/service yet | No submission client |
 | `/actuator/health` | Implemented | Operational endpoint |
 
 The [permission matrix](../security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย) lists remaining Active, PRESIDENT, account-refresh, and self-review checks. Real TU access and verified student-status provisioning still require integration work.
@@ -39,6 +40,7 @@ The foundation contract covers:
 - The current user's minimal account identity.
 - Public club profiles and currently open recruitment rounds for active clubs.
 - Application submission with answers and document links, including database persistence, as defined in [section 11](#11-application-submission).
+- Applicant-facing form schemas and the read policy in [section 12](#12-round-application-form-task42).
 - A minimal health endpoint for operations.
 
 Application review, membership decisions, notifications, search, and dashboards remain product backlog work; their request and response schemas must be defined before implementation. Recruitment management is specified separately in [rounds.openapi.yaml](rounds.openapi.yaml). The submission contract is defined below, but its implementation is still pending. A not-yet-implemented endpoint must not return a success response as a stub.
@@ -442,12 +444,14 @@ Decisions on the items US-03 left open, adopted on 2026-10-19:
 | `Location` of a new application | `/api/v1/me/applications/{applicationId}`, read through US-04 | The applicant must be able to read the URI it receives. Applicant reads are owner-only and return `404` for other people's IDs, so they belong under `/me`. The round-nested collection stays available for committee reads in US-09. |
 | Inactive target club | `404 RESOURCE_NOT_FOUND` | Public endpoints already hide inactive clubs with `404`, and US-03 BR-02 avoids revealing resources that are not public. `403 ACCESS_DENIED` remains for the applicant's own eligibility. |
 
-### `POST /api/v1/clubs/{clubId}/rounds/{roundId}/applications`
+### `POST /api/v1/rounds/{roundId}/applications`
+
+Task42 uses the round-scoped path above, replacing the earlier **contract-only** `POST /api/v1/clubs/{clubId}/rounds/{roundId}/applications`. The existing `submitApplication` operation and request/response schemas are reused at the new path; no compatibility alias or second submission operation is specified. Resolve `clubId` from the stored round instead of accepting it in the path or body. Consumers of the earlier draft, including the existing SD-05 diagram, must use this path when implemented; the old diagram is historical route context, not an additional API contract. Confirm that handoff during team review.
 
 Creates the current student's application. Requires a valid `SESSION` cookie, `X-CSRF-TOKEN`, and `Content-Type: application/json`. Path IDs and `questionId` are positive decimal strings without leading zeroes, up to `9223372036854775807`.
 
 - Require an `ACTIVE` account and a verified `student_profiles.student_status = 'ACTIVE'`; login success alone is insufficient. The target club must be `ACTIVE`; an inactive club returns `404`, as on public endpoints. Committee/Admin callers use the same Student permissions; no committee assignment or term is required for this operation.
-- The round must belong to `clubId`, be `PUBLISHED`, have `published_at` set, satisfy `opens_at <= now < closes_at`, and have `closed_at IS NULL`. Use backend UTC time, sampled after acquiring the round lock.
+- Resolve the round and its club from `roundId`; the club must be `ACTIVE`. The round must be `PUBLISHED`, have `published_at` set, satisfy `opens_at <= now < closes_at`, and have `closed_at IS NULL`. Use backend UTC time, sampled after acquiring the round lock.
 - Set the applicant from the session and the club from the verified round. Reject unknown JSON fields at every request-object level, including client-supplied applicant, club/round IDs, status, timestamps, or link ordering.
 - A student may submit once per round, including after a prior application is withdrawn. A repeated submission is a conflict; it does not update or replay the existing application.
 - For this API, the product limit is five distinct clubs with locally recorded memberships satisfying `status = 'ACTIVE'`, `joined_at <= now`, and `ended_at IS NULL`, across all club types. Reject applicants already in the target club or already at that limit. Pending applications do not count, and there is no separate pending-application quota. Confirmation must recheck membership limits; submission creates no membership.
@@ -478,6 +482,10 @@ Creates the current student's application. Requires a valid `SESSION` cookie, `X
 | `links[].url` | Required absolute HTTPS URI with a host, at most 2,048 characters. Scheme matching is case-insensitive. Reject whitespace, control characters, and userinfo such as `user:password@host`. Preserve the accepted URL. |
 
 Length limits count Unicode characters in the submitted value, before trimming, so they match the OpenAPI `maxLength` values. A blank value is empty or contains only whitespace. URLs are validated and stored as supplied, without trimming. Null values are invalid for all request fields. Validate all fields before writing. The backend stores links without opening or downloading them; this API does not accept file uploads. The database HTTPS check is a final safeguard and does not replace URI validation.
+
+Only text questions exist in the current model. There is no choice/options schema and no client-supplied question type: a supplied `optionId`, `selectedOptions`, score, applicant identity, application status, or other unknown field is `400 VALIDATION_FAILED`. Reject duplicate `questionId` values even when their answer texts differ; JSON Schema `uniqueItems` alone cannot enforce this identifier-level rule. Missing required answers, blank supplied optional answers, wrong-round/unknown questions, and overlong text also use `400 VALIDATION_FAILED` with indexed `fieldErrors` where applicable.
+
+Loading the form does not reserve a submission or freeze round availability. If a round closes while the student is filling it in, the transaction-time state check returns `409 RESOURCE_CONFLICT` with `reason: ROUND_CLOSED`, with no writes. Current policy permits question edits only on drafts without applications ([permission matrix](../security/permission-matrix.md#3-permission-matrix)); no form version/ETag/precondition token is defined for this POST. Always validate against the current stored question set. If that set changed and an answer is now invalid or required data is missing, use the existing `400 VALIDATION_FAILED`; there is no invented `FORM_CHANGED` conflict. Supporting edits after publication or detecting stale content when IDs/constraints remain valid requires a separately confirmed versioning design (§12 review item R3).
 
 #### Success response
 
@@ -522,7 +530,7 @@ Use the shared Problem format with `Cache-Control: no-store`. Error `type` value
 | `403` | `ACCOUNT_NOT_ALLOWED` | `account-not-allowed` | Suspended account; invalidate its session. |
 | `403` | `ACCESS_DENIED` | `access-denied` | Missing verified Active student status. |
 | `403` | `CSRF_INVALID` | `csrf-invalid` | Missing/invalid CSRF header; this check may precede authentication. |
-| `404` | `RESOURCE_NOT_FOUND` | `resource-not-found` | Club missing or not `ACTIVE`, round missing or under another club, or round never published (`published_at IS NULL`). |
+| `404` | `RESOURCE_NOT_FOUND` | `resource-not-found` | Round missing, its club missing or not `ACTIVE`, or round never published (`published_at IS NULL`). |
 | `409` | `RESOURCE_CONFLICT` | `resource-conflict` | A conflict identified by the required `reason` field below. |
 | `500` | `INTERNAL_ERROR` | `internal-error` | Unexpected failure; roll back all submission writes. |
 | `503` | `SERVICE_UNAVAILABLE` | `service-unavailable` | Database unavailable; do not report a successful submission. |
@@ -533,7 +541,7 @@ Checks run in this order, and the first failure determines the response. This is
 2. Session and account: `401 AUTHENTICATION_REQUIRED`, then `403 ACCOUNT_NOT_ALLOWED`.
 3. Path IDs and request body, without database lookups: `400 INVALID_RESOURCE_ID` or `400 VALIDATION_FAILED`.
 4. Verified Active student status: `403 ACCESS_DENIED`.
-5. Active club and a published round under that club: `404 RESOURCE_NOT_FOUND`.
+5. Round lookup and its Active club, with `published_at` set: `404 RESOURCE_NOT_FOUND`.
 6. Round state after the round lock: `409` with `ROUND_CANCELLED`, `ROUND_NOT_OPEN`, or `ROUND_CLOSED`.
 7. Answers checked against the round's questions: `400 VALIDATION_FAILED`.
 8. Existing application and memberships: `409` with `APPLICATION_ALREADY_EXISTS`, `ALREADY_MEMBER`, or `MEMBERSHIP_LIMIT_REACHED`.
@@ -552,3 +560,125 @@ Conflict `reason` values, in check order:
 For example, a duplicate uses `status: 409`, `code: RESOURCE_CONFLICT`, and `reason: APPLICATION_ALREADY_EXISTS`, with the shared `type`, `title`, `instance`, and `traceId` fields. Do not expose another applicant's identity or any stored answers/links in error bodies. No numeric rate limit is introduced by this contract; any future limiter must follow the shared `429`/`Retry-After` policy before deployment.
 
 Clients must not retry a `4xx` response unchanged. After a lost response or a `5xx`, retrying is safe without an idempotency key because the one-application-per-round rule prevents a second application. The earlier attempt may still have committed, so when such a retry returns `409`, check the applicant's history (US-04) before telling the student that nothing was submitted; `APPLICATION_ALREADY_EXISTS` means the application exists.
+
+## 12. Round application form (Task42)
+
+**Review status: not reviewed or approved. Implementation pending.** Task42 specifies two operations in the existing OpenAPI 3.1.0 [openapi.yaml](openapi.yaml): `getRoundApplicationForm` and `submitApplication`. It does not add a specification file or change the committee management contract in `rounds.openapi.yaml` (3.0.3). Submission rules in §11 remain decided. On 2026-10-20 the Task42 requester confirmed that GET uses the same ACTIVE account/student and currently open-round checks as submission. This records that explicit task decision; it does not claim a PO/team review has occurred. The permission matrix has no dedicated applicant-form row yet; include it in the review handoff. Remaining questions are listed below. The requested round-scoped POST replaces the earlier contract-only club-nested route as explained in §11; no implementation or deployed-client compatibility is claimed.
+
+### `GET /api/v1/rounds/{roundId}/application-form`
+
+| Concern | Contract / review status |
+|---|---|
+| ID | Required `roundId` path parameter uses `PositiveBigintId`: a positive decimal string without leading zeroes, maximum `9223372036854775807`. `0`, negative, fractional, nonnumeric, and out-of-range values are `400 INVALID_RESOURCE_ID`. |
+| Authentication | `security: [{SessionCookie: []}]`, cookie name `SESSION`. This is an applicant workflow, **not a Task35 public endpoint**. Session authentication is consistent with US-03; the ACTIVE account/student and open-round requirements were confirmed by the Task42 requester on 2026-10-20. GET needs no CSRF header. |
+| Read eligibility — Task42 confirmation | Require an ACTIVE account and verified ACTIVE student profile; Committee/Admin callers use Student rights. Do not infer a committee management grant. Duplicate-application/membership conflicts remain mandatory on POST. They are not additional GET rejections in this contract; changing that needs a separate decision (R1). |
+| Availability — Task42 confirmation | Return `200` only for the round's ACTIVE club and a `PUBLISHED` round with `published_at` set, `closed_at IS NULL`, and `opens_at <= now < closes_at`. Use backend UTC time, sampled once for this read; never use client time. |
+| Hidden resources | Missing round, missing/inactive club, or never-published round: `404 RESOURCE_NOT_FOUND`, without distinguishing whether a hidden resource exists. |
+| Unavailable form | For a previously published round, check cancellation first (`ROUND_CANCELLED`), then `now < opens_at` (`ROUND_NOT_OPEN`), then `closed_at IS NOT NULL` or `now >= closes_at` (`ROUND_CLOSED`): `409 RESOURCE_CONFLICT`. This does not authorize preview outside the window. |
+| Success | Direct `RoundApplicationForm` resource, not an `items/page` wrapper: the embedded `questions` array is the complete form, not a separate collection endpoint. Include all questions sorted by `displayOrder ASC, id ASC` (numeric ID), with unique IDs/order per round. Gaps in order are valid. |
+| Cache | Every response, including failures, uses `Cache-Control: no-store`. A loaded form grants no reservation and no guarantee that POST will succeed. |
+
+Example `200`:
+
+```json
+{
+  "round": {
+    "id": "70001",
+    "clubId": "20001",
+    "title": "Volunteer recruitment",
+    "description": "Join our student activities team.",
+    "eligibilityText": "Active TU students interested in volunteering.",
+    "opensAt": "2026-10-20T02:00:00Z",
+    "closesAt": "2026-11-01T10:00:00Z"
+  },
+  "questions": [
+    {
+      "id": "81001",
+      "type": "TEXT",
+      "questionText": "Describe an activity you helped organize.",
+      "isRequired": true,
+      "displayOrder": 1,
+      "maxLength": 2000
+    },
+    {
+      "id": "81002",
+      "type": "TEXT",
+      "questionText": "What other experience would you like to share?",
+      "isRequired": false,
+      "displayOrder": 3,
+      "maxLength": 1000
+    }
+  ]
+}
+```
+
+If no custom questions exist, keep the same resource shape and return `questions: []`; `motivation` and `links` still follow the POST request schema. OpenAPI also includes a complete no-question example with `eligibilityText: null`.
+
+#### DTO/schema mapping and privacy
+
+All objects are dedicated allowlists with `additionalProperties: false`. Every property listed below is required in the response; only `eligibilityText` is nullable. OpenAPI 3.1 uses `type: [string, 'null']`, not the 3.0 `nullable` keyword.
+
+| Schema / property | Type and source |
+|---|---|
+| `RoundApplicationForm.round` | `ApplicationFormRound`, a dedicated projection of the round, not `RecruitmentRound`/committee DTO. |
+| `RoundApplicationForm.questions` | Array of `ApplicationTextQuestion`; zero or more; no null items. |
+| `ApplicationFormRound.id`, `clubId` | `PositiveBigintId`, from stored `recruitment_rounds.id` / `club_id`. |
+| `ApplicationFormRound.title` | String, 1–200 characters, from `recruitment_rounds.title`. |
+| `ApplicationFormRound.description` | Non-null string, from applicant-facing `recruitment_rounds.description`. |
+| `ApplicationFormRound.eligibilityText` | String or null, from `eligibility_text`; display text, not a newly invented automated eligibility condition. |
+| `ApplicationFormRound.opensAt`, `closesAt` | UTC ISO 8601 `date-time` strings ending `Z`, from `TIMESTAMPTZ`. Opening is inclusive, closing exclusive. Equal instants with UTC/+07:00 offsets have the same meaning; serialize responses in UTC. Manual closure may end submission earlier. |
+| `ApplicationTextQuestion.id` | `PositiveBigintId`, from `application_questions.id`; send this as POST `answers[].questionId`. |
+| `ApplicationTextQuestion.type` | Enum `TEXT`, derived from the text-only model; no new database column. No choices/options schema, numeric answer schema, or upload schema is introduced. |
+| `ApplicationTextQuestion.questionText` | Nonblank string, from `prompt`; uses the existing question-view naming convention. |
+| `ApplicationTextQuestion.isRequired` | Boolean, from `is_required`; do not confuse required answer content with required response keys. |
+| `ApplicationTextQuestion.displayOrder` | Positive `int32` (1–2147483647), from `display_order`; need not be contiguous. |
+| `ApplicationTextQuestion.maxLength` | Positive `int32` (1–2147483647), from `max_length`; database default 2000. Count answer input in Unicode characters before trimming. |
+
+The form deliberately excludes existing answers/applications, applicant identity, contact information of other people, review scores, internal comments, creator IDs, raw `version`, result-publication metadata, and management timestamps. Nested references reach only these dedicated form schemas and `PositiveBigintId`. POST reuses `ApplicationSubmissionRequest`, `ApplicationAnswerInput`, `ApplicationLinkInput`, `ApplicationSubmission`, and `ApplicationSubmissionConflict`; it never accepts or returns a persistence entity. Submission errors must not echo another student's data.
+
+The existing frontend prototype is not the wire contract: `reason`, `orderIndex`, `documentTitle`/`documentUrl`, body `roundId`, and the mock `{success, message, applicationId}` response require mapping to `motivation`, `displayOrder`, `links[]`, path `roundId`, and `ApplicationSubmission`. There is no UI change in Task42.
+
+#### GET errors and POST parity
+
+Use the shared `application/problem+json` `Problem` schema (`type`, `title`, `status`, `code`, `traceId`; optional `detail`, `instance`, `fieldErrors`). Never include SQL, stack traces, credentials, session IDs, or applicant/reviewer content.
+
+| GET status | Code / condition |
+|---|---|
+| `400` | `INVALID_RESOURCE_ID`; invalid/out-of-range `roundId`. |
+| `401` | `AUTHENTICATION_REQUIRED`; no valid session. |
+| `403` | `ACCOUNT_NOT_ALLOWED` for a suspended account, invalidating session; student-eligibility denial uses `ACCESS_DENIED`. No CSRF requirement on GET. |
+| `404` | `RESOURCE_NOT_FOUND` hiding unavailable resources as described above. |
+| `409` | `RESOURCE_CONFLICT` with required `reason` restricted by `ApplicationFormAvailabilityConflict` to `ROUND_CANCELLED`, `ROUND_NOT_OPEN`, or `ROUND_CLOSED`. Do not use submission-duplicate/member reasons on GET without an R1 decision. |
+| `500` / `503` | `INTERNAL_ERROR` / `SERVICE_UNAVAILABLE` using the existing shared responses; no sensitive diagnostics. |
+
+GET checks session/account → ID → verified student → visible resource → round state, applying the existing submission ordering to the shared checks and omitting CSRF/body checks. The Task42 requester confirmed the shared eligibility/window policy; formal PO/team review is still pending. POST retains the already-decided §11 ordering and errors, including CSRF first, answer validation, duplicate/membership conflicts, and atomic rollback. Successful POST returns `201 ApplicationSubmission` plus `Location` and `Cache-Control: no-store`; it does not return this form or any reviews.
+
+### Evidence and implementation handoff
+
+| Rule / design input | Repository evidence |
+|---|---|
+| Authenticated student, required answers, HTTPS links, one submission per round, server-side time check, atomic writes | [US-03](../stories/US-03.md), AC-01–06 and BR-01–11; existing §11 decisions dated 2026-10-19. |
+| Student/club Active, Student rights for Committee/Admin, no role override; question edits only on drafts without applications | [Permission matrix](../security/permission-matrix.md), §§1–3; this policy takes precedence over older unresolved wording in stories. It has no dedicated form-read row; the Task42 requester confirmed the account/student/window policy on 2026-10-20. |
+| Text-only questions, stable question identity, required flag, display order | [US-08](../stories/US-08.md); [ApplicationQuestionService](../../backend/src/main/java/com/tu/clubhub/recruitment/service/ApplicationQuestionService.java) uses `questionText`, `isRequired`, and `displayOrder`; its committee-only read must not be reused as applicant authorization. |
+| Real persisted types/constraints | [V1 migration](../../backend/src/main/resources/db/migration/V1__init_schema.sql): `recruitment_rounds`, `application_questions`, `applications`, `application_answers`, `application_links`, `application_status_history`; [ERD](../database/TU-ClubHub-ERD-Updated.dbml). Questions have `max_length`, no question-type/options/file columns. |
+| Round fields | [RecruitmentRound](../../backend/src/main/java/com/tu/clubhub/recruitment/domain/RecruitmentRound.java); [rounds.openapi.yaml](rounds.openapi.yaml) for management semantics. No full internal schema is referenced by form responses. |
+| Server-side UTC clock, session/CSRF, no automatic public access for round-scoped routes | [SecurityConfiguration](../../backend/src/main/java/com/tu/clubhub/config/SecurityConfiguration.java), [AbsoluteSessionTimeoutFilter](../../backend/src/main/java/com/tu/clubhub/config/AbsoluteSessionTimeoutFilter.java); §§2–3. Current filters are not proof of the future endpoint's complete authorization. |
+| Prototype mismatch, not an established HTTP client | [applicationForm.ts](../../frontend/src/features/applications/types/applicationForm.ts), [applicationService.ts](../../frontend/src/features/applications/services/applicationService.ts). Submission is simulated, so it cannot override the contract. |
+
+### PO / user representative / development review checklist
+
+No review has taken place as part of writing this contract. The Task42 requester confirmed the account/student/window policy above; the following questions still need a decision or review handoff:
+
+| Item | Question and options | Effect / proposed direction |
+|---|---|---|
+| R1 | Should an existing application, existing target membership, or the five-club limit additionally block reading? | Baseline account/student/window checks were confirmed by the requester. Keep duplicate/member conflicts on POST under this contract; adding them to GET would prevent revisiting a form for reference. The alternative is GET conflicts too, requiring explicit errors and precedence in both documents. |
+| R2 | Record the requester's confirmed read policy in the permission matrix and obtain PO/user-representative review. | The account/student/window policy is defined here from the 2026-10-20 task answer, not from Task35 public access. Read-only preview outside the window is not included; changing it later would require an explicit contract decision. |
+| R3 | Is the current immutable-after-publication question policy sufficient, or must the API reject any stale form snapshot even if IDs and constraints still validate? | Current decided policy needs no new version field; POST revalidates the stored set. Strict snapshot rejection or edits after publication require a separate versioning/precondition contract; do not silently add `formVersion`, `If-Match`, or `FORM_CHANGED`. |
+| R4 | Confirm all consumers move to Task42's round-scoped POST, and reconcile earlier SD-05 path references during handoff. | One submission operation/schema remains; no compatibility alias is defined. Applicant `Location` remains `/api/v1/me/applications/{id}` and that read API still needs implementation. |
+
+- [ ] PO/user representative reviews the requester-confirmed read policy, resolves R1, and records the applicant-form action in the permission matrix (R2). Update both contracts together if the decision changes.
+- [ ] PO/team confirms R3/R4, the text-only question model, optional 0–5 HTTPS links, and the existing §11 duplicate/membership rules.
+- [ ] Frontend/backend agree on the dedicated DTO allowlist, `eligibilityText: null`, empty questions, Unicode lengths, field-error paths, UTC serialization, and prototype mapping.
+- [ ] Backend plan covers current account/student checks, session/CSRF, resource hiding, same-round transaction lock, unique-conflict mapping, rollback, and transaction-time deadline checks.
+- [ ] QA plans positive/negative ID bounds, session/CSRF errors, required/optional/unknown/duplicate answers, overlong text, invalid/extra fields, invalid HTTPS links, duplicate submission, and a close occurring after form load.
+- [ ] Run OpenAPI structural/reference/example validation and `git diff --check`; record actual results separately from product review approval. No application implementation or runtime test result is implied by specification validation.

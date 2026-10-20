@@ -3,8 +3,11 @@ info:
   title: TU-ClubHub API
   version: 1.1.0
   description: >-
-    TU-ClubHub API contract for foundation, public club profiles, and application
-    submission. The application submission contract is defined; implementation is pending.
+    TU-ClubHub API contract for foundation, public club profiles, application forms,
+    and submission. Task42 defines round-scoped application paths; implementation
+    is pending. The Task42 requester confirmed student/account Active and open-round
+    requirements for form reads on 2026-10-20. Remaining review items are recorded
+    in API_v1.md section 12; no PO/team review approval is claimed.
     Source status reviewed on 2026-10-19: auth, public club reads, club profile PUT,
     and health have handlers. GET /api/v1/clubs/{clubId} remains contract-only.
     Recruitment management is specified separately in rounds.openapi.yaml.
@@ -22,7 +25,7 @@ tags:
   - name: Clubs
   - name: Public Clubs
   - name: Applications
-    description: Student application submission (US-03). Application history and review APIs are not defined yet.
+    description: Student application forms and submission (US-03/US-08). Application history and review APIs are not defined yet.
   - name: Operations
 paths:
   /api/v1/auth/csrf:
@@ -608,7 +611,165 @@ paths:
           $ref: '#/components/responses/ServiceUnavailable'
         default:
           $ref: '#/components/responses/ServerError'
-  /api/v1/clubs/{clubId}/rounds/{roundId}/applications:
+  /api/v1/rounds/{roundId}/application-form:
+    get:
+      tags: [Applications]
+      operationId: getRoundApplicationForm
+      summary: Get the applicant-facing text-question form for a recruitment round
+      x-implementation-status: pending
+      x-contract-status: defined-pending-review
+      x-review-required:
+        - Confirm whether prior application or membership eligibility should additionally block reading the form; not specified as a GET rejection here.
+      description: >-
+        A valid SESSION is required, not public access or a committee permission.
+        GET requires no CSRF header. The Task42 requester confirmed the same
+        account/student and open-round checks as submission on 2026-10-20:
+        require an ACTIVE account and verified ACTIVE student; Committee/Admin
+        callers use Student rights. Hide missing/inactive clubs and
+        never-published rounds with 404, and allow 200 only for a PUBLISHED round
+        with published_at set, opens_at <= now < closes_at and closed_at IS NULL.
+        A previously published cancelled/not-yet-open/closed round returns
+        409 with ROUND_CANCELLED/ROUND_NOT_OPEN/ROUND_CLOSED in that order.
+        Apply checks in order: session/account, path ID, verified student, visible
+        round/club, then round availability. Duplicate-application and membership
+        conflicts remain submission checks; adding them as form-read rejections
+        needs a separate decision. PO/team review remains pending as recorded in
+        section 12 of API_v1.md; submission rules are defined in section 11.
+        Resolve the club from roundId. Return one form resource, not a paginated
+        question collection. Questions are TEXT only, sorted by displayOrder
+        ascending then id ascending; return questions [] if none exist. Do not
+        include answers, applicants, reviews, creator IDs, or internal round data.
+        All responses use Cache-Control no-store. Read backend UTC time once for
+        availability; opening is inclusive and closing exclusive. Loading a form
+        never reserves an application slot or guarantees later submission.
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          description: Positive PostgreSQL BIGINT decimal string without leading zeroes; maximum 9223372036854775807.
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '70001'
+      responses:
+        '200':
+          description: Applicant-facing form for an eligible student and currently open published round
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundApplicationForm'
+              examples:
+                textQuestions:
+                  summary: Text-only form with required and optional questions
+                  value:
+                    round:
+                      id: '70001'
+                      clubId: '20001'
+                      title: Volunteer recruitment
+                      description: Join our student activities team.
+                      eligibilityText: Active TU students interested in volunteering.
+                      opensAt: '2026-10-20T02:00:00Z'
+                      closesAt: '2026-11-01T10:00:00Z'
+                    questions:
+                      - id: '81001'
+                        type: TEXT
+                        questionText: Describe an activity you helped organize.
+                        isRequired: true
+                        displayOrder: 1
+                        maxLength: 2000
+                      - id: '81002'
+                        type: TEXT
+                        questionText: What other experience would you like to share?
+                        isRequired: false
+                        displayOrder: 3
+                        maxLength: 1000
+                noQuestions:
+                  summary: No custom screening questions; motivation remains required on submission
+                  value:
+                    round:
+                      id: '70002'
+                      clubId: '20001'
+                      title: General recruitment
+                      description: Applications without custom screening questions.
+                      eligibilityText: null
+                      opensAt: '2026-10-20T02:00:00Z'
+                      closesAt: '2026-11-01T10:00:00Z'
+                    questions: []
+        '400':
+          description: INVALID_RESOURCE_ID for malformed or out-of-range roundId
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:invalid-resource-id
+                title: Invalid resource identifier
+                status: 400
+                instance: /api/v1/rounds/abc/application-form
+                code: INVALID_RESOURCE_ID
+                traceId: example-form-trace
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >-
+            ACCOUNT_NOT_ALLOWED for a suspended account (invalidate session).
+            ACCESS_DENIED for missing verified ACTIVE student status.
+            GET does not require a CSRF header.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: >-
+            Submission visibility also applies here: RESOURCE_NOT_FOUND
+            for a missing round, missing/inactive club, or never-published round.
+            Do not disclose which resource exists.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-not-found
+                title: Resource not found
+                status: 404
+                instance: /api/v1/rounds/70001/application-form
+                code: RESOURCE_NOT_FOUND
+                traceId: example-form-trace
+        '409':
+          description: Previously published round is cancelled, not yet open, or closed; no read-only preview outside the submission window
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApplicationFormAvailabilityConflict'
+              example:
+                type: urn:tuclubhub:problem:resource-conflict
+                title: Application form unavailable
+                status: 409
+                instance: /api/v1/rounds/70001/application-form
+                code: RESOURCE_CONFLICT
+                reason: ROUND_CLOSED
+                traceId: example-form-trace
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/rounds/{roundId}/applications:
     post:
       tags: [Applications]
       operationId: submitApplication
@@ -616,12 +777,14 @@ paths:
       x-implementation-status: pending
       description: >-
         Contract defined in API_v1.md section 11; implementation is pending.
+        Task42 replaces the earlier contract-only club-nested submission path;
+        it does not define a second submission endpoint or a compatibility alias.
         Requires an ACTIVE account, verified ACTIVE student profile, and ACTIVE
         target club; an inactive club returns 404 like a missing one.
         Committee/Admin callers use the same Student permissions;
         no committee assignment or term is required. Derive the applicant from
         the session and club from the round; reject unknown request fields.
-        The round must belong to clubId, be PUBLISHED with published_at set,
+        Resolve the club from roundId. The round must be PUBLISHED with published_at set,
         satisfy opens_at <= now < closes_at, and have closed_at IS NULL.
         Recheck authorization, eligibility, questions, and round state inside
         one transaction. Serialize with round close/cancel using the same round
@@ -636,21 +799,25 @@ paths:
         Pending applications do not count; there is no separate pending-application
         quota. Submission creates no membership. Confirmation rechecks the limit.
         Store URLs without fetching them or accepting file uploads.
+        Questions support text answers only. Reject missing required answers,
+        blank supplied optional answers, unknown/wrong-round question IDs, duplicate
+        question IDs even with different answers, and answers exceeding that
+        question's max_length with 400 VALIDATION_FAILED and fieldErrors.
+        Published question editing is not allowed by the current permission
+        matrix. No form version or precondition token is defined. Revalidate the
+        current question set; an invalid stale answer is 400, not an invented
+        FORM_CHANGED conflict. If the round closes while the form is being filled
+        in, return 409 ROUND_CLOSED after the transaction-time check without writes.
         All responses use Cache-Control no-store. No numeric rate limit is set;
         a future limiter must document its thresholds and the shared 429 policy.
       security:
         - SessionCookie: []
           CsrfHeader: []
       parameters:
-        - name: clubId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/PositiveBigintId'
-          example: '20001'
         - name: roundId
           in: path
           required: true
+          description: Positive PostgreSQL BIGINT decimal string without leading zeroes; maximum 9223372036854775807.
           schema:
             $ref: '#/components/schemas/PositiveBigintId'
           example: '70001'
@@ -714,7 +881,7 @@ paths:
                     title: Request validation failed
                     status: 400
                     detail: One or more application fields are invalid.
-                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    instance: /api/v1/rounds/70001/applications
                     code: VALIDATION_FAILED
                     fieldErrors:
                       - field: links[0].url
@@ -751,7 +918,7 @@ paths:
                     title: Access denied
                     status: 403
                     detail: An active verified student profile is required to apply.
-                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    instance: /api/v1/rounds/70001/applications
                     code: ACCESS_DENIED
                     traceId: 01J9EXAMPLE7K4D5
                 accountNotAllowed:
@@ -761,7 +928,7 @@ paths:
                     title: Account not allowed
                     status: 403
                     detail: This account is not allowed to use TU-ClubHub.
-                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    instance: /api/v1/rounds/70001/applications
                     code: ACCOUNT_NOT_ALLOWED
                     traceId: 01J9EXAMPLE7K4D5
                 csrfInvalid:
@@ -771,13 +938,13 @@ paths:
                     title: Request rejected
                     status: 403
                     detail: The CSRF token is missing or invalid.
-                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    instance: /api/v1/rounds/70001/applications
                     code: CSRF_INVALID
                     traceId: 01J9EXAMPLE7K4D5
         '404':
           description: >-
             RESOURCE_NOT_FOUND when the club is missing or not ACTIVE, the round
-            is missing or does not belong to clubId, or the round has never been
+            is missing, or the round has never been
             published (published_at IS NULL). Do not reveal whether an inactive
             club or an unpublished round exists.
           content:
@@ -789,7 +956,7 @@ paths:
                 title: Resource not found
                 status: 404
                 detail: No published recruitment round was found at this path.
-                instance: /api/v1/clubs/20001/rounds/70001/applications
+                instance: /api/v1/rounds/70001/applications
                 code: RESOURCE_NOT_FOUND
                 traceId: 01J9EXAMPLE7K4D5
         '409':
@@ -811,7 +978,7 @@ paths:
                     title: Application conflicts with current state
                     status: 409
                     detail: This recruitment round has been cancelled.
-                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    instance: /api/v1/rounds/70001/applications
                     code: RESOURCE_CONFLICT
                     reason: ROUND_CANCELLED
                     traceId: 01J9EXAMPLE7K4D5
@@ -822,7 +989,7 @@ paths:
                     title: Application conflicts with current state
                     status: 409
                     detail: This recruitment round is not open for applications yet.
-                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    instance: /api/v1/rounds/70001/applications
                     code: RESOURCE_CONFLICT
                     reason: ROUND_NOT_OPEN
                     traceId: 01J9EXAMPLE7K4D5
@@ -833,7 +1000,7 @@ paths:
                     title: Application conflicts with current state
                     status: 409
                     detail: This recruitment round is closed.
-                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    instance: /api/v1/rounds/70001/applications
                     code: RESOURCE_CONFLICT
                     reason: ROUND_CLOSED
                     traceId: 01J9EXAMPLE7K4D5
@@ -844,7 +1011,7 @@ paths:
                     title: Application conflicts with current state
                     status: 409
                     detail: You have already submitted an application for this round.
-                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    instance: /api/v1/rounds/70001/applications
                     code: RESOURCE_CONFLICT
                     reason: APPLICATION_ALREADY_EXISTS
                     traceId: 01J9EXAMPLE7K4D5
@@ -855,7 +1022,7 @@ paths:
                     title: Application conflicts with current state
                     status: 409
                     detail: You are already a member of this club.
-                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    instance: /api/v1/rounds/70001/applications
                     code: RESOURCE_CONFLICT
                     reason: ALREADY_MEMBER
                     traceId: 01J9EXAMPLE7K4D5
@@ -866,7 +1033,7 @@ paths:
                     title: Application conflicts with current state
                     status: 409
                     detail: You are already an active member of five clubs.
-                    instance: /api/v1/clubs/20001/rounds/70001/applications
+                    instance: /api/v1/rounds/70001/applications
                     code: RESOURCE_CONFLICT
                     reason: MEMBERSHIP_LIMIT_REACHED
                     traceId: 01J9EXAMPLE7K4D5
@@ -898,6 +1065,12 @@ paths:
         default:
           description: Unexpected health endpoint failure
 components:
+  headers:
+    ApplicationNoStore:
+      description: Do not cache applicant form or submission responses, including failures.
+      schema:
+        type: string
+        const: no-store
   securitySchemes:
     SessionCookie:
       type: apiKey
@@ -918,6 +1091,93 @@ components:
       description: >-
         Positive decimal bigint identifier without leading zeroes. The backend
         must also enforce the signed 64-bit upper bound 9223372036854775807.
+    RoundApplicationForm:
+      type: object
+      additionalProperties: false
+      required: [round, questions]
+      description: >-
+        Applicant-facing resource, separate from committee round/question DTOs.
+        Render motivation and optional HTTPS document links using constraints in
+        ApplicationSubmissionRequest. questions contains all custom screening
+        questions, not a page; it may be empty. No existing application is returned.
+      properties:
+        round:
+          $ref: '#/components/schemas/ApplicationFormRound'
+        questions:
+          type: array
+          description: Ascending displayOrder, then numeric id; gaps in displayOrder are valid.
+          items:
+            $ref: '#/components/schemas/ApplicationTextQuestion'
+    ApplicationFormRound:
+      type: object
+      additionalProperties: false
+      required: [id, clubId, title, description, eligibilityText, opensAt, closesAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveBigintId'
+        clubId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          description: Published applicant-facing round description; not an internal review note.
+        eligibilityText:
+          type: [string, 'null']
+          description: Applicant-facing recruitment_rounds.eligibility_text; null when unspecified. Text alone is not a machine-enforced eligibility rule.
+        opensAt:
+          type: string
+          format: date-time
+          pattern: 'Z$'
+          description: ISO 8601 UTC; submission starts inclusively at this instant.
+        closesAt:
+          type: string
+          format: date-time
+          pattern: 'Z$'
+          description: ISO 8601 UTC; submission ends exclusively at this instant. Manual close can end submission earlier.
+    ApplicationTextQuestion:
+      type: object
+      additionalProperties: false
+      required: [id, type, questionText, isRequired, displayOrder, maxLength]
+      description: >-
+        US-08 and application_questions support text answers only. There are no
+        choice options, numeric answers, or uploads. type is a DTO discriminator
+        derived from that model, not a database column. questionText maps prompt;
+        isRequired maps is_required. id is used as answers[].questionId on POST.
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveBigintId'
+        type:
+          type: string
+          enum: [TEXT]
+        questionText:
+          type: string
+          minLength: 1
+          pattern: '\S'
+        isRequired:
+          type: boolean
+        displayOrder:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 2147483647
+        maxLength:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 2147483647
+          description: application_questions.max_length; answerText limit in Unicode characters on input before trimming, default in DB is 2000.
+    ApplicationFormAvailabilityConflict:
+      description: Form availability conflict; duplicate and membership conflicts belong to submission, not form reads.
+      allOf:
+        - $ref: '#/components/schemas/ApplicationSubmissionConflict'
+        - type: object
+          properties:
+            reason:
+              type: string
+              enum: [ROUND_CANCELLED, ROUND_NOT_OPEN, ROUND_CLOSED]
     ApplicationSubmissionRequest:
       type: object
       additionalProperties: false
