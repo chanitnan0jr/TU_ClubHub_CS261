@@ -3,12 +3,14 @@ import React from 'react';
 interface GuestLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onLogin?: () => void;
   roundTitle?: string;
 }
 
 export const GuestLoginModal: React.FC<GuestLoginModalProps> = ({
   isOpen,
   onClose,
+  onLogin,
   roundTitle,
 }) => {
   if (!isOpen) return null;
@@ -47,7 +49,7 @@ export const GuestLoginModal: React.FC<GuestLoginModalProps> = ({
 
         <div className="flex flex-col gap-2 pt-2">
           <button
-            onClick={() => alert('นำทางไปหน้า TU Login')}
+            onClick={onLogin}
             className="w-full h-11 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-xs font-bold shadow-md transition-colors"
           >
             เข้าสู่ระบบด้วยบัญชี TU ➔

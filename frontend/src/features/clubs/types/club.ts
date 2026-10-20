@@ -104,33 +104,65 @@ export interface ClubProfileDraft extends Partial<ClubUpdateRequestDto> {
 // 3. Types สำหรับ Task36 (Club Detail & Recruitment)
 // ==========================================
 
+// Response of GET /api/v1/public/clubs/{id} (PublicClubProfileDto).
+export interface PublicClubProfile {
+  id: string;
+  name: string;
+  description: string;
+  objectives: string | null;
+  contactUrl: string | null;
+  facebookUrl: string | null;
+  instagramUrl: string | null;
+  contactEmail: string | null;
+  affiliationLevel: string | null;
+  affiliationName: string | null;
+  imageUrl: string | null;
+  bannerUrl: string | null;
+  category: { id: string; name: string } | null;
+  tags: { id: string; name: string }[];
+}
+
+// Response of GET /api/v1/public/clubs/{id}/recruitment-rounds.
+export interface PublicOpenRound {
+  id: string;
+  name: string;
+  opensAt: string;
+  closesAt: string;
+}
+
+export interface PublicOpenRoundPage {
+  items: PublicOpenRound[];
+  page: {
+    number: number;
+    size: number;
+    totalElements: number;
+    totalPages: number;
+  };
+}
+
 export interface RecruitmentRoundData {
-  id?: string;
+  id: string;
   title: string;
-  term?: string;
-  startDate?: string;
-  endDate?: string;
-  qualificationText?: string;
-  qualification?: string;
-  questionSummary?: string;
-  isClosed?: boolean;
+  opensAt: string;
+  closesAt: string;
 }
 
 export interface ClubDetailData {
   id: string;
   name: string;
   category: string;
-  tagline?: string;
+  description: string;
+  objectives: string;
   tags: string[];
-  logoUrl?: string;
-  coverImageUrl?: string;
-  objective: string;
-  activities: string[];
-  announcementNote?: string;
+  imageUrl?: string;
+  bannerUrl?: string;
   contacts: {
+    website?: string;
     facebook?: string;
     instagram?: string;
     email?: string;
   };
-  activeRound?: RecruitmentRoundData;
+  rounds: RecruitmentRoundData[];
+  // True when the club loaded but its open rounds could not be fetched.
+  roundsUnavailable: boolean;
 }
