@@ -87,7 +87,7 @@ Select these services explicitly: enabling the profile without a service list al
    - Flyway automatically applies all database migrations (`V1__init_schema.sql`, `V3__create_spring_session_tables.sql`) on startup.
    - These create 17 business tables and the two Spring Session tables. There is no V2 or demo-data seed migration in the current repository.
    - A fresh database has no demo clubs, memberships, or committee assignments. Mock login provisions a `users` row only; it does not create an eligible `student_profiles` row or grant committee access. API examples such as club ID `20001` are not seeded records.
-   - To load local demo data (10 clubs, committee accounts and sample rounds with questions), start the app once so Flyway creates the tables, then run `scripts/seed-dev-data.sh`. It is safe to run again. It makes `student-demo` the president of ชมรมเขียนโปรแกรม so the club editor and question pages work, and prints the page URLs to try. It is for local development only; use `--base-only` to skip the demo account and rounds.
+   - To load local demo data (10 clubs, committee accounts and sample rounds with questions), start the app once so Flyway creates the tables, then run `scripts/seed-dev-data.sh`. It is safe to run again. It makes `student-demo` the president of ชมรมเขียนโปรแกรม so the club editor and question pages work, and prints the page URLs to try. It is for local development only.
    - Check application logs:
      ```bash
      docker compose logs -f app
