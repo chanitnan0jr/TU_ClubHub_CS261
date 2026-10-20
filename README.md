@@ -65,7 +65,7 @@ Use Docker Engine/Desktop with Compose V2. Run from the repository root:
    ```sh
    docker compose up --build
    ```
-3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` / `tu-clubhub-demo`. Health is available at `http://localhost:8080/actuator/health`.
+3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` / `tu-clubhub-demo`. Health is available at `http://localhost:8080/actuator/health`. A fresh database has no clubs; run `scripts/seed-dev-data.sh` once the app has started to load local demo data (see the [local demo guide](docs/deployment/local-demo.md)).
 
 Migrations create the schema without demo clubs, memberships, or committee assignments. Login provisions a local user, not an eligible student profile or committee permissions. The club/profile/recruitment screens are not yet reachable through the main app. See the [local guide](docs/deployment/local-demo.md) for Compose options and resets.
 

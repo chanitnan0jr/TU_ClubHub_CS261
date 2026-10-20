@@ -80,13 +80,14 @@ Select these services explicitly: enabling the profile without a service list al
    - Open your web browser and navigate to: [http://localhost:8080](http://localhost:8080)
    - If using split mode: [http://localhost](http://localhost)
    - With `dev` + `TU_AUTH_MODE=mock`, use `student-demo` / `tu-clubhub-demo`.
-   - The main app currently shows login, account ID/role, and logout. Other feature screens are not yet wired into it.
+   - After login the home page has a launcher that takes a club ID (and round ID). The club pages are `/clubs/{clubId}`, `/clubs/{clubId}/edit` and `/clubs/{clubId}/rounds/{roundId}/questions`. A fresh database has no clubs, so load the demo data first (step 3).
    - Unified health endpoint: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health).
 
 3. **Database Migrations and Initial Data**:
    - Flyway automatically applies all database migrations (`V1__init_schema.sql`, `V3__create_spring_session_tables.sql`) on startup.
    - These create 17 business tables and the two Spring Session tables. There is no V2 or demo-data seed migration in the current repository.
    - A fresh database has no demo clubs, memberships, or committee assignments. Mock login provisions a `users` row only; it does not create an eligible `student_profiles` row or grant committee access. API examples such as club ID `20001` are not seeded records.
+   - To load local demo data (10 clubs, committee accounts and sample rounds with questions), start the app once so Flyway creates the tables, then run `scripts/seed-dev-data.sh`. It is safe to run again. It makes `student-demo` the president of ชมรมเขียนโปรแกรม so the club editor and question pages work, and prints the page URLs to try. It is for local development only; use `--base-only` to skip the demo account and rounds.
    - Check application logs:
      ```bash
      docker compose logs -f app
