@@ -1,85 +1,72 @@
-import type { ClubDetailData } from '../types/club';
+import { ApiError, apiRequest, describeApiError } from '../../../lib/api.ts';
+import type {
+  ClubDetailData,
+  PublicClubProfile,
+  PublicOpenRoundPage,
+} from '../types/club.ts';
 
-export const fetchClubDetailAPI = async (clubId: string): Promise<ClubDetailData | null> => {
-  try {
-    // 1. ยิง API จริงไปที่ Backend
-    const response = await fetch(`/api/v1/public/clubs/${clubId}`);
-    
-    if (response.ok) {
-      const data = await response.json();
-      
-      // ดึงข้อมูลรอบรับสมัครถ้ามี
-      let activeRoundData = undefined;
-      try {
-        const roundRes = await fetch(`/api/v1/public/clubs/${clubId}/recruitment-rounds`);
-        if (roundRes.ok) {
-          const rounds = await roundRes.json();
-          if (Array.isArray(rounds) && rounds.length > 0) {
-            activeRoundData = rounds[0];
-          }
-        }
-      } catch {
-        // ถ้าดึงรอบไม่ผ่าน ไม่ให้แครช
-      }
+export type ClubDetailResult =
+  | { status: 'ok'; club: ClubDetailData }
+  | { status: 'not-found' }
+  | { status: 'error'; message: string };
 
-      return {
-        id: data.id || clubId,
-        name: data.name || 'ชมรมธรรมศาสตร์',
-        category: typeof data.category === 'object' ? data.category?.name : (data.category || 'ทั่วไป'),
-        tagline: data.tagline || 'ชมรมกิจกรรมนักศึกษามหาวิทยาลัยธรรมศาสตร์',
-        tags: Array.isArray(data.tags) ? data.tags.map((t: any) => typeof t === 'object' ? t.name : t) : ['กิจกรรม', 'จิตอาสา'],
-        logoUrl: data.logoUrl || '',
-        coverImageUrl: data.coverImageUrl || data.bannerUrl || '',
-        objective: data.objective || data.objectives || 'มุ่งเน้นการทำกิจกรรมเพื่อพัฒนาทักษะและเสริมสร้างความสัมพันธ์ระหว่างนักศึกษา',
-        activities: data.activities || ['ประชุมประจำสัปดาห์', 'กิจกรรมรับน้อง', 'ค่ายอาสาพัฒนา'],
-        announcementNote: data.announcementNote || 'เปิดรับสมัครสมาชิกใหม่ประจำปีการศึกษา!',
-        contacts: {
-          facebook: data.contacts?.facebook || data.facebookUrl || '',
-          instagram: data.contacts?.instagram || data.instagramUrl || '',
-          email: data.contacts?.email || data.contactEmail || '',
-        },
-        activeRound: activeRoundData || data.activeRound || {
-          id: `round-${clubId}`,
-          title: `เปิดรับสมัครสมาชิกชมรม (${clubId})`,
-          term: 'ภาคเรียนที่ 1/2567',
-          startDate: '10 ต.ค. 2567',
-          endDate: '31 ต.ค. 2567',
-          qualification: 'นักศึกษามหาวิทยาลัยธรรมศาสตร์ทุกชั้นปี',
-          questionSummary: 'คำถามความสนใจ และประสบการณ์ทำกิจกรรม',
-          isClosed: false,
-        },
-      };
+const orUndefined = (value: string | null): string | undefined => value || undefined;
+
+export function toClubDetailData(
+  profile: PublicClubProfile,
+  rounds: PublicOpenRoundPage | null,
+): ClubDetailData {
+  return {
+    id: profile.id,
+    name: profile.name,
+    category: profile.category?.name ?? '',
+    description: profile.description,
+    objectives: profile.objectives ?? '',
+    tags: profile.tags.map((tag) => tag.name),
+    imageUrl: orUndefined(profile.imageUrl),
+    bannerUrl: orUndefined(profile.bannerUrl),
+    contacts: {
+      website: orUndefined(profile.contactUrl),
+      facebook: orUndefined(profile.facebookUrl),
+      instagram: orUndefined(profile.instagramUrl),
+      email: orUndefined(profile.contactEmail),
+    },
+    rounds: (rounds?.items ?? []).map((round) => ({
+      id: round.id,
+      title: round.name,
+      opensAt: round.opensAt,
+      closesAt: round.closesAt,
+    })),
+    roundsUnavailable: rounds === null,
+  };
+}
+
+/** Loads a public club profile and its currently open recruitment rounds. */
+export async function fetchClubDetail(clubId: string): Promise<ClubDetailResult> {
+  const base = `/api/v1/public/clubs/${encodeURIComponent(clubId)}`;
+
+  const [profile, rounds] = await Promise.allSettled([
+    apiRequest<PublicClubProfile>(base),
+    apiRequest<PublicOpenRoundPage>(`${base}/recruitment-rounds`),
+  ]);
+
+  if (profile.status === 'rejected') {
+    const error = profile.reason;
+    // 404 for an unknown or inactive club, 400 for a malformed ID.
+    if (error instanceof ApiError && (error.status === 404 || error.status === 400)) {
+      return { status: 'not-found' };
     }
-  } catch (err) {
-    console.warn('API connection failed, falling back to dynamic structure:', err);
+    return {
+      status: 'error',
+      message: describeApiError(error, 'ไม่สามารถโหลดข้อมูลชมรมได้ กรุณาลองใหม่อีกครั้ง'),
+    };
   }
 
-  // Fallback Dynamic Mock เมื่อไม่มี Backend หรือ Network error
   return {
-    id: clubId,
-    name: clubId === 'volunteer' ? 'ชมรมค่ายอาสาพัฒนาธรรมศาสตร์' : `ชมรม ${clubId}`,
-    category: 'วิชาการและสังคม',
-    tagline: 'มุ่งมั่นสร้างสรรค์สังคมและพัฒนาศักยภาพนักศึกษา',
-    tags: ['จิตอาสา', 'พัฒนาสังคม', 'ธรรมศาสตร์'],
-    logoUrl: '',
-    coverImageUrl: '',
-    objective: 'ส่งเสริมให้นักศึกษาใช้เวลาว่างให้เกิดประโยชน์ผ่านการทำกิจกรรมเพื่อส่วนรวม',
-    activities: ['กิจกรรมลงพื้นที่ชุมชน', 'ค่ายอาสาต่างจังหวัด', 'เวิร์กชอปพัฒนาทักษะ'],
-    announcementNote: 'เปิดรับสมัครสมาชิกใหม่แล้ววันนี้!',
-    contacts: {
-      facebook: 'https://facebook.com/tuclub',
-      instagram: 'https://instagram.com/tuclub',
-      email: 'contact@tuclub.org',
-    },
-    activeRound: {
-      id: `round-${clubId}-2567`,
-      title: `เปิดรับสมัครสมาชิกประจำปีการศึกษา 2567 (${clubId})`,
-      term: 'ภาคเรียนที่ 1/2567',
-      startDate: '10 ต.ค. 2567',
-      endDate: '31 ต.ค. 2567',
-      qualification: 'นักศึกษามหาวิทยาลัยธรรมศาสตร์ทุกระดับชั้นปี',
-      questionSummary: 'แบบฟอร์มสัมภาษณ์และเลือกฝ่ายที่สนใจ',
-      isClosed: false,
-    },
+    status: 'ok',
+    club: toClubDetailData(
+      profile.value,
+      rounds.status === 'fulfilled' ? rounds.value : null,
+    ),
   };
-};
+}
