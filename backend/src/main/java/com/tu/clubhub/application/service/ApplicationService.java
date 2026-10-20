@@ -24,7 +24,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Implements API_v1.md section 11. HTTP/CSRF handling belongs to the future controller. */
+/** Implements API_v1.md section 11. HTTP/CSRF handling belongs to the controller/security filters. */
 @Service
 public class ApplicationService {
     private final ApplicationRepository repository;

@@ -4,7 +4,7 @@
 |---|---|
 | Version | `v1` |
 | Contract status | Partially implemented; endpoint status listed below |
-| Last updated | 2026-10-20 |
+| Last updated | 2026-10-21 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
@@ -15,7 +15,7 @@ The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](openapi.y
 
 ### Implementation status
 
-Reviewed from source on 2026-10-19; this table records handlers and integration, not test results or complete policy enforcement.
+Initial source review on 2026-10-19; application POST status updated on 2026-10-21. This table records handlers and integration, not test results or complete policy enforcement.
 
 | API | Backend status | Frontend status |
 |---|---|---|
@@ -26,7 +26,7 @@ Reviewed from source on 2026-10-19; this table records handlers and integration,
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
 | Committee round `GET` list/detail and `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
 | `GET /api/v1/rounds/{roundId}/application-form` (§12) | Account/student/window policy confirmed by Task42 requester; PO/team review pending; no handler | Form prototype only |
-| `POST /api/v1/rounds/{roundId}/applications` (§11) | Contract defined; no handler/service yet | No submission client |
+| `POST /api/v1/rounds/{roundId}/applications` (§11) | Implemented: transactional service, HTTP handler, shared Problem errors, session/CSRF; see [Task45 verification](../testing/task45-concurrency-and-rollback.md) | No submission client |
 | `/actuator/health` | Implemented | Operational endpoint |
 
 The [permission matrix](../security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย) lists remaining Active, PRESIDENT, account-refresh, and self-review checks. Real TU access and verified student-status provisioning still require integration work.
