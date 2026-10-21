@@ -35,3 +35,8 @@ tu:
     application-key: ${TU_AUTH_APPLICATION_KEY:}
     connect-timeout: ${TU_AUTH_CONNECT_TIMEOUT:3s}
     read-timeout: ${TU_AUTH_READ_TIMEOUT:5s}
+
+clubhub:
+  application:
+    submission:
+      lock-timeout: ${APPLICATION_SUBMISSION_LOCK_TIMEOUT:2s}

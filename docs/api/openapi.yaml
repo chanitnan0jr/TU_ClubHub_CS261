@@ -774,9 +774,11 @@ paths:
       tags: [Applications]
       operationId: submitApplication
       summary: Submit the current student's application with answers and document links
-      x-implementation-status: pending
+      x-implementation-status: implemented
       description: >-
-        Contract defined in API_v1.md section 11; implementation is pending.
+        Contract defined in API_v1.md section 11; implemented by ApplicationController
+        and ApplicationService. The HTTP boundary checks the current account before
+        decoding the request body, and the write transaction rechecks it under lock.
         Task42 replaces the earlier contract-only club-nested submission path;
         it does not define a second submission endpoint or a compatibility alias.
         Requires an ACTIVE account, verified ACTIVE student profile, and ACTIVE

@@ -337,7 +337,8 @@ class ApplicationSubmissionHttpIntegrationTest {
             int holderPid = pid(holder);
             Future<MvcResult> request = workers.submit(() -> withBeginHook(() -> {
                 defaultTimeout.set(jdbc.queryForObject("SHOW lock_timeout", String.class));
-                jdbc.execute("SET LOCAL lock_timeout = '2s'");
+                // Safety ceiling only: production code, not the test, must set lock_timeout.
+                jdbc.execute("SET LOCAL statement_timeout = '3s'");
                 visit.set(currentVisit());
                 began.countDown();
             }, "lock-timeout", client));
@@ -447,6 +448,66 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertProblem(submit("suspended", suspended, body("valid")), 403, "ACCOUNT_NOT_ALLOWED", null);
         assertNull(sessions.findById(sessionId(suspended.cookie())));
         assertTargetEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"malformed", "unknown-field", "empty-body", "invalid-id"})
+    void suspendedAccountPrecedesBodyAndIdValidationAndInvalidatesSession(String scenario) throws Exception {
+        jdbc.update("UPDATE users SET account_status = 'SUSPENDED' WHERE id = ?", userId);
+        String payload = switch (scenario) {
+            case "malformed" -> "{";
+            case "unknown-field" -> body("valid").replace("\"motivation\"", "\"applicantId\":\"999\",\"motivation\"");
+            case "empty-body" -> "";
+            default -> body("valid");
+        };
+        String target = scenario.equals("invalid-id") ? "/api/v1/rounds/abc/applications" : path();
+        var result = mvc.perform(post(target).cookie(client.cookie()).header("X-CSRF-TOKEN", client.token())
+                .contentType(MediaType.APPLICATION_JSON).content(payload)).andReturn();
+        assertProblem(result, 403, "ACCOUNT_NOT_ALLOWED", null);
+        assertNull(sessions.findById(sessionId(client.cookie())));
+        assertTrue(clock.visits.isEmpty());
+        assertTargetEmpty();
+    }
+
+    @Test
+    void wrappedDtoValidationPreservesIndexedFieldErrors() throws Exception {
+        var result = submit("wrapped-validation", client, body("valid").replace(
+                "\"url\":\"https://example.org/portfolio\"", "\"url\":42"));
+        assertProblem(result, 400, "VALIDATION_FAILED", null);
+        assertEquals("links[0].url", json(result).path("fieldErrors").get(0).path("field").asText());
+        assertInstanceOf(org.springframework.http.converter.HttpMessageNotReadableException.class, result.getResolvedException());
+        assertTargetEmpty();
+    }
+
+    @Test
+    void invalidHttpsUrlHttpErrorMatchesOpenApiExample() throws Exception {
+        var result = submit("invalid-url", client, body("valid").replace("https://example.org/portfolio", "http://example.org/portfolio"));
+        assertProblem(result, 400, "VALIDATION_FAILED", null);
+        var field = json(result).path("fieldErrors").get(0);
+        assertEquals("links[0].url", field.path("field").asText());
+        assertEquals("INVALID_HTTPS_URL", field.path("code").asText());
+        assertTargetEmpty();
+    }
+
+    @Test
+    void accountStatusIsRecheckedUnderLockAfterHttpPreflight() throws Exception {
+        var began = new CountDownLatch(1);
+        var proceed = new CountDownLatch(1);
+        try (ExecutorService workers = Executors.newFixedThreadPool(1)) {
+            var request = workers.submit(() -> withBeginHook(() -> {
+                began.countDown();
+                await(proceed);
+            }, "account-changed-after-preflight", client));
+            try {
+                await(began); // Pre-body Active account read has completed; write transaction has begun.
+                assertEquals(1, jdbc.update("UPDATE users SET account_status = 'SUSPENDED' WHERE id = ?", userId));
+                proceed.countDown();
+                assertProblem(request.get(15, TimeUnit.SECONDS), 403, "ACCOUNT_NOT_ALLOWED", null);
+                assertEquals("SUSPENDED", jdbc.queryForObject("SELECT account_status FROM users WHERE id = ?", String.class, userId));
+                assertNull(sessions.findById(sessionId(client.cookie())));
+                assertTargetEmpty();
+            } finally { proceed.countDown(); }
+        }
     }
 
     @Test

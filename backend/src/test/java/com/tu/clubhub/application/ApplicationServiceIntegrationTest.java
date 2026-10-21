@@ -413,6 +413,18 @@ class ApplicationServiceIntegrationTest {
     }
 
     @Test
+    void submissionSetsProductionLockTimeoutOnlyForItsTransaction() {
+        String previous = jdbc.queryForObject("SHOW lock_timeout", String.class);
+        transaction().executeWithoutResult(status -> {
+            service.submit(Long.toString(roundId), request());
+            assertEquals("2s", jdbc.queryForObject("SHOW lock_timeout", String.class));
+        });
+        assertEquals(previous, jdbc.queryForObject("SHOW lock_timeout", String.class));
+        assertEquals(1, count("applications"));
+        assertEquals(1, countHistory());
+    }
+
+    @Test
     void concurrentSameApplicantProducesOneApplicationAndOneHistoryOnSeparateConnections() throws Exception {
         var results = simultaneous(userId, userId);
         assertNotEquals(results.get(0).backendPid(), results.get(1).backendPid());

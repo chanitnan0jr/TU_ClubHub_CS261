@@ -2,6 +2,8 @@
 
 ## Scope and decisions
 
+**Later review follow-up:** [Application submission PR review fixes](application-submission-review-follow-up.md) supersedes the original timeout-injection setup described below: the HTTP timeout test now relies on the production transaction-local lock timeout, and new account-before-body / metadata regressions have been added. The 355-test results in this report are the historical Task45 results.
+
 Checked on **2026-10-21**, starting from `b49d49d` on `feat/application-submission`. The working tree was clean. No `AGENTS.md` was found in the repository or its ancestors. Follow [COMMIT_RULES.md](../../COMMIT_RULES.md), [Task42 contract §11](../api/API_v1.md#11-application-submission), [OpenAPI](../api/openapi.yaml), and the [Task43 handoff](task43-application-submission.md).
 
 The requester explicitly confirmed:

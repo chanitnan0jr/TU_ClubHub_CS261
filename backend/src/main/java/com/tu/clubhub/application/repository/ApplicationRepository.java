@@ -2,7 +2,6 @@ package com.tu.clubhub.application.repository;
 
 import com.tu.clubhub.application.domain.ValidatedApplicationSubmission.Answer;
 import com.tu.clubhub.application.domain.ValidatedApplicationSubmission.Link;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -11,6 +10,7 @@ import java.util.Optional;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.postgresql.util.PSQLException;
 
 /** JDBC persistence for applicant submission. Locks require the caller's transaction. */
 @Repository
@@ -23,6 +23,16 @@ public class ApplicationRepository {
     private final JdbcTemplate jdbc;
 
     public ApplicationRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+
+    public void setLocalLockTimeout(String timeout) {
+        jdbc.queryForObject("SELECT set_config('lock_timeout', ?, true)", String.class, timeout);
+    }
+
+    /** HTTP preflight only; the write transaction must still recheck under lock. */
+    public Optional<String> findAccountStatus(long userId) {
+        return jdbc.query("SELECT account_status FROM users WHERE id = ?",
+                (rs, row) -> rs.getString("account_status"), userId).stream().findFirst();
+    }
 
     public Optional<String> lockAccount(long userId) {
         return jdbc.query("SELECT account_status FROM users WHERE id = ? FOR UPDATE",
@@ -119,9 +129,9 @@ public class ApplicationRepository {
     /** Match only the documented duplicate key; never relabel arbitrary integrity failures. */
     public static boolean isRoundApplicantConflict(DuplicateKeyException exception) {
         for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
-            if (cause instanceof SQLException sql && "23505".equals(sql.getSQLState())
-                    && sql.getMessage() != null
-                    && sql.getMessage().contains("\"uq_applications_round_applicant\"")) return true;
+            if (cause instanceof PSQLException sql && "23505".equals(sql.getSQLState())
+                    && sql.getServerErrorMessage() != null
+                    && "uq_applications_round_applicant".equals(sql.getServerErrorMessage().getConstraint())) return true;
         }
         return false;
     }

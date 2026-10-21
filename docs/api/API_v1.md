@@ -518,6 +518,8 @@ Recheck authorization, membership eligibility, question membership/requirements,
 
 Keep `uq_applications_round_applicant` as the final duplicate safeguard: concurrent identical submissions can produce only one application; translate that specific uniqueness conflict into `409` after rolling back. Other database failures must not be mislabeled as duplicates. Composite foreign keys already enforce application/round/club and answer/question/round consistency. Do not modify or create membership records during submission. This contract creates no `notifications` row; if an `APPLICATION_SUBMITTED` notification is added later, insert it in the same transaction (US-03 BR-09).
 
+Implementation note: submissions set PostgreSQL `lock_timeout` locally to the write transaction before acquiring any row lock. The default is `2s`, configurable through `clubhub.application.submission.lock-timeout` / `APPLICATION_SUBMISSION_LOCK_TIMEOUT`; zero, negative, sub-millisecond and out-of-range values are rejected at startup. This bounds each lock wait, not total request duration, and introduces no quota. A lock timeout (`55P03`) or deadlock (`40P01`) rolls back and returns `503 SERVICE_UNAVAILABLE`; the setting does not persist on the pooled connection after transaction completion. Duplicate classification uses PostgreSQL's structured constraint-name field plus SQLSTATE `23505`, never translated error text.
+
 #### Errors
 
 Use the shared Problem format with `Cache-Control: no-store`. Error `type` values use the stable prefix `urn:tuclubhub:problem:` and the suffixes below.
@@ -534,6 +536,8 @@ Use the shared Problem format with `Cache-Control: no-store`. Error `type` value
 | `409` | `RESOURCE_CONFLICT` | `resource-conflict` | A conflict identified by the required `reason` field below. |
 | `500` | `INTERNAL_ERROR` | `internal-error` | Unexpected failure; roll back all submission writes. |
 | `503` | `SERVICE_UNAVAILABLE` | `service-unavailable` | Database unavailable; do not report a successful submission. |
+
+For POST, the HTTP body advice makes a nonlocking account-status precheck before JSON decoding, including for an empty body. Thus a suspended account receives `403 ACCOUNT_NOT_ALLOWED` and its session is invalidated even if its body is malformed. This precheck is not an authorization cache: `ApplicationService.submit` re-reads the account under its row lock inside the write transaction. JSON factory exceptions wrapped by Jackson retain their indexed field errors in the shared Problem response. A supplied string that fails HTTPS URI validation uses field-error code `INVALID_HTTPS_URL`, as in OpenAPI; structural type errors and other validations retain their applicable field codes.
 
 Checks run in this order, and the first failure determines the response. This is the authoritative order for US-03; request checks needing no database lookup run before the eligibility check:
 

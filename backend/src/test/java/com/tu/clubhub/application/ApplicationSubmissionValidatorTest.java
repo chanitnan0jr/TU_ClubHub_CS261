@@ -74,6 +74,14 @@ class ApplicationSubmissionValidatorTest {
     }
 
     @Test
+    void invalidHttpsUrlUsesTheOpenApiExampleFieldCode() {
+        var error = validation(() -> validator.validate("1", new ApplicationSubmissionRequest("hello", List.of(),
+                List.of(new ApplicationLinkInput("Portfolio", "http://example.org")))));
+        assertEquals("links[0].url", error.fieldErrors().getFirst().field());
+        assertEquals("INVALID_HTTPS_URL", error.fieldErrors().getFirst().code());
+    }
+
+    @Test
     void rejectsNullArraysItemsDuplicateQuestionsAndInvalidQuestionIds() {
         validation(() -> validator.validate("1", null));
         validation(() -> validator.validate("1", new ApplicationSubmissionRequest("hello", null, List.of())));

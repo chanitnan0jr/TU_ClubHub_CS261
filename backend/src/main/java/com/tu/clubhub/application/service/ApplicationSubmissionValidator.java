@@ -67,7 +67,8 @@ public class ApplicationSubmissionValidator {
                     continue;
                 }
                 String label = text(link.label(), 200, field + ".label", errors);
-                if (!httpsUrl(link.url())) errors.add(error(field + ".url", "Must be an absolute HTTPS URI with a host and no whitespace, controls or userinfo."));
+                if (!httpsUrl(link.url())) errors.add(new FieldError(field + ".url", "INVALID_HTTPS_URL",
+                        "Must be an absolute HTTPS URI with a host and no whitespace, controls or userinfo."));
                 links.add(new Link(label, link.url()));
             }
         }

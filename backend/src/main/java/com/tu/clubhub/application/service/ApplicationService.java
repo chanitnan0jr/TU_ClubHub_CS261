@@ -1,6 +1,7 @@
 package com.tu.clubhub.application.service;
 
 import com.tu.clubhub.application.dto.ApplicationSubmission;
+import com.tu.clubhub.application.config.ApplicationSubmissionProperties;
 import com.tu.clubhub.application.dto.ApplicationSubmissionRequest;
 import com.tu.clubhub.application.domain.ValidatedApplicationSubmission;
 import com.tu.clubhub.application.repository.ApplicationRepository;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.dao.DuplicateKeyException;
@@ -30,12 +32,19 @@ public class ApplicationService {
     private final ApplicationRepository repository;
     private final ApplicationSubmissionValidator validator;
     private final Clock clock;
+    private final String lockTimeout;
 
     public ApplicationService(ApplicationRepository repository,
-            ApplicationSubmissionValidator validator, Clock clock) {
+            ApplicationSubmissionValidator validator, Clock clock, ApplicationSubmissionProperties properties) {
         this.repository = repository;
         this.validator = validator;
         this.clock = clock;
+        this.lockTimeout = properties.databaseLockTimeout();
+    }
+
+    /** Pre-body HTTP check; MVCC read avoids taking a write lock while the body is decoded. */
+    public void requireActiveAccountForRequest() {
+        requireActiveAccount(repository.findAccountStatus(currentUserId()));
     }
 
     /**
@@ -62,11 +71,8 @@ public class ApplicationService {
 
     private ApplicationSubmission submitInCurrentTransaction(String rawRoundId, ApplicationSubmissionRequest request) {
         long userId = currentUserId();
-        String accountStatus = repository.lockAccount(userId)
-                .orElseThrow(() -> failure(401, "AUTHENTICATION_REQUIRED", "A valid account is required."));
-        if (!"ACTIVE".equals(accountStatus)) {
-            throw failure(403, "ACCOUNT_NOT_ALLOWED", "This account is not allowed to use TU-ClubHub.");
-        }
+        repository.setLocalLockTimeout(lockTimeout);
+        requireActiveAccount(repository.lockAccount(userId));
         ValidatedApplicationSubmission input = validator.validate(rawRoundId, request);
         if (repository.lockStudentStatus(userId).filter("ACTIVE"::equals).isEmpty()) {
             throw failure(403, "ACCESS_DENIED", "Verified active student status is required.");
@@ -97,6 +103,14 @@ public class ApplicationService {
         repository.insertInitialHistory(applicationId, userId, now);
         return new ApplicationSubmission(Long.toString(applicationId), Long.toString(round.clubId()),
                 Long.toString(round.id()), "SUBMITTED", now);
+    }
+
+    private static void requireActiveAccount(Optional<String> status) {
+        String accountStatus = status
+                .orElseThrow(() -> failure(401, "AUTHENTICATION_REQUIRED", "A valid account is required."));
+        if (!"ACTIVE".equals(accountStatus)) {
+            throw failure(403, "ACCOUNT_NOT_ALLOWED", "This account is not allowed to use TU-ClubHub.");
+        }
     }
 
     private static long currentUserId() {

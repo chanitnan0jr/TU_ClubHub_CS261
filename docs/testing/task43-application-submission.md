@@ -46,7 +46,7 @@ Lock/read order:
 
 Future membership/confirmation writers should use a compatible applicant/profile locking order when adding multirow eligibility workflows. These locks do not introduce a reservation or quota for pending applications.
 
-The Service returns a receipt, but the caller receives a successful return only after the Spring proxy commits (or after an outer transaction commits when the caller deliberately joins one). A future HTTP controller must send 201 only after the transactional boundary completes.
+With the current nontransactional Controller, the Service owns its transaction and the Spring proxy commits before returning a receipt to that Controller. If an internal caller deliberately joins an existing outer transaction, the Service can return before that outer transaction commits; that caller owns final completion and must not send an HTTP success prematurely.
 
 ### Duplicate safeguard and rollback
 
@@ -56,7 +56,9 @@ Initial history is exactly `from_status = NULL`, `to_status = 'SUBMITTED'`, auth
 
 The follow-up QA checklist exposed a missing transient-lock error translation. The transactional public entry now maps only PostgreSQL SQLSTATE `55P03` (lock timeout/unavailable) and `40P01` (deadlock) to service metadata `503 SERVICE_UNAVAILABLE`, retains the cause for internal diagnosis, and triggers rollback. Other DataAccessExceptions still propagate. There is no automatic retry or new conflict reason. A real PostgreSQL reproduction failed before this fix and passed unchanged afterward; see the [45-case QA matrix](task43-qa-case-matrix.md).
 
-## HTTP handoff still required
+## HTTP handoff (historical Task43 scope)
+
+The paragraphs below record the original service-only commit `b49d49d`. The Controller and handler were added in Task45; the [PR review follow-up](application-submission-review-follow-up.md) records the remaining fixes, their regression evidence and the current account-before-body policy.
 
 This task intentionally adds no endpoint handler. The existing OpenAPI operations remain pending as HTTP APIs. A future Controller/security integration must:
 
@@ -65,8 +67,12 @@ This task intentionally adds no endpoint handler. The existing OpenAPI operation
 - Invalidate the HTTP session for a suspended account; a service exception alone does not invalidate an HTTP session.
 - Return 201, `Location: /api/v1/me/applications/{id}`, and `Cache-Control: no-store` after commit.
 - Handle transaction-start/commit/database failures as 500/503 without disclosing SQL or credentials.
+- Unwrap `ApplicationSubmissionException` raised by the strict JSON DTO factories inside Jackson's conversion exception so indexed field errors survive at HTTP level.
+- Check a suspended account before body decoding, including malformed/missing bodies, and invalidate its session. Recheck the account inside the write transaction; a pre-body check alone is insufficient.
 
 No Controller or broad exception advice was introduced simply to claim those HTTP behaviors are already implemented.
+
+The current implementation fulfills these HTTP duties through the scoped Controller, exception handler and body advice. It also sets a bounded transaction-local submission lock timeout and classifies duplicate violations through driver constraint metadata. The original test totals below remain historical rather than current-suite totals.
 
 ## Test coverage
 
