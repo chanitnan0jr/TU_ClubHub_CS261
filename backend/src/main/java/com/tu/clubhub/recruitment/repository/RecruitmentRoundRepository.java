@@ -156,6 +156,18 @@ public class RecruitmentRoundRepository {
         return count != null && count > 0;
     }
 
+    /** Includes withdrawn/rejected applications for the self-review restriction. */
+    public boolean hasApplicationByApplicant(Long roundId, Long applicantId) {
+        Boolean exists = jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM applications
+                    WHERE round_id = ? AND applicant_id = ?
+                )
+                """, Boolean.class, roundId, applicantId);
+
+        return Boolean.TRUE.equals(exists);
+    }
+
     public List<RoundResponse.Question> findQuestions(Long roundId) {
         return jdbcTemplate.query("""
                 SELECT id, prompt, is_required, display_order, max_length

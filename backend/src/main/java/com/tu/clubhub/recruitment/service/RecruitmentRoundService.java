@@ -79,6 +79,8 @@ public class RecruitmentRoundService {
 
         RecruitmentRound round = findRound(clubId, roundId);
 
+        requireNotApplicant(roundId);
+
         requireVersion(round, request.version());
 
         if (!"DRAFT".equals(round.publicationStatus())
@@ -119,6 +121,8 @@ public class RecruitmentRoundService {
         requireExpectedVersion(expectedVersion);
 
         RecruitmentRound round = findRound(clubId, roundId);
+
+        requireNotApplicant(roundId);
 
         requireVersion(round, expectedVersion);
 
@@ -165,6 +169,8 @@ public class RecruitmentRoundService {
         requireExpectedVersion(expectedVersion);
 
         RecruitmentRound round = findRound(clubId, roundId);
+
+        requireNotApplicant(roundId);
 
         requireVersion(round, expectedVersion);
 
@@ -264,6 +270,13 @@ public class RecruitmentRoundService {
         return RoundResponse.from(
                 findRound(clubId, roundId),
                 repository.findQuestions(roundId));
+    }
+
+    private void requireNotApplicant(Long roundId) {
+        if (repository.hasApplicationByApplicant(roundId, currentUserId())) {
+            throw new AccessDeniedException(
+                    "Committee members cannot manage rounds they applied to");
+        }
     }
 
     private Long currentUserId() {

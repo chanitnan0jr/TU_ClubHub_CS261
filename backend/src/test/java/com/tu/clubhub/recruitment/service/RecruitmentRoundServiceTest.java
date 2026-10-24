@@ -1,5 +1,6 @@
 package com.tu.clubhub.recruitment.service;
 
+import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import com.tu.clubhub.committee.security.ClubSecurity;
 import com.tu.clubhub.recruitment.domain.RecruitmentRound;
 import com.tu.clubhub.recruitment.dto.RoundResponse;
@@ -8,9 +9,12 @@ import com.tu.clubhub.recruitment.repository.RecruitmentRoundRepository;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
@@ -27,6 +31,7 @@ class RecruitmentRoundServiceTest {
 
     private static final Instant NOW =
             Instant.parse("2026-10-18T12:00:00Z");
+    private static final long COMMITTEE_USER = 100L;
 
     private RecruitmentRoundRepository repository;
     private ClubSecurity security;
@@ -42,6 +47,15 @@ class RecruitmentRoundServiceTest {
                 security,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 mock(Validator.class));
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(
+                        new ClubHubPrincipal(COMMITTEE_USER, "committee", "USER"),
+                        null, List.of()));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -128,6 +142,31 @@ class RecruitmentRoundServiceTest {
         assertEquals(409, error.getStatusCode().value());
 
         verify(repository, never()).closeRound(
+                any(), any(), any(), any());
+    }
+
+    @Test
+    void applicantCannotManageRoundTheyAppliedTo() {
+        when(security.isCommittee(1L)).thenReturn(true);
+        when(repository.findForUpdate(1L, 10L))
+                .thenReturn(Optional.of(round(
+                        NOW.minusSeconds(3600),
+                        NOW.plusSeconds(3600),
+                        null,
+                        0L)));
+        when(repository.hasApplicationByApplicant(10L, COMMITTEE_USER))
+                .thenReturn(true);
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> service.closeRound(1L, 10L, 0L));
+        assertThrows(
+                AccessDeniedException.class,
+                () -> service.publishRound(1L, 10L, 0L));
+
+        verify(repository, never()).closeRound(
+                any(), any(), any(), any());
+        verify(repository, never()).publishRound(
                 any(), any(), any(), any());
     }
 
