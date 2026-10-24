@@ -65,7 +65,12 @@ Use Docker Engine/Desktop with Compose V2. Run from the repository root:
    ```sh
    docker compose up --build
    ```
-3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` / `tu-clubhub-demo`. Health is available at `http://localhost:8080/actuator/health`. A fresh database has no clubs; run `scripts/seed-dev-data.sh` once the app has started to load local demo data (see the [local demo guide](docs/deployment/local-demo.md)).
+3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` / `tu-clubhub-demo`. Health is available at `http://localhost:8080/actuator/health`.
+4. A fresh database has no clubs. Once the app has started (Flyway creates the tables), load the dev-only demo data in another terminal:
+   ```sh
+   scripts/seed-dev-data.sh
+   ```
+   It runs [`V2__seed_test_data.sql`](backend/src/test/resources/db/migration/V2__seed_test_data.sql) inside the `tu-clubhub-db` container: demo clubs, fictional users, and `student-demo` as president of one club with a draft round and questions. It is safe to run again, and prints the club and question-page URLs to open. The script does not read `.env`; if you changed `POSTGRES_USER` or `POSTGRES_DB`, export them first (`DB_CONTAINER` overrides the container name).
 
 Migrations create the schema without demo clubs, memberships, or committee assignments. Login provisions a local user and, for TU student accounts, a student profile from the TU status; it grants no memberships or committee permissions. Club detail, club editing, and question management are routed in the main app (see the [frontend guide](frontend/README.md)); the round and application forms are not. See the [local guide](docs/deployment/local-demo.md) for Compose options and resets.
 
@@ -92,6 +97,8 @@ cd frontend
 npm ci
 npm run dev
 ```
+
+The backend's Flyway run creates the tables in the Compose `db` container, so `scripts/seed-dev-data.sh` loads the same demo data in this mode.
 
 Open `http://localhost:5173`; Vite proxies `/api` to `http://localhost:8080`. Use the backend URL directly for `/actuator/health`. The `dev` profile runs Flyway and Hibernate schema validation. Spring Boot does not automatically load the root `.env` file.
 
