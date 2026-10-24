@@ -96,9 +96,9 @@ Contract ส่งใบสมัครใช้ตารางเดิมใ�
 |---|---|
 | Frontend | `npm ci`, `npm run dev`, `npm run lint`, `npm run build`, `npm test`, `npm run preview` |
 | TypeScript | `npm run build` เรียก `tsc -b` ก่อน Vite; ไม่มี script `typecheck` |
-| Frontend tests | Script `test` ใช้ Node test runner กับ club-profile validation; ไม่มี `test:run` และ CI ยังไม่ได้เรียก `npm test` |
+| Frontend tests | Script `test` ใช้ Node test runner กับทุกไฟล์ `tests/*.test.ts`; ไม่มี `test:run` และ CI รัน `npm test` อัตโนมัติ |
 | Backend | Maven Wrapper; `./mvnw clean verify` สร้าง test/JaCoCo reports |
-| CI | Frontend lint/build, Backend verify; มี PostgreSQL 18 service และใช้ mock TU; tests มี H2 และ PostgreSQL ทั้ง `seedtest` และ recruitment integration |
+| CI | Frontend lint, test (`npm test`) และ build, Backend verify; มี PostgreSQL 18 service และใช้ mock TU; tests มี H2 และ PostgreSQL ทั้ง `seedtest` และ recruitment integration |
 | Documentation | Workflow มี path filters ข้ามการเปลี่ยนเฉพาะ docs/Markdown |
 
 [รายงานเดิม](../testing) อ้างอิงวันที่หรือ revision ของแต่ละงาน ไม่ใช่ผลตรวจของ Source ปัจจุบัน
