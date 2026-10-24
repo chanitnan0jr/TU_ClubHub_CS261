@@ -2,6 +2,7 @@ package com.tu.clubhub.recruitment.service;
 
 import com.tu.clubhub.committee.security.ClubSecurity;
 import com.tu.clubhub.recruitment.domain.RecruitmentRound;
+import com.tu.clubhub.recruitment.dto.RoundResponse;
 import com.tu.clubhub.recruitment.dto.RoundWriteRequest;
 import com.tu.clubhub.recruitment.repository.RecruitmentRoundRepository;
 import jakarta.validation.Validation;
@@ -63,7 +64,7 @@ class RecruitmentRoundLifecycleEdgeCasesTest {
                 .thenReturn(Optional.of(after));
         when(repository.publishRound(CLUB, ROUND, 0L, NOW)).thenReturn(1);
 
-        RecruitmentRound result = service.publishRound(CLUB, ROUND, 0L);
+        RoundResponse result = service.publishRound(CLUB, ROUND, 0L);
 
         assertEquals("PUBLISHED", result.publicationStatus());
         verify(repository).publishRound(CLUB, ROUND, 0L, NOW);

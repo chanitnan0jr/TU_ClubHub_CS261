@@ -2,6 +2,7 @@ package com.tu.clubhub.recruitment.service;
 
 import com.tu.clubhub.committee.security.ClubSecurity;
 import com.tu.clubhub.recruitment.domain.RecruitmentRound;
+import com.tu.clubhub.recruitment.dto.RoundResponse;
 import com.tu.clubhub.recruitment.dto.RoundWriteRequest;
 import com.tu.clubhub.recruitment.repository.RecruitmentRoundRepository;
 import jakarta.validation.ConstraintViolationException;
@@ -153,7 +154,7 @@ class RecruitmentRoundServiceTest {
         when(repository.closeRound(1L, 10L, 0L, NOW))
                 .thenReturn(1);
 
-        RecruitmentRound result =
+        RoundResponse result =
                 service.closeRound(1L, 10L, 0L);
 
         assertEquals(NOW, result.closedAt());
