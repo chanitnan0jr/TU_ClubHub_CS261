@@ -52,7 +52,7 @@ For backend mock authentication, use the `dev` profile with `TU_AUTH_MODE=mock` 
 | `npm test` | Node test runner for every `tests/*.test.ts` file: validation, the API client, club-detail mapping, the club edit form, question API paths, and routing helpers. There are no component or browser tests. |
 | `npm run preview` | Preview built assets; this command does not start the backend |
 
-There are no `typecheck` or `test:run` scripts. CI currently runs lint and build, but not `npm test`. Tailwind is loaded from `src/index.css` through the PostCSS plugin in `postcss.config.js`.
+There are no `typecheck` or `test:run` scripts. CI runs lint, `npm test`, and build. Tailwind is loaded from `src/index.css` through the PostCSS plugin in `postcss.config.js`.
 
 ## Contracts to use when connecting features
 

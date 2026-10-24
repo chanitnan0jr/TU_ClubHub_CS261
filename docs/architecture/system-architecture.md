@@ -329,7 +329,7 @@ Render รองรับ Docker Web Service และกำหนด Environmen
 ## 11. CI, Review และ Quality Gates
 
 1. Feature branch ส่ง PR โดยแนบ Story/Task และวิธีตรวจ
-2. GitHub Actions ปัจจุบันตรวจ Frontend lint/build (`build` รวม `tsc -b`) และ Backend `mvnw clean verify` พร้อม PostgreSQL service; ยังไม่ได้เรียก Frontend `npm test` และข้ามการเปลี่ยนเฉพาะ docs/Markdown
+2. GitHub Actions ปัจจุบันตรวจ Frontend lint, unit tests (`npm test`), build (`build` รวม `tsc -b`) และ Backend `mvnw clean verify` พร้อม PostgreSQL service; ข้ามการเปลี่ยนเฉพาะ docs/Markdown
 3. Auth integration tests ใน CI ใช้ Mock TU API ไม่มีการส่ง Credential ไปบริการจริง
 4. สมาชิกอื่น Review อย่างน้อย 1 คน; การเปลี่ยน Auth/Schema/Transaction ให้ Lead BE หรือ SA ที่ไม่ได้เป็นผู้เขียนตรวจ
 5. Merge เมื่อ CI และ Review ผ่าน ไม่บังคับให้ทุก PR ต้องผ่านคนเดียวเป็นคอขวด

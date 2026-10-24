@@ -113,7 +113,7 @@ Open `http://localhost:5173`; Vite proxies `/api` to `http://localhost:8080`. Us
 
 Frontend scripts are `dev`, `build`, `test`, `lint`, and `preview`. `build` runs TypeScript checking before Vite; there are no separate `typecheck` or `test:run` scripts. The current `test` script runs every `frontend/tests/*.test.ts` unit test (validation, API client and form/routing helpers); there are no component or browser tests.
 
-[CI](.github/workflows/ci.yml) runs frontend `npm ci`, `npm run lint`, and `npm run build`, plus backend `./mvnw clean verify` and uploads test/JaCoCo reports. It does not currently invoke frontend `npm test`. Backend tests use H2 and PostgreSQL; the `seedtest` profile covers migrations/public data, and recruitment integration tests also use PostgreSQL. Documentation-only changes are excluded by the workflow path filters.
+[CI](.github/workflows/ci.yml) runs frontend `npm ci`, `npm run lint`, `npm test`, and `npm run build`, plus backend `./mvnw clean verify` and uploads test/JaCoCo reports. Backend tests use H2 and PostgreSQL; the `seedtest` profile covers migrations/public data, and recruitment integration tests also use PostgreSQL. Documentation-only changes are excluded by the workflow path filters.
 
 ### Graphify code knowledge graph
 
