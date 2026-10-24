@@ -2,17 +2,17 @@
 
 TU-ClubHub is a web platform in development for Thammasat University students to discover clubs, apply for membership, and track results. Club committees manage profiles and recruitment; central staff reporting is planned.
 
-> **Status reviewed: 2026-10-19.** Authentication, public club APIs, club profile updates, and recruitment write APIs have implementations. The main frontend currently provides login, account identity, and logout; the other feature components still need integration. The status below describes repository contents, not a deployment or test result.
+> **Status reviewed: 2026-10-24.** Authentication, public club APIs, club profile updates, recruitment round writes, and per-question management APIs have implementations. The main frontend routes login, club detail, club editing, and question management; the round form and application form still need integration. The status below describes repository contents, not a deployment or test result.
 
 ## Current implementation
 
 | Area | Present in the repository | Remaining work |
 |---|---|---|
-| Authentication | TU real/mock adapters; session login/logout/me, CSRF, 30-minute idle and 8-hour absolute expiry; connected login UI | Verify real TU access and map verified student status into `student_profiles` |
-| Public clubs (US-02) | Public profile and paginated currently open rounds APIs backed by the database | Club-detail UI still uses mock data and is not mounted in the main app; club listing/search is absent |
-| Club profile (US-06) | `PUT /api/v1/clubs/{clubId}` with committee guard; editor components and API client | `GET /api/v1/clubs/{clubId}` is contract-only; route integration, category/tag writes, and remaining permission checks |
-| Recruitment (US-07) | Create, replace, publish, and close APIs with version checks; form component | Committee list/detail `GET`, `CANCEL`, self-review checks, and frontend integration |
-| Questions (US-08) | Questions saved with round `POST`/`PUT`; question UI components | Frontend still targets unsupported per-question endpoints; align it with the round contract |
+| Authentication | TU real/mock adapters; session login/logout/me, CSRF, 30-minute idle and 8-hour absolute expiry; every authenticated request rechecks the account and a suspended account loses its session (`403 ACCOUNT_NOT_ALLOWED`); connected login UI | Verify real TU access, map verified student status into `student_profiles`, and read the current global role from the database |
+| Public clubs (US-02) | Public profile and paginated currently open rounds APIs backed by the database; `/clubs/:clubId` shows their data | Club listing/search is absent; applying is disabled until the submission API exists |
+| Club profile (US-06) | `PUT /api/v1/clubs/{clubId}` with committee guard; `/clubs/:clubId/edit` prefills from the public profile and saves | `GET /api/v1/clubs/{clubId}` is contract-only; category/tag writes |
+| Recruitment (US-07) | Create, replace, publish, and close APIs with version checks and the self-review restriction; responses follow the `Round` schema, including questions; form component | Committee list/detail `GET`, `CANCEL` (effective `PRESIDENT`), and frontend integration of the round form |
+| Questions (US-08) | Questions saved with round `POST`/`PUT`, plus list/create/update/delete/reorder under `/api/v1/rounds/{roundId}/questions` with the self-review restriction and Problem error bodies; `/clubs/:clubId/rounds/:roundId/questions` uses them | Specific conflict codes such as `QUESTION_HAS_ANSWERS` (409 currently returns `RESOURCE_CONFLICT`) |
 | Applications (US-03) | Submission contract, database tables, and a form prototype | Submission API/client and real question data; the prototype does not persist applications |
 | Later workflows | Schema and design for review, results, membership, notifications, and reporting | Application history, decisions, confirmation/decline, Admin APIs, and dashboards |
 | Runtime | Flyway migrations, health endpoint, Docker/Compose, and CI workflow | Deployment and verification of the selected release |
@@ -67,7 +67,7 @@ Use Docker Engine/Desktop with Compose V2. Run from the repository root:
    ```
 3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` / `tu-clubhub-demo`. Health is available at `http://localhost:8080/actuator/health`. A fresh database has no clubs; run `scripts/seed-dev-data.sh` once the app has started to load local demo data (see the [local demo guide](docs/deployment/local-demo.md)).
 
-Migrations create the schema without demo clubs, memberships, or committee assignments. Login provisions a local user, not an eligible student profile or committee permissions. The club/profile/recruitment screens are not yet reachable through the main app. See the [local guide](docs/deployment/local-demo.md) for Compose options and resets.
+Migrations create the schema without demo clubs, memberships, or committee assignments. Login provisions a local user, not an eligible student profile or committee permissions. Club detail, club editing, and question management are routed in the main app (see the [frontend guide](frontend/README.md)); the round and application forms are not. See the [local guide](docs/deployment/local-demo.md) for Compose options and resets.
 
 ### Standalone Local Development
 

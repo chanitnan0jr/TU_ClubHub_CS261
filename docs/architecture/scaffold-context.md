@@ -38,17 +38,17 @@ TU_ClubHub_CS261/
 └── compose.yaml                      # app + db; มี split profile เพิ่ม
 ```
 
-ยังไม่มี Backend packages สำหรับ application workflow, notification หรือ dashboard การมีตารางในฐานข้อมูลไม่ได้แปลว่ามี API ของตารางนั้นแล้ว Frontend ยังไม่มี Router หรือ HTTP client กลางตามแบบเป้าหมาย
+ยังไม่มี Backend packages สำหรับ application workflow, notification หรือ dashboard การมีตารางในฐานข้อมูลไม่ได้แปลว่ามี API ของตารางนั้นแล้ว Frontend มี Router (`src/app/AppRoutes.tsx`) และ HTTP client กลาง (`src/lib/api.ts`) แล้ว
 
 ## 3. Contract และจุดเชื่อมต่อปัจจุบัน
 
 | ส่วน | สถานะและงานต่อ |
 |---|---|
 | Auth | `/api/v1/auth/csrf`, `login`, `me`, `logout` มี handler และหน้า Login เรียกใช้แล้ว; Real TU adapter มีโค้ด แต่การเข้าถึงบริการจริงต้องยืนยันในสภาพแวดล้อมส่งมอบ |
-| Public club | `GET /api/v1/public/clubs/{id}` และ `.../{id}/recruitment-rounds` อ่าน DB แล้ว; หน้า ClubDetailPage ยังใช้ mock และไม่ได้ mount ใน App |
-| Club editor | `PUT /api/v1/clubs/{clubId}` มีแล้ว; GET path เดียวกันยังไม่มี handler แม้ API client เรียกอยู่; category/tags ยังอ่านอย่างเดียว |
-| Recruitment | POST/PUT และ PATCH `PUBLISH`/`CLOSE` มีแล้ว; GET list/detail และ `CANCEL` ยังไม่ทำ; ฟอร์มยังไม่มีการเชื่อมใช้งานใน App |
-| Questions | บันทึกผ่าน `questions` ใน POST/PUT ของรอบ; `questionApi.ts` ยังใช้ `/api/v1/recruitment-rounds/.../questions` ที่ไม่มีใน Backend/Contract ปัจจุบัน |
+| Public club | `GET /api/v1/public/clubs/{id}` และ `.../{id}/recruitment-rounds` อ่าน DB แล้ว; หน้า `/clubs/:clubId` แสดงข้อมูลจากสอง API นี้ |
+| Club editor | `PUT /api/v1/clubs/{clubId}` มีแล้ว; GET path เดียวกันยังไม่มี handler หน้า `/clubs/:clubId/edit` จึงเติมค่าจาก public profile; category/tags ยังอ่านอย่างเดียว |
+| Recruitment | POST/PUT และ PATCH `PUBLISH`/`CLOSE` มีแล้ว พร้อมข้อห้ามจัดการรอบที่ตนสมัคร และ response ตาม schema `Round`; GET list/detail และ `CANCEL` ยังไม่ทำ; ฟอร์มยังไม่มีการเชื่อมใช้งานใน App |
+| Questions | บันทึกผ่าน `questions` ใน POST/PUT ของรอบ และจัดการรายข้อผ่าน `/api/v1/rounds/{roundId}/questions` (Backend และ `questionApi.ts` ใช้ path เดียวกัน); error เป็น Problem body แต่ 409 ยังใช้ `RESOURCE_CONFLICT` แทนรหัสเฉพาะเช่น `QUESTION_HAS_ANSWERS` |
 | Submission | [API Contract §11](../api/API_v1.md#11-application-submission) และ [OpenAPI](../api/openapi.yaml) กำหนดแล้ว; DynamicApplicationForm ใช้ข้อมูลตัวอย่างและยังไม่ส่ง API |
 | History / review / confirmation / Admin | ยังต้องมี Contract และ implementation ของ workflow; path สำหรับอ่านใบสมัครใน §11 เป็นการจองสำหรับ US-04 |
 
