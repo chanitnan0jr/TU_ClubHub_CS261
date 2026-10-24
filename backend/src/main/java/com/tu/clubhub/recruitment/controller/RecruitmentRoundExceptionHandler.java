@@ -32,7 +32,10 @@ import java.util.Locale;
 import java.util.UUID;
 
 @RestControllerAdvice(
-        assignableTypes = RecruitmentRoundController.class
+        assignableTypes = {
+                RecruitmentRoundController.class,
+                ApplicationQuestionController.class
+        }
 )
 public class RecruitmentRoundExceptionHandler {
 
