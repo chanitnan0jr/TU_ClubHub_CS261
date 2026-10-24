@@ -45,7 +45,7 @@ public final class AbsoluteSessionTimeoutFilter extends OncePerRequestFilter {
 		filterChain.doFilter(request, response);
 	}
 
-	private static boolean isPublicRequest(HttpServletRequest request) {
+	static boolean isPublicRequest(HttpServletRequest request) {
 		if (!"GET".equals(request.getMethod())) {
 			return false;
 		}
