@@ -164,10 +164,22 @@ class RecruitmentRoundServiceTest {
                 AccessDeniedException.class,
                 () -> service.publishRound(1L, 10L, 0L));
 
+        OffsetDateTime opensAt = NOW.plusSeconds(3600).atOffset(ZoneOffset.UTC);
+        var replacement = new RoundWriteRequest(
+                "Replacement", 2569, 1, "Description", null,
+                opensAt, opensAt.plusHours(1), opensAt.plusDays(1), null,
+                List.of(), 0L);
+        assertThrows(
+                AccessDeniedException.class,
+                () -> service.updateRound(1L, 10L, replacement));
+
         verify(repository, never()).closeRound(
                 any(), any(), any(), any());
         verify(repository, never()).publishRound(
                 any(), any(), any(), any());
+        verify(repository, never()).updateDraft(
+                any(), any(), any(), any());
+        verify(repository, never()).deleteQuestions(any());
     }
 
     @Test
