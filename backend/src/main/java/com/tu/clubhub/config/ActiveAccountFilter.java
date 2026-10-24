@@ -71,6 +71,6 @@ public final class ActiveAccountFilter extends OncePerRequestFilter {
 
 	private static boolean isProtectedApiRequest(HttpServletRequest request) {
 		return request.getRequestURI().startsWith("/api/")
-				&& !AbsoluteSessionTimeoutFilter.isPublicRequest(request);
+				&& !PublicRoutes.MATCHER.matches(request);
 	}
 }
