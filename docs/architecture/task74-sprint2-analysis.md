@@ -160,7 +160,7 @@ US-09 ปัจจุบันมี Business Rules BR-01–09; การอ้�
 
 ## 7. Acceptance Criteria และ DoD จากการ์ด Task74
 
-ถอดเกณฑ์จากภาพการ์ดที่ผู้ใช้ให้วันที่ 27 ตุลาคม 2026 ในบทสนทนา ยังไม่มีลิงก์การ์ด/PR หรือหลักฐาน Review จริงใน Repository จึงไม่ทำเครื่องหมายผ่านแทนผู้รับผิดชอบ
+ถอดเกณฑ์จากภาพการ์ดที่ผู้ใช้ให้วันที่ 27 ตุลาคม 2026 ในบทสนทนา ยังไม่มีลิงก์การ์ดต้นทางหรือหลักฐาน Review Approval จริง แต่สร้าง Draft PR #58 และส่งคำขอ Reviewแล้วตาม §8 จึงยังไม่ทำเครื่องหมายผ่านแทนผู้รับผิดชอบ
 
 ### Acceptance Criteria
 
@@ -176,10 +176,10 @@ US-09 ปัจจุบันมี Business Rules BR-01–09; การอ้�
 |---|---|---|
 | ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน | Scope/Traceability/จุดส่งต่อ Design ใน §2–3; ปิดข้อขัดแย้งที่ Block หรือเลื่อน Scope อย่างมีหลักฐาน | Draft / Pending Review |
 | พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด | สำหรับ SYS-ANALYSIS คือจัดทำ Artefacts และตรวจความครบ/สอดคล้องตาม AC; Scenario §4 เป็นแผน ไม่อ้างว่า feature ที่ยังไม่มีทดสอบผ่าน | รอการตรวจรับและผลตรวจเอกสารจริง |
-| แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer | ลิงก์ Artefacts §1, วิธีตรวจ §8; ต้องเพิ่ม PR และผลตรวจ revision ที่ส่งจริง | PR: ยังไม่มี; ดู Verification Ledger §8 |
-| CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend | รอบนี้แก้เฉพาะเอกสาร ไม่มี Frontend Logic; แนบ CI ของ PR จริงหรือให้ Reviewer รับรองว่าไม่เข้า path filter ตาม workflow ไม่อ้าง CI ผ่านจาก local checks | CI: ยังไม่ได้รัน; Frontend Tests: ไม่ได้รันเพราะไม่มีการแก้ Logic |
+| แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer | [Draft PR #58](https://github.com/chanitnan0jr/TU_ClubHub_CS261/pull/58), Artefacts §1, วิธีตรวจ §8 และผลตรวจเอกสารที่แนบใน PR | ส่ง Review แล้ว; actual feedback/Approval ยัง Pending |
+| CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend | PR เปลี่ยนเฉพาะ README/docs ตามรายการ GitHub; workflow ฐาน main ใช้ paths-ignore กับ docs/Markdown; commit ส่ง Review ไม่มี check runs/workflow runs | ไม่อ้าง CI ผ่าน: ไม่เกิด run ตาม scope; Reviewer ยังต้องตรวจเกณฑ์ CI/Docs; ไม่มี Frontend Logic จึงไม่รัน feature tests |
 | แก้ข้อเสนอแนะที่ต้องการครบ และ Reviewer อนุมัติ | Feedback/Resolution และ Approval ที่อ้างอิง revision จริง | Pending Review / ยังไม่มี Approval |
-| รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ | สำหรับรอบนี้คือรวมชุดเอกสารที่ Review แล้ว; ต้องมี merge/reference จริง ไม่เท่ากับมีไฟล์ใน working tree | ยังไม่ Commit/เปิด PR/merge |
+| รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ | ต้องรวมชุดเอกสารหลัง Review/Approval จริง | GitHub commit/Draft PR มีแล้ว แต่ยังไม่ Merge |
 
 ### DoD เฉพาะ SYS-ANALYSIS ก่อนปิด Task74
 
@@ -223,13 +223,13 @@ US-09 ปัจจุบันมี Business Rules BR-01–09; การอ้�
 |---|---|
 | Local documentation checks — 27 ต.ค. 2026 | ผ่าน git diff --check ของ tracked working diff และตรวจ Markdown 42 ไฟล์: local file/fragment links 401 รายการ ไม่พบปลายทางขาด; table columns/code fences ผ่าน; แยก URL ภายนอก/URI ประวัติออกจากการตรวจ local links |
 | OpenAPI checks | YAML ทั้งสองฉบับ parse ผ่านโดยไม่พบ key ซ้ำ; local `$ref` ครบ 102/74 รายการ และ operation IDs ไม่ซ้ำ; semantic diff เมื่อไม่นับ description/summary/Task74 metadata ไม่เปลี่ยน transport structure, paths/components/security/operation flags/version; ข้อความ policy ของ private-resource 403/404 ปรับตาม D01 ไม่ใช่ handler ที่ Implement แล้ว |
-| Mermaid | พบ 27 Mermaid blocks รวม SD-06–12 จำนวน 12 sequence diagrams; ตรวจ fences/frontmatter/participants/control blocks และอ่านทวนแล้ว SD-10 แยก exact Retry พร้อม CSRF ของ unsafe request; parser/render ยัง Not Run ไม่อ้างว่า structural checks เท่ากับ render ผ่าน |
+| Mermaid | พบ 27 Mermaid blocks รวม SD-06–12 จำนวน 12 sequence diagrams; ตรวจ fences/frontmatter/participants/control blocks และอ่านทวนแล้ว SD-10 แยก exact Retry พร้อม CSRF ของ unsafe request; parser/render ยัง Not Run: ไม่พบ renderer local และการลอง Browser Preview พบว่าไม่มี browser surface ให้ใช้ ไม่อ้างว่า structural checks เท่ากับ render ผ่าน |
 | Scope / Data declarations | ไม่พบ diff ใน `backend/` หรือ `frontend/`; SQL Migration ไม่เปลี่ยน; DBML ต่างเฉพาะ comments/Note ไม่มี schema declarations เปลี่ยน |
 | Cross-review เอกสาร | ตรวจข้าม State/Permission/Stories/API/Diagrams และแก้ข้อเสนอแนะเรื่อง fresh-action gates, CSRF ของ unsafe Replay และสถานะ student-profile sync แล้ว; การตรวจโดยผู้จัดทำ/AI ไม่ใช่การเห็นชอบของทีม Dev/QA หรือ Approval ของ Owner/Reviewer |
 | Application / Frontend / Backend feature tests | Not Run — ไม่มีการแก้ Source Code ในรอบนี้ |
 | Database migration | Not Run — ไม่เปลี่ยน SQL Migration/ข้อมูลฐานข้อมูล |
-| CI | ยังไม่อ้าง CI ผ่าน; workflow ฐาน GitHub main ce60bc7 ข้าม docs/Markdown-only ตาม paths-ignore; ต้องตรวจ run/check ของ PR จริงหลังสร้าง |
-| PR / Commit / Merge | ยังไม่มี — ไม่ถือว่าการแก้ไฟล์ใน working tree เป็นการรวมงาน |
+| CI | ตรวจ GitHub ของ commit ส่ง Review 9a370ce: check runs 0 และ pull_request workflow runs 0; รายการ changed files เป็น README/docs ทั้งหมด ตรง paths-ignore ของฐาน ce60bc7 จึงไม่อ้าง CI ผ่าน |
+| PR / Commit / Merge | [Draft PR #58](https://github.com/chanitnan0jr/TU_ClubHub_CS261/pull/58), branch docs/task74-sprint2-analysis, GitHub commit ส่ง Review 9a370cecdd650283af73dcfcf8a1256a42e4e634; ยังไม่ Merge; local main/working changes เดิมคงไว้ |
 | Deployment | Not Run — อยู่นอกขอบเขต |
 
 ### Review / Approval Ledger
@@ -237,9 +237,9 @@ US-09 ปัจจุบันมี Business Rules BR-01–09; การอ้�
 | บทบาท / ผู้ตรวจ | สถานะ | วันที่ / revision / ลิงก์หลักฐาน | Feedback / Resolution |
 |---|---|---|---|
 | Owner: ชนิตว์นันท์ — PO/SA | User decisions recorded / Pending Team Review | UDEC-2026-10-27 ใน §2.3; ยังไม่มีลิงก์ sign-off ของ Owner | Scope Owner/สอง Draft Stories ยืนยันแล้ว; รอ Review AC/ประเด็นเปิด ไม่ลงชื่อแทน Owner |
-| Reviewer: สิรวิชญ์ — Scrum Master / QA Lead | Pending Review | ยังไม่มี | รอตรวจ AC/DoD และข้อเสนอแนะ |
+| Reviewer: สิรวิชญ์ — Scrum Master / QA Lead | Review requested / Pending response | 27 ต.ค. 2026; ขอ Review จาก sirkrid10 ผ่าน [PR #58](https://github.com/chanitnan0jr/TU_ClubHub_CS261/pull/58) แล้ว | ยังไม่มี Review/Approval/Feedback จากผู้ตรวจ ไม่ถือว่าคำขอ Review เท่ากับเห็นชอบ |
 | Frontend representative | Pending Review / รอมอบหมายชื่อ | ยังไม่มี | รอทบทวน UI/DTO/API effects |
 | Backend representative | Pending Review / รอมอบหมายชื่อ | ยังไม่มี | รอทบทวน guard/time/Transaction/Data Contract |
 | QA representative | Pending Review / รอมอบหมายชื่อ | ยังไม่มี | รอ expected results หลัง Decision |
 
-เอกสารชุดนี้ส่งให้ Review ได้ แต่ยังไม่มีหลักฐานเพียงพอทำเครื่องหมาย Approved หรือปิด Task74
+เอกสารชุดนี้ส่งให้ Review ได้ แต่ยังไม่มีหลักฐาน Team Review/Approval เพียงพอทำเครื่องหมาย Approved หรือปิด Task74 แม้บันทึกข้อสรุปผู้ใช้และส่ง Draft PR แล้ว
