@@ -17,6 +17,47 @@ info:
     Authorization policy adopted on 2026-10-19 is defined in the
     [Permission Matrix](../security/permission-matrix.md), including Active status,
     committee terms, self-review restrictions, and remaining enforcement work.
+    Task74's Sprint 2 design handoff dated 2026-10-27 is Draft / Pending Team Review.
+    User instructions recorded that date exclude INTERVIEW from MVP, make
+    UNDER_REVIEW an optional explicit action, and allow direct decisions after
+    actual close; US-09 reads never mutate state. Existing unauthorized private
+    resources use 403 ACCESS_DENIED and nonexistent resources 404 RESOURCE_NOT_FOUND,
+    superseding the old other-owner hiding policy; public/availability endpoint
+    exceptions remain documented below. Same-final-action confirmation/decline
+    retries return the stored outcome after current authorization without new
+    writes; opposite final actions are 409 with no change of mind in MVP.
+    Fresh actions recheck rights/state in the transaction and use backend time
+    after relevant locks, with actual publication <= now < confirmation deadline.
+    Fresh confirmation rejects any prior target membership row in ACTIVE, INACTIVE,
+    LEFT or REMOVED without changing it; MVP has no reactivation. Same-application
+    final-action retry only reads the recorded outcome. The user confirmed
+    ชนิตว์นันท์ as Owner of the two Draft selection-result Stories; FE/BE owners
+    and team review remain pending. Automatic EXPIRED is distinct from DECLINED.
+    These are target
+    contract decisions, not runtime changes or completed PO/Reviewer approval.
+    Workflow operation paths/DTOs are not added here. See API_v1.md sections 8.1/9
+    for provenance, breaking-error-policy review and remaining operation/job design.
+  x-sprint2-design-handoff:
+    status: draft-pending-review
+    prepared-at: '2026-10-27'
+    artefact: ../architecture/task74-sprint2-analysis.md
+    permission-matrix: ../security/permission-matrix.md#s2-permission-matrix
+    state-machine: ../architecture/system-architecture.md#s2-application-state-machine
+    business-rules: ../architecture/system-architecture.md#s2-business-rules
+    decision-log: ../architecture/system-architecture.md#s2-decision-log
+    selection-results-draft: ../stories/sprint2/selection-results-draft.md
+    decision-source: explicit-user-instruction-2026-10-27
+    decision-review-status: pending-team-review
+    recorded-decisions:
+      T74-D01: existing-unauthorized-private-resource-403-nonexistent-404
+      T74-D02: no-interview-mvp-optional-explicit-review-direct-decision-after-close
+      T74-D03: two-draft-selection-stories-owner-confirmed-team-review-pending
+      T74-D05: same-final-action-replay-without-writes-opposite-action-409
+      T74-D06: fresh-action-server-time-after-lock-recheck-automatic-expiry
+      T74-D07: same-application-replay-no-writes-all-prior-membership-rows-reject-fresh-confirmation-no-reactivation
+    open-items:
+      - selection-result-team-review-fe-be-owner-assignment-api-dto-and-publication-audit-design
+      - expiry-worker-frequency-catch-up-mechanism-and-acceptable-lag
 servers:
   - url: /
     description: Same-origin application server
@@ -1767,7 +1808,13 @@ components:
             code: AUTHENTICATION_REQUIRED
             traceId: 01J9EXAMPLE7K4D5
     Forbidden:
-      description: Request is forbidden or the CSRF token is invalid
+      description: >-
+        ACCESS_DENIED when an authenticated caller lacks permission to an existing
+        private resource; CSRF_INVALID when the CSRF token is invalid. T74-D01's
+        user-recorded 2026-10-27 target policy uses 403 for existing unauthorized
+        private resources, not the former 404 hiding rule; nonexistent uses 404.
+        This does not change the separate public/availability endpoint exceptions
+        or imply that missing application workflow handlers are implemented.
       content:
         application/problem+json:
           schema:

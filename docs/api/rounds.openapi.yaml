@@ -22,6 +22,37 @@ info:
     field specified before implementation. The matrix lists remaining guard work.
     Source status reviewed on 2026-10-19: POST, PUT, and PATCH PUBLISH/CLOSE have
     handlers. Frontend integration and complete permission enforcement remain pending.
+    Task74's Sprint 2 design handoff dated 2026-10-27 is Draft / Pending Team Review.
+    User decisions recorded that date use 403 ACCESS_DENIED for an existing private
+    resource outside the caller's authorization and 404 for a nonexistent resource;
+    this revises the target error policy, not runtime implementation. PUBLISH here
+    remains recruitment publication. The user confirmed ชนิตว์นันท์ as Owner of the
+    two Draft selection-result Stories; FE/BE assignment, team review and separate
+    API/audit design remain pending under API_v1.md section 8.1 and T74-D03.
+    INTERVIEW is excluded from MVP; UNDER_REVIEW is optional through an
+    explicit action, while reads never mutate application state. This document
+    adds no application workflow operation or claim of completed PO/Reviewer review.
+  x-sprint2-design-handoff:
+    status: draft-pending-review
+    prepared-at: '2026-10-27'
+    artefact: ../architecture/task74-sprint2-analysis.md
+    permission-matrix: ../security/permission-matrix.md#s2-permission-matrix
+    state-machine: ../architecture/system-architecture.md#s2-application-state-machine
+    business-rules: ../architecture/system-architecture.md#s2-business-rules
+    decision-log: ../architecture/system-architecture.md#s2-decision-log
+    selection-results-draft: ../stories/sprint2/selection-results-draft.md
+    decision-source: explicit-user-instruction-2026-10-27
+    decision-review-status: pending-team-review
+    recorded-decisions:
+      T74-D01: existing-unauthorized-private-resource-403-nonexistent-404
+      T74-D02: no-interview-mvp-optional-explicit-review-direct-decision-after-close
+      T74-D03: two-draft-selection-stories-owner-confirmed-team-review-pending
+      T74-D05: same-final-action-replay-without-writes-opposite-action-409
+      T74-D06: fresh-action-server-time-after-lock-recheck-automatic-expiry
+      T74-D07: same-application-replay-no-writes-all-prior-membership-rows-reject-fresh-confirmation-no-reactivation
+    open-items:
+      - selection-result-team-review-fe-be-owner-assignment-api-dto-and-publication-audit-design
+      - expiry-worker-frequency-catch-up-mechanism-and-acceptable-lag
 servers:
   - url: http://localhost:8080
 security:
@@ -56,13 +87,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -124,13 +155,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -210,13 +241,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -253,13 +284,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -322,13 +353,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/PRESIDENT/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/PRESIDENT/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -416,14 +447,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
-          description: Not an authorized active committee member of the round owner, self-review restriction,
-            or CSRF_INVALID
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: Round not found, or question does not belong to round
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -478,14 +508,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
-          description: Not an authorized active committee member of the round owner, self-review restriction,
-            or CSRF_INVALID
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: Round not found, or question does not belong to round
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -563,14 +592,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
-          description: Not an authorized active committee member of the round owner, self-review restriction,
-            or CSRF_INVALID
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: Round not found, or question does not belong to round
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -623,14 +651,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
-          description: Not an authorized active committee member of the round owner, self-review restriction,
-            or CSRF_INVALID
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: Round not found, or question does not belong to round
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -697,14 +724,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
-          description: Not an authorized active committee member of the round owner, self-review restriction,
-            or CSRF_INVALID
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: Round not found, or question does not belong to round
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:

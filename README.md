@@ -2,7 +2,7 @@
 
 TU-ClubHub is a web platform in development for Thammasat University students to discover clubs, apply for membership, and track results. Club committees manage profiles and recruitment; central staff reporting is planned.
 
-> **Status reviewed: 2026-10-24.** Authentication, public club APIs, club profile updates, recruitment round writes, and per-question management APIs have implementations. The main frontend routes login, club detail, club editing, and question management; the round form and application form still need integration. The status below describes repository contents, not a deployment or test result.
+> **Status reviewed: 2026-10-27.** Authentication, public club APIs, club profile updates, recruitment round writes, and per-question management APIs have implementations. The main frontend routes login, club detail, club editing, and question management; the round form and application form still need integration. The status below describes repository contents, not a deployment or test result. The [Sprint 2 Task74 analysis and review packet](docs/architecture/task74-sprint2-analysis.md) records user decisions and remains Draft / Pending Team Review; it does not establish team approval or a completed workflow.
 
 ## Current implementation
 
@@ -39,14 +39,15 @@ Dependency versions are recorded in [frontend/package.json](frontend/package.jso
 |---|---|
 | [Commit rules](COMMIT_RULES.md) | Conventional Commit format and project commit guidance |
 | [API v1 contract](docs/api/API_v1.md) | Shared endpoint, session, CSRF, response, and error conventions |
-| [Main OpenAPI specification](docs/api/openapi.yaml) | Authentication, clubs, health, and the pending application-submission endpoint |
+| [Main OpenAPI specification](docs/api/openapi.yaml) | Authentication, clubs, health, and the pending application-form/submission contracts |
 | [Recruitment OpenAPI specification](docs/api/rounds.openapi.yaml) | Round/question writes plus pending committee reads and cancellation |
 | [System architecture](docs/architecture/system-architecture.md) | System boundaries, modules, security, workflows, and deployment target |
+| [Sprint 2 Task74 artefacts](docs/architecture/task74-sprint2-analysis.md) | Draft review packet linking the business flow, state machine, permissions, rule index, decisions, Story/AC traceability, QA scenarios, and approval checklist |
 | [Permission matrix](docs/security/permission-matrix.md) | Adopted Student, Club Committee, and Admin permissions; Active status, term dates, self-review, and implementation gaps |
 | [Repository context](docs/architecture/scaffold-context.md) | Current layout, integration gaps, configuration, and next work |
 | [Architecture diagram](docs/architecture/TU-ClubHub-Architecture.drawio) | Editable system architecture diagrams |
 | [Database design](docs/database/TU-ClubHub-ERD-Updated.dbml) / [migrations](backend/src/main/resources/db/migration) | Domain model and executable schema; migrations are authoritative |
-| [User stories](docs/stories) / [sequence diagrams](docs/diagrams/sequence) | Acceptance requirements and Happy path exchanges, including pending workflows |
+| [User stories](docs/stories) / [sequence diagram index](docs/diagrams/README.md) | Acceptance requirements and exchanges for Sprint 1 and Draft Sprint 2 workflows, with pending contracts and dependencies marked |
 | [Local demonstration guide](docs/deployment/local-demo.md) | Compose modes, demo login, persistence, and reset instructions |
 | [Frontend guide](frontend/README.md) | Current screens, components, and API integration gaps |
 | [Test reports and handoffs](docs/testing) | Historical results for the revision/date recorded in each report |
