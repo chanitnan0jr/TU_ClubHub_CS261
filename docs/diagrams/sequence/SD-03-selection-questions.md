@@ -1,10 +1,10 @@
 # SD-03: จัดการคำถามคัดเลือก
 
-อ้างอิง: [US-08](../../stories/US-08.md) · [Recruitment API](../../api/rounds.openapi.yaml)
+อ้างอิง: [US-08](../../stories/sprint1/US-08.md) · [Recruitment API](../../api/rounds.openapi.yaml)
 
 <!-- ponytail: show successful exchanges between layers only. -->
 
-สถานะ: Backend รับคำถามพร้อมข้อมูลรอบผ่าน POST/PUT; ยังไม่มี API แยกรายคำถาม และ Frontend ยังไม่ได้เชื่อม API
+สถานะ 27 ต.ค. 2026: Backend รับคำถามพร้อมข้อมูลรอบผ่าน POST/PUT และมี API รายคำถามใต้ `/api/v1/rounds/{roundId}/questions` แล้ว หน้าจัดการคำถามเชื่อม API รายคำถามแล้ว ภาพนี้แสดงทางเลือกบันทึกทั้งชุดผ่าน PUT ของรอบ ไม่ได้หมายความว่าไม่มี API รายคำถาม การแก้ทุกทางจำกัด DRAFT ที่ไม่มีใบสมัครตาม Contract
 
 ย่อ Service ไว้ใน REST API Controller; DAO แทน RecruitmentRoundRepository
 
@@ -26,7 +26,7 @@ sequenceDiagram
     DAO->>DB: อัปเดตรอบรับสมัครและคำถาม
     DB-->>DAO: ข้อมูลรอบและคำถามที่บันทึก
     DAO-->>API: ข้อมูลรอบรับสมัคร
-    API-->>C: 200 OK + RecruitmentRound
+    API-->>C: 200 OK + Round
     C-->>V: แจ้งว่าบันทึกคำถามสำเร็จ
 ```
 

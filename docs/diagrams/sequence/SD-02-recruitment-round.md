@@ -1,6 +1,6 @@
 # SD-02: สร้าง แก้ไข เผยแพร่ และปิดรอบรับสมัคร
 
-อ้างอิง: [US-07](../../stories/US-07.md) · [Recruitment API](../../api/rounds.openapi.yaml)
+อ้างอิง: [US-07](../../stories/sprint1/US-07.md) · [Recruitment API](../../api/rounds.openapi.yaml)
 
 <!-- ponytail: show successful exchanges between layers only. -->
 

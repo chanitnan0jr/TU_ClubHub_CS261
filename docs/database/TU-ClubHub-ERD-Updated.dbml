@@ -11,6 +11,11 @@
 // This is a design proposal, not an inspection of an existing implementation.
 // Authorization policy adopted 2026-10-19: ../security/permission-matrix.md.
 // Policy notes below describe requirements; they do not add SQL constraints or deployed guards.
+// Task74 documentation update 2026-10-27: Sprint 2 additions are Draft / Pending Review.
+// Product decisions below record the user's instruction on 2026-10-27 and remain
+// Pending Team Review; they are not a runtime change or completed PO/Reviewer sign-off.
+// Canonical flow/rule index/decision log: ../architecture/system-architecture.md.
+// Review/handoff artefact: ../architecture/task74-sprint2-analysis.md.
 // Assumptions: one category per club; text-only selection questions;
 // one application per student per round; one membership per student per club;
 // accepted applicants become members only after confirming their place.
@@ -150,7 +155,7 @@ Table recruitment_rounds [headercolor: #B45309] {
     `publication_status <> 'PUBLISHED' OR published_at IS NOT NULL`
     `results_published_at IS NULL OR (published_at IS NOT NULL AND results_published_at >= published_at AND results_published_at >= opens_at AND results_published_at < confirmation_deadline)`
   }
-  Note: 'Java: RecruitmentRound. Open for applications only when PUBLISHED and opens_at <= now < closes_at and closed_at IS NULL. Closing early does not cancel existing applications. Confirmation starts at results_published_at and ends before confirmation_deadline. Publication-before-close and form-edit policies still need agreement; not imposed as DB checks.'
+  Note: 'Java: RecruitmentRound. Open for applications only when PUBLISHED and opens_at <= now < closes_at and closed_at IS NULL. Closing early preserves existing applications and closes_at. Actual selection-result publication requires effective closure under the Permission Matrix; results_scheduled_at does not publish results. Confirmation starts at results_published_at and ends before confirmation_deadline. Question edits are limited to drafts without applications. Additional Task74 proposals remain Pending Review; service policies are not all imposed as DB checks.'
 }
 
 Table application_questions [headercolor: #B45309] {
@@ -289,7 +294,7 @@ Table club_memberships [headercolor: #15803D] {
     `(status IN ('LEFT', 'REMOVED')) = (ended_at IS NOT NULL)`
     `ended_at IS NULL OR ended_at >= joined_at`
   }
-  Note: 'Java: ClubMembership. Current relationship, not a User subclass. Confirmation creates or reactivates one row transactionally; history records previous periods. Membership source must match both student and club. Committee roles and terms exist only in club_committee_assignments; expiry of an assignment does not end membership.'
+  Note: 'Java: ClubMembership. Current relationship, not a User subclass. User-recorded T74-D07 on 2026-10-27: fresh confirmation creates a membership only when no prior target-club row exists; ACTIVE/INACTIVE/LEFT/REMOVED rows block fresh confirmation unchanged. Same-application final-action retry reads its old outcome without writes; MVP has no reactivation. Preserve source and history. Membership source must match both student and club. Committee roles and terms exist only in club_committee_assignments; expiry of an assignment does not end membership. Pending Team Review; no runtime change implied.'
 }
 
 Table club_committee_assignments [headercolor: #15803D] {
@@ -338,7 +343,7 @@ Table membership_history [headercolor: #15803D] {
     `new_status IN ('ACTIVE', 'INACTIVE', 'LEFT', 'REMOVED')`
     `old_status IS NULL OR old_status <> new_status`
   }
-  Note: 'Java: MembershipHistory. Append-only record of membership join/reactivation and status changes; reason includes termination reason. Committee appointments are separate term records, not membership status changes.'
+  Note: 'Java: MembershipHistory. Append-only record of membership joins and status changes, retaining any earlier periods; reason includes termination reason. T74-D07 excludes new reactivation from MVP and preserves existing history/source. Committee appointments are separate term records, not membership status changes.'
 }
 
 Table notifications [headercolor: #BE185D] {
@@ -452,31 +457,56 @@ DiagramView Default {
 //    Do not put committee roles back into users.system_role or club_memberships.
 // 2. Submit atomically: eligible student/account; active club; round PUBLISHED;
 //    opens_at <= now < closes_at; closed_at IS NULL; required answers and HTTPS
-//    links valid; unique student/round; application quota not exceeded.
-//    Quota amount, counting period and distinct-club/status rules remain TBD.
-//    Serialize competing submissions for the student (or equivalent) when enforcing
-//    quota; a count followed by insert without concurrency control is insufficient.
-// 3. Proposed transitions retained from the earlier design:
-//    SUBMITTED -> UNDER_REVIEW or WITHDRAWN;
-//    UNDER_REVIEW -> ACCEPTED or REJECTED or WITHDRAWN;
+//    links valid; unique student/round including a withdrawn application.
+//    POLICY RECORDED 2026-10-19 (API section 11 / US-03 BR-07/08): maximum five
+//    distinct effective club memberships across all club types. Count ACTIVE rows
+//    with joined_at <= now and ended_at NULL; do not count pending applications or
+//    ended memberships. Deny an effective membership in the target club as well.
+//    Recheck this ceiling at confirmation and serialize competing confirmations
+//    for the student (or equivalent); counting then writing without concurrency
+//    control is insufficient. Submission itself creates no membership.
+// 3. T74-D02 USER DECISION RECORDED 2026-10-27 / Pending Team Review:
+//    UNDER_REVIEW is optional and requires an explicit action; reads never set it.
+//    After effective recruitment closure, SUBMITTED or UNDER_REVIEW may transition
+//    directly to ACCEPTED or REJECTED under the effective committee/state rules.
 //    ACCEPTED -> CONFIRMED or DECLINED or EXPIRED.
 //    WITHDRAWN support, resubmission and correction/reapplication policies require
 //    explicit scope agreement. Existing unique student/round constraint is retained.
+//    INTERVIEW is excluded from MVP; no new status is added to SQL/API/DBML here.
 // 4. Review recommendations are internal opinions; applications holds the final
 //    decision. Release final results, messages and history only after the parent
 //    results_published_at is set. Publish in-app result notices with that change.
 //    Confirmation opens at actual publication, not results_scheduled_at.
-// 5. Confirm/decline requires ownership, ACCEPTED, published results, a noncancelled
-//    round, an ACTIVE account and now < confirmation_deadline. Confirmation also
-//    requires ACTIVE student profile and club. Decline does not require student or
-//    club Active status. Confirmation creates/reactivates membership with application
-//    and membership histories in one transaction; avoid duplicate rows.
+//    Recruitment PUBLISH and selection-result publication are separate actions.
+//    Publication leaves application.status unchanged. SQL status history forbids
+//    same-state rows; the round-publication audit representation is pending T74-D03.
+// 5. Fresh confirm/decline requires ownership, ACCEPTED, published results, a
+//    noncancelled round and an ACTIVE account. T74-D06 records transaction-time
+//    rights/state/version recheck followed by backend time sampling after relevant
+//    locks and before writing: results_published_at <= serverNow < confirmation_deadline.
+//    Confirmation also requires ACTIVE student profile and club; decline does not.
+//    Confirmation and membership/history must commit atomically.
+//    T74-D05: after current session/ACTIVE account and ownership authorization,
+//    same-final-action retry returns the stored outcome with no new decision,
+//    responded_at, membership or history write; it is not a fresh deadline decision.
+//    An opposite final action is rejected with 409 and no change of mind in MVP.
+//    T74-D07 FINAL USER DECISION RECORDED 2026-10-27 / Pending Team Review:
+//    same-application final-action retry only reads the stored outcome, without writes.
+//    A fresh confirmation is rejected unchanged if ANY prior target membership row
+//    exists: ACTIVE, INACTIVE, LEFT or REMOVED. MVP has no reactivation or rejoin
+//    through a new confirmation. Preserve the existing row, source and history;
+//    unique (club_id,user_id) remains a safeguard, not a substitute for this rule.
 //    Earlier-round closed_at is not a reason to block confirmation.
 // 6. At the deadline, change unanswered published ACCEPTED applications to EXPIRED
 //    with actor_id NULL and history reason; responded_at remains NULL. The UI shows
-//    DECLINED and EXPIRED as declined, distinguishing voluntary action from timeout.
-//    Preserve each old membership period/source in an immutable history reason or
-//    structured extension before reactivating/replacing the current source link.
+//    EXPIRED as 'สละสิทธิ์ (หมดเวลาตอบรับ)', distinct from voluntary DECLINED.
+//    Do not store timeout as DECLINED; the schema already has distinct EXPIRED.
+//    Automatic expiry and the fresh-action time rule are recorded under T74-D06;
+//    worker frequency, catch-up mechanism and acceptable lag still need team Design.
+//    Fresh request APIs deny expired actions even while the worker lags; an authorized
+//    same-final-action retry only reads the recorded outcome and does not reopen it.
+//    Preserve each old membership period/source. Any future rejoin/reactivation
+//    design is separate scope; no replacement of an existing source link in MVP.
 // 7. Manual close sets closed_at to the actual server time; it does not rewrite
 //    closes_at, cancel the round, delete applications or decide existing applicants.
 //    Concurrency between closing and submission must be controlled transactionally.
@@ -505,6 +535,12 @@ DiagramView Default {
 //     Histories are append-only through services/permissions; Java @Version,
 //     unique constraints and transactions handle concurrent updates. Use DTOs
 //     appropriate to each role instead of directly serializing Java entities.
+// 12. T74-D01 USER DECISION RECORDED 2026-10-27 / Pending Team Review:
+//     Existing private application/resources without permission return 403 ACCESS_DENIED;
+//     genuinely missing resources return 404 RESOURCE_NOT_FOUND. This supersedes the
+//     old other-owner 404 hiding policy, not the separate public inactive-club rule.
+//     Session/CSRF/account error codes remain unchanged. API compatibility review and
+//     implementation work remain necessary; these comments add no database constraint.
 // MIGRATION NOTE: this file is a revised design, not an executable migration.
 // For an existing database, backfill academic_year/semester before NOT NULL checks.
 // Preserve old committee roles and role-history data before removing role columns;

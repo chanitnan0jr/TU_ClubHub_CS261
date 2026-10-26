@@ -1,10 +1,10 @@
 # SD-01: อ่านและอัปเดตโปรไฟล์ชมรม
 
-อ้างอิง: [US-06](../../stories/US-06.md) · [API Contract](../../api/API_v1.md)
+อ้างอิง: [US-06](../../stories/sprint1/US-06.md) · [API Contract](../../api/API_v1.md)
 
 <!-- ponytail: show successful exchanges between layers only. -->
 
-สถานะ: ภาพ Happy path ตามแบบ; GET ที่ฟอร์มเรียกยังไม่มี handler; PUT มีแล้ว แต่หน้าฟอร์มยังไม่ได้เชื่อมเข้าหน้าหลักของแอป
+สถานะ 27 ต.ค. 2026: ภาพ Happy path ตาม Contract ของ editor; GET ในภาพยังไม่มี handler ส่วน PUT และหน้า `/clubs/:clubId/edit` เชื่อมใช้งานแล้ว โค้ดปัจจุบันเติมฟอร์มด้วย Public profile ตาม SD-04 แทน GET ในภาพ ไม่ใช่หลักฐานว่า editor GET มี Implementation แล้ว
 
 ย่อ Service ไว้ใน REST API Controller; DAO แทน ClubRepository และ ClubProfileQueryRepository
 
