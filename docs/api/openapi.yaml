@@ -1,63 +1,46 @@
 openapi: 3.1.0
 info:
   title: TU-ClubHub API
-  version: 1.1.0
+  version: 1.2.0
   description: >-
-    TU-ClubHub API contract for foundation, public club profiles, application forms,
-    and submission. Task42 defines round-scoped application paths; implementation
-    is pending. The Task42 requester confirmed student/account Active and open-round
-    requirements for form reads on 2026-10-20. Remaining review items are recorded
-    in API_v1.md section 12; no PO/team review approval is claimed.
-    Source status reviewed on 2026-10-19: auth, public club reads, club profile PUT,
-    and health have handlers. GET /api/v1/clubs/{clubId} remains contract-only.
-    Recruitment management is specified separately in rounds.openapi.yaml.
-    Handler presence does not imply complete frontend or permission-policy integration.
-    Additional product workflow endpoints are tracked in docs/api/API_v1.md and
-    must be specified before implementation.
-    Authorization policy adopted on 2026-10-19 is defined in the
-    [Permission Matrix](../security/permission-matrix.md), including Active status,
-    committee terms, self-review restrictions, and remaining enforcement work.
-    Task74's Sprint 2 design handoff dated 2026-10-27 is Draft / Pending Team Review.
-    User instructions recorded that date exclude INTERVIEW from MVP, make
-    UNDER_REVIEW an optional explicit action, and allow direct decisions after
-    actual close; US-09 reads never mutate state. Existing unauthorized private
-    resources use 403 ACCESS_DENIED and nonexistent resources 404 RESOURCE_NOT_FOUND,
-    superseding the old other-owner hiding policy; public/availability endpoint
-    exceptions remain documented below. Same-final-action confirmation/decline
-    retries return the stored outcome after current authorization without new
-    writes; opposite final actions are 409 with no change of mind in MVP.
-    Fresh actions recheck rights/state in the transaction and use backend time
-    after relevant locks, with actual publication <= now < confirmation deadline.
-    Fresh confirmation rejects any prior target membership row in ACTIVE, INACTIVE,
-    LEFT or REMOVED without changing it; MVP has no reactivation. Same-application
-    final-action retry only reads the recorded outcome. The user confirmed
-    ชนิตว์นันท์ as Owner of the two Draft selection-result Stories; FE/BE owners
-    and team review remain pending. Automatic EXPIRED is distinct from DECLINED.
-    These are target
-    contract decisions, not runtime changes or completed PO/Reviewer approval.
-    Workflow operation paths/DTOs are not added here. See API_v1.md sections 8.1/9
-    for provenance, breaking-error-policy review and remaining operation/job design.
+    TU-ClubHub API contract for foundation, public club search/profiles, application
+    forms, submission, applicant status tracking, membership offer confirmation/decline,
+    committee application review, internal selection decisions, selection result
+    publication, and the central Admin statistics dashboard.
+    Recruitment round and question management is specified in rounds.openapi.yaml.
+    Authorization policy is defined in the [Permission Matrix](../security/permission-matrix.md)
+    and the Sprint 2 System Design specification [task75-sprint2-design.md](../architecture/task75-sprint2-design.md),
+    incorporating all recorded Task74 decisions (T74-D01 through T74-D09):
+    existing unauthorized private resources return 403 ACCESS_DENIED and nonexistent
+    resources return 404 RESOURCE_NOT_FOUND; INTERVIEW is excluded from MVP and
+    GET operations never mutate application state; internal decisions and result
+    publication are separate operations; applicant DTOs mask unreleased selection
+    outcomes before results_published_at; confirm/decline supports idempotent
+    same-action replay (200 OK without duplicate writes) and rejects opposite
+    actions or any prior club_memberships row (ACTIVE, INACTIVE, LEFT, REMOVED)
+    with 409 RESOURCE_CONFLICT.
   x-sprint2-design-handoff:
-    status: draft-pending-review
-    prepared-at: '2026-10-27'
-    artefact: ../architecture/task74-sprint2-analysis.md
+    status: specified-in-task75
+    prepared-at: '2026-10-28'
+    analysis-artefact: ../architecture/task74-sprint2-analysis.md
+    design-artefact: ../architecture/task75-sprint2-design.md
     permission-matrix: ../security/permission-matrix.md#s2-permission-matrix
     state-machine: ../architecture/system-architecture.md#s2-application-state-machine
     business-rules: ../architecture/system-architecture.md#s2-business-rules
     decision-log: ../architecture/system-architecture.md#s2-decision-log
     selection-results-draft: ../stories/sprint2/selection-results-draft.md
-    decision-source: explicit-user-instruction-2026-10-27
-    decision-review-status: pending-team-review
+    decision-source: explicit-user-instruction-2026-10-27-and-task75-design
+    decision-review-status: ready-for-team-review
     recorded-decisions:
       T74-D01: existing-unauthorized-private-resource-403-nonexistent-404
       T74-D02: no-interview-mvp-optional-explicit-review-direct-decision-after-close
-      T74-D03: two-draft-selection-stories-owner-confirmed-team-review-pending
+      T74-D03: separate-decision-and-publication-contracts-specified
+      T74-D04: applicant-pre-publication-masking-and-history-allowlist-specified
       T74-D05: same-final-action-replay-without-writes-opposite-action-409
-      T74-D06: fresh-action-server-time-after-lock-recheck-automatic-expiry
+      T74-D06: fresh-action-server-time-after-lock-recheck-automatic-expiry-60s-worker
       T74-D07: same-application-replay-no-writes-all-prior-membership-rows-reject-fresh-confirmation-no-reactivation
-    open-items:
-      - selection-result-team-review-fe-be-owner-assignment-api-dto-and-publication-audit-design
-      - expiry-worker-frequency-catch-up-mechanism-and-acceptable-lag
+      T74-D08: admin-dashboard-metrics-and-academic-year-semester-filtering-specified
+      T74-D09: application-form-read-and-submission-contract-confirmed
 servers:
   - url: /
     description: Same-origin application server
@@ -66,7 +49,11 @@ tags:
   - name: Clubs
   - name: Public Clubs
   - name: Applications
-    description: Student application forms and submission (US-03/US-08). Application history and review APIs are not defined yet.
+    description: Student application forms, submission (US-03), applicant status tracking (US-04), and membership confirmation/decline (US-05).
+  - name: Committee Review & Results
+    description: Committee read-only application review (US-09), internal selection decisions (S2-DECISION-DRAFT), and PRESIDENT result publication (S2-PUBLICATION-DRAFT).
+  - name: Admin Dashboard
+    description: University-wide aggregate recruitment and membership statistics for ADMIN (US-10).
   - name: Operations
 paths:
   /api/v1/auth/csrf:
@@ -187,19 +174,21 @@ paths:
       tags: [Authentication]
       operationId: getCurrentUser
       x-implementation-status: implemented
-      summary: Get the authenticated user's minimal account identity
+      summary: Get the authenticated user's real-time account identity and effective committee assignments
       description: >-
-        The role is for UI presentation only; the backend rechecks authorization for
+        The returned role, studentStatus, and activeCommitteeAssignments are for UI
+        presentation and route guarding only; the backend rechecks authorization on
         every request. Expired sessions return 401 AUTHENTICATION_REQUIRED.
-        The adopted policy requires a current ACTIVE account and the current
-        database global role. A suspended account returns 403 ACCOUNT_NOT_ALLOWED
-        and its session is invalidated. The permission matrix records the
-        remaining account and role revalidation implementation work.
+        Task79 requires reading the current ACTIVE account, global role, student
+        profile status, and currently effective committee assignments directly from
+        the database on every call rather than trusting stale session authorities.
+        A suspended account returns 403 ACCOUNT_NOT_ALLOWED and its session is
+        invalidated.
       security:
         - SessionCookie: []
       responses:
         '200':
-          description: Current authenticated user
+          description: Current authenticated user with real-time role and effective committee assignments
           headers:
             Cache-Control:
               schema:
@@ -213,6 +202,14 @@ paths:
                 user:
                   id: '10001'
                   role: USER
+                  studentStatus: ACTIVE
+                  activeCommitteeAssignments:
+                    - clubId: '20001'
+                      clubName: Example Club
+                      permissionRole: PRESIDENT
+                      positionName: Club President
+                      startsAt: '2026-07-31T17:00:00Z'
+                      endsAt: '2027-07-31T17:00:00Z'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -247,6 +244,184 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         default:
           $ref: '#/components/responses/ServerError'
+  /api/v1/public/clubs:
+    get:
+      tags: [Public Clubs]
+      operationId: searchPublicClubs
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: Search and filter active public clubs (US-01 / Task62)
+      description: >-
+        Public endpoint; authentication is not required. Returns only clubs with
+        status ACTIVE. Supports case-insensitive substring search by club name (q,
+        supporting Thai and English), filtering by categoryId, filtering by interest
+        tagId without duplicating clubs that have multiple tags (US-01.BR-08), and
+        optional recruitmentStatus filtering (default ALL so active clubs without
+        open rounds remain discoverable). Blank or whitespace-only q is treated as
+        omitted. Filters combine with logical AND. Also mapped as GET /api/v1/clubs
+        for Task62 compatibility.
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive substring search on club name; surrounding whitespace is trimmed.
+          schema:
+            type: string
+            maxLength: 200
+          example: Coding
+        - name: categoryId
+          in: query
+          required: false
+          description: Filter by club category ID.
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '30001'
+        - name: tagId
+          in: query
+          required: false
+          description: Filter by interest tag ID using EXISTS so clubs are never duplicated.
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '40001'
+        - name: recruitmentStatus
+          in: query
+          required: false
+          description: Optional filter by current open recruitment round presence; defaults to ALL.
+          schema:
+            type: string
+            enum: [ALL, OPEN, CLOSED]
+            default: ALL
+          example: ALL
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+        - name: size
+          in: query
+          required: false
+          description: Page size (1 to 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+        - name: sort
+          in: query
+          required: false
+          description: Sort order; secondary sort by id ASC is always applied for deterministic pagination.
+          schema:
+            type: string
+            enum: ['name,asc', 'name,desc']
+            default: 'name,asc'
+          example: 'name,asc'
+      responses:
+        '200':
+          description: Paginated list of matching active public clubs; items is empty when no clubs match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicClubSearchPage'
+              examples:
+                matchingClubs:
+                  summary: Matching active clubs found
+                  value:
+                    items:
+                      - id: '20001'
+                        name: Example Club
+                        description: A student club at Thammasat University.
+                        affiliationLevel: University
+                        affiliationName: Thammasat University
+                        imageUrl: https://images.example.org/clubs/20001.png
+                        category:
+                          id: '30001'
+                          name: Technology
+                        tags:
+                          - id: '40001'
+                            name: Programming
+                        hasOpenRecruitment: true
+                    page:
+                      number: 0
+                      size: 20
+                      totalElements: 1
+                      totalPages: 1
+                emptyResult:
+                  summary: No active clubs match the selected filters
+                  value:
+                    items: []
+                    page:
+                      number: 0
+                      size: 20
+                      totalElements: 0
+                      totalPages: 0
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/ServerError'
+  /api/v1/public/club-categories:
+    get:
+      tags: [Public Clubs]
+      operationId: listPublicClubCategories
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: List all club categories for public search filters (US-01 / Task62)
+      description: Public endpoint; returns all club categories ordered by display_order ASC, id ASC.
+      security: []
+      responses:
+        '200':
+          description: Club categories list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicClubCategoryList'
+              example:
+                items:
+                  - id: '30001'
+                    name: วิชาการ
+                  - id: '30002'
+                    name: กีฬา
+                  - id: '30003'
+                    name: ศิลปวัฒนธรรม
+                  - id: '30004'
+                    name: บำเพ็ญประโยชน์
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/ServerError'
+  /api/v1/public/interest-tags:
+    get:
+      tags: [Public Clubs]
+      operationId: listPublicInterestTags
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: List all interest tags for public search filters (US-01 / Task62)
+      description: Public endpoint; returns all interest tags ordered by name ASC, id ASC.
+      security: []
+      responses:
+        '200':
+          description: Interest tags list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicClubTagList'
+              example:
+                items:
+                  - id: '40001'
+                    name: Programming
+                  - id: '40002'
+                    name: Music
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/ServerError'
   /api/v1/public/clubs/{id}:
     get:
       tags: [Public Clubs]
@@ -258,6 +433,9 @@ paths:
         club. If the club does not exist or is inactive, return the same 404
         response so its non-public existence is not disclosed. Only the explicitly
         listed public profile fields and safe category/tag summaries may be exposed.
+        When called with an active authenticated session, canEditProfile reflects
+        whether the caller currently holds an effective COMMITTEE or PRESIDENT
+        assignment for this club (Task81); anonymous callers receive canEditProfile: false.
         Database bigint identifiers are decimal strings on the wire. The id path
         value must contain decimal digits and fit a positive signed 64-bit integer.
       security: []
@@ -297,6 +475,7 @@ paths:
                 tags:
                   - id: '40001'
                     name: Programming
+                canEditProfile: false
         '400':
           $ref: '#/components/responses/InvalidResourceId'
         '404':
@@ -1082,6 +1261,811 @@ paths:
           $ref: '#/components/responses/ServerError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+    get:
+      tags: [Committee Review & Results]
+      operationId: listRoundApplicationsForCommittee
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: List submitted applications for a recruitment round (US-09 / Task65, Read-Only)
+      description: >-
+        Requires an authenticated SESSION, ACTIVE account/student/club/membership/assignment
+        for the club that actually owns roundId, and NO application by the caller in
+        roundId in any status (including WITHDRAWN). Global ADMIN grants no access.
+        Strictly read-only: calling GET never mutates application status or triggers
+        result publication (US-09.AC-04, T74-D02). Under T74-D01, if roundId exists
+        but the caller lacks committee permission or has a self-review conflict,
+        return 403 ACCESS_DENIED; if roundId does not exist, return 404 RESOURCE_NOT_FOUND.
+        Ordered by submittedAt ASC, id ASC.
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '70001'
+        - name: status
+          in: query
+          required: false
+          description: Optional internal application status filter.
+          schema:
+            $ref: '#/components/schemas/InternalApplicationStatus'
+        - name: q
+          in: query
+          required: false
+          description: Optional case-insensitive search on applicant studentCode or fullName.
+          schema:
+            type: string
+            maxLength: 200
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of applications in the round for authorized committee review
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitteeApplicationPage'
+              example:
+                round:
+                  id: '70001'
+                  clubId: '20001'
+                  title: Volunteer recruitment
+                  publicationStatus: PUBLISHED
+                  opensAt: '2026-10-01T00:00:00Z'
+                  closesAt: '2026-10-25T16:59:59Z'
+                  closedAt: '2026-10-25T16:59:59Z'
+                  resultsPublishedAt: null
+                  confirmationDeadline: '2026-11-05T16:59:59Z'
+                  version: 1
+                items:
+                  - id: '90001'
+                    applicant:
+                      userId: '10001'
+                      studentCode: '6609650001'
+                      fullName: Somchai Jaidee
+                      faculty: Faculty of Science and Technology
+                      department: Computer Science
+                      yearLevel: 2
+                    submittedAt: '2026-10-19T09:30:00Z'
+                    status: SUBMITTED
+                    decidedAt: null
+                    respondedAt: null
+                    version: 0
+                page:
+                  number: 0
+                  size: 20
+                  totalElements: 1
+                  totalPages: 1
+        '400':
+          $ref: '#/components/responses/InvalidResourceId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Recruitment round does not exist (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Round is in DRAFT or CANCELLED state (ROUND_NOT_PUBLISHED / ROUND_CANCELLED)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/rounds/{roundId}/applications/{applicationId}:
+    get:
+      tags: [Committee Review & Results]
+      operationId: getRoundApplicationDetailForCommittee
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: Get full application detail, answers, and portfolio links for committee review (US-09 / Task65, Read-Only)
+      description: >-
+        Requires an authenticated SESSION and effective COMMITTEE or PRESIDENT
+        assignment for the club owning roundId, with no self-review conflict in
+        roundId. Strictly read-only: never changes status to UNDER_REVIEW or
+        mutates any record (US-09.AC-04, T74-D02). Questions are ordered by
+        displayOrder ASC, id ASC and paired by questionId; unanswered optional
+        questions are returned with answerText: null so positions never shift
+        (US-09.AC-03, BR-08). Under T74-D01, if the round or application exists
+        outside the caller's authorized scope, return 403 ACCESS_DENIED; if nonexistent,
+        return 404 RESOURCE_NOT_FOUND.
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '70001'
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '90001'
+      responses:
+        '200':
+          description: Full committee view of the application
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitteeApplicationDetail'
+              example:
+                id: '90001'
+                clubId: '20001'
+                roundId: '70001'
+                applicant:
+                  userId: '10001'
+                  studentCode: '6609650001'
+                  fullName: Somchai Jaidee
+                  faculty: Faculty of Science and Technology
+                  department: Computer Science
+                  yearLevel: 2
+                motivation: I would like to help organize club activities.
+                questionsWithAnswers:
+                  - questionId: '81001'
+                    questionText: Describe an activity you helped organize.
+                    isRequired: true
+                    displayOrder: 1
+                    answerText: I have organized student workshops.
+                  - questionId: '81002'
+                    questionText: What other experience would you like to share?
+                    isRequired: false
+                    displayOrder: 2
+                    answerText: null
+                links:
+                  - id: '95001'
+                    label: Portfolio
+                    url: https://example.org/portfolio
+                    displayOrder: 1
+                status: SUBMITTED
+                resultMessage: null
+                decidedBy: null
+                decidedAt: null
+                respondedAt: null
+                version: 0
+                submittedAt: '2026-10-19T09:30:00Z'
+                reviews: []
+                statusHistory:
+                  - fromStatus: null
+                    toStatus: SUBMITTED
+                    actorId: '10001'
+                    reason: APPLICATION_SUBMITTED
+                    createdAt: '2026-10-19T09:30:00Z'
+        '400':
+          $ref: '#/components/responses/InvalidResourceId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Round or application does not exist (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/rounds/{roundId}/applications/{applicationId}/decision:
+    put:
+      tags: [Committee Review & Results]
+      operationId: recordApplicationDecision
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: Record or update an internal selection decision before publication (S2-DECISION-DRAFT / Task67)
+      description: >-
+        Requires SESSION, X-CSRF-TOKEN, and an effective COMMITTEE or PRESIDENT
+        assignment for the club owning roundId, with no self-review conflict.
+        The round must be PUBLISHED, not CANCELLED, effectively closed
+        (serverNow >= COALESCE(closed_at, closes_at)), and unpublished
+        (results_published_at IS NULL). Supports direct transition from SUBMITTED
+        or UNDER_REVIEW to ACCEPTED or REJECTED, and allows updating ACCEPTED/REJECTED
+        prior to publication with optimistic lock version checking (T74-D02, T74-D03).
+        Does not expose the decision to the applicant until POST /publish-results commits.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '70001'
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '90001'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationDecisionRequest'
+            example:
+              decision: ACCEPTED
+              resultMessage: Congratulations! Please confirm your membership before the deadline.
+              internalNote: Strong portfolio and workshop experience.
+              version: 0
+      responses:
+        '200':
+          description: Internal selection decision saved
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitteeApplicationDetail'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Round or application does not exist (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Round still open, results already published, round cancelled, or optimistic lock version mismatch
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApplicationDecisionConflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/rounds/{roundId}/publish-results:
+    post:
+      tags: [Committee Review & Results]
+      operationId: publishRoundSelectionResults
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: Publish finalized selection results for a recruitment round (S2-PUBLICATION-DRAFT / Task67)
+      description: >-
+        Requires SESSION, X-CSRF-TOKEN, and an effective PRESIDENT assignment for
+        the club owning roundId, with no self-review conflict. General COMMITTEE
+        members and ADMIN without an effective PRESIDENT assignment receive 403 ACCESS_DENIED.
+        The round must be PUBLISHED, effectively closed, unpublished (results_published_at IS NULL),
+        serverNow < confirmation_deadline, and every active application in the round
+        must already be decided as ACCEPTED or REJECTED (none remaining in SUBMITTED
+        or UNDER_REVIEW). Sets recruitment_rounds.results_published_at = serverNow,
+        increments version, and creates RESULT_PUBLISHED notifications in one transaction
+        without writing same-state rows to application_status_history (T74-D03).
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '70001'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishResultsRequest'
+            example:
+              version: 1
+      responses:
+        '200':
+          description: Selection results published atomically
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishResultsResponse'
+              example:
+                roundId: '70001'
+                clubId: '20001'
+                resultsPublishedAt: '2026-10-26T03:00:00Z'
+                confirmationDeadline: '2026-11-05T16:59:59Z'
+                acceptedCount: 12
+                rejectedCount: 8
+                roundVersion: 2
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Round does not exist (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Undecided applications remain, round still open, already published, deadline passed, or version mismatch
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/PublishResultsConflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/me/applications:
+    get:
+      tags: [Applications]
+      operationId: listMyApplications
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: List the authenticated user's own club applications (US-04 / Task64)
+      description: >-
+        Requires SESSION and an ACTIVE user account. Allowed even when the caller's
+        student profile or target club is no longer ACTIVE (Permission Matrix section 3).
+        Derives applicant_id strictly from the session. Before recruitment_rounds.results_published_at
+        is set, internal selection statuses (UNDER_REVIEW, ACCEPTED, REJECTED) are
+        masked as SUBMITTED ("รอพิจารณา"), hiding result messages and confirmation
+        CTAs (T74-D04). Ordered by submittedAt DESC, id DESC.
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of the caller's applications with pre/post-publication visibility masking applied
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicantApplicationPage'
+              example:
+                items:
+                  - id: '90001'
+                    club:
+                      id: '20001'
+                      name: Example Club
+                      imageUrl: https://images.example.org/clubs/20001.png
+                    round:
+                      id: '70001'
+                      title: Volunteer recruitment
+                      academicYear: 2569
+                      semester: 1
+                      opensAt: '2026-10-01T00:00:00Z'
+                      closesAt: '2026-10-25T16:59:59Z'
+                      resultsPublishedAt: '2026-10-26T03:00:00Z'
+                      confirmationDeadline: '2026-11-05T16:59:59Z'
+                    submittedAt: '2026-10-19T09:30:00Z'
+                    applicantVisibleStatus: ACCEPTED_PENDING_CONFIRMATION
+                    displayStatusLabel: ผ่านการคัดเลือก (รอยืนยันสิทธิ์)
+                    canConfirm: true
+                    canDecline: true
+                    respondedAt: null
+                page:
+                  number: 0
+                  size: 20
+                  totalElements: 1
+                  totalPages: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccountNotAllowed'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/me/applications/{applicationId}:
+    get:
+      tags: [Applications]
+      operationId: getMyApplicationDetail
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: Get detail and status history of one of the caller's own applications (US-04 / Task64)
+      description: >-
+        Requires SESSION and an ACTIVE user account. Under T74-D01, if applicationId
+        exists in the database but belongs to another user, return 403 ACCESS_DENIED;
+        if applicationId does not exist, return 404 RESOURCE_NOT_FOUND. Applies
+        server-side visibility masking (T74-D04): before results_published_at, masks
+        UNDER_REVIEW/ACCEPTED/REJECTED as SUBMITTED, hides resultMessage/decidedAt,
+        and strips unreleased statusHistory entries. Internal committee notes
+        (application_reviews) are never returned.
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '90001'
+      responses:
+        '200':
+          description: Applicant-facing application detail and allowed status history
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicantApplicationDetail'
+              examples:
+                prePublicationMasked:
+                  summary: Before results_published_at is set (internal ACCEPTED is masked as SUBMITTED)
+                  value:
+                    id: '90001'
+                    club:
+                      id: '20001'
+                      name: Example Club
+                      imageUrl: https://images.example.org/clubs/20001.png
+                    round:
+                      id: '70001'
+                      title: Volunteer recruitment
+                      academicYear: 2569
+                      semester: 1
+                      opensAt: '2026-10-01T00:00:00Z'
+                      closesAt: '2026-10-25T16:59:59Z'
+                      resultsPublishedAt: null
+                      confirmationDeadline: null
+                    motivation: I would like to help organize club activities.
+                    questionsWithAnswers:
+                      - questionId: '81001'
+                        questionText: Describe an activity you helped organize.
+                        isRequired: true
+                        displayOrder: 1
+                        answerText: I have organized student workshops.
+                    links:
+                      - label: Portfolio
+                        url: https://example.org/portfolio
+                        displayOrder: 1
+                    submittedAt: '2026-10-19T09:30:00Z'
+                    applicantVisibleStatus: SUBMITTED
+                    displayStatusLabel: รอพิจารณา
+                    resultMessage: null
+                    canConfirm: false
+                    canDecline: false
+                    respondedAt: null
+                    statusHistory:
+                      - status: SUBMITTED
+                        displayStatusLabel: ส่งใบสมัครแล้ว
+                        occurredAt: '2026-10-19T09:30:00Z'
+                postPublicationAccepted:
+                  summary: After results_published_at is set and before confirmation_deadline
+                  value:
+                    id: '90001'
+                    club:
+                      id: '20001'
+                      name: Example Club
+                      imageUrl: https://images.example.org/clubs/20001.png
+                    round:
+                      id: '70001'
+                      title: Volunteer recruitment
+                      academicYear: 2569
+                      semester: 1
+                      opensAt: '2026-10-01T00:00:00Z'
+                      closesAt: '2026-10-25T16:59:59Z'
+                      resultsPublishedAt: '2026-10-26T03:00:00Z'
+                      confirmationDeadline: '2026-11-05T16:59:59Z'
+                    motivation: I would like to help organize club activities.
+                    questionsWithAnswers:
+                      - questionId: '81001'
+                        questionText: Describe an activity you helped organize.
+                        isRequired: true
+                        displayOrder: 1
+                        answerText: I have organized student workshops.
+                    links:
+                      - label: Portfolio
+                        url: https://example.org/portfolio
+                        displayOrder: 1
+                    submittedAt: '2026-10-19T09:30:00Z'
+                    applicantVisibleStatus: ACCEPTED_PENDING_CONFIRMATION
+                    displayStatusLabel: ผ่านการคัดเลือก (รอยืนยันสิทธิ์)
+                    resultMessage: Congratulations! Please confirm your membership before the deadline.
+                    canConfirm: true
+                    canDecline: true
+                    respondedAt: null
+                    statusHistory:
+                      - status: SUBMITTED
+                        displayStatusLabel: ส่งใบสมัครแล้ว
+                        occurredAt: '2026-10-19T09:30:00Z'
+                      - status: ACCEPTED_PENDING_CONFIRMATION
+                        displayStatusLabel: ประกาศผลคัดเลือก (ผ่านการคัดเลือก)
+                        occurredAt: '2026-10-26T03:00:00Z'
+        '400':
+          $ref: '#/components/responses/InvalidResourceId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Application does not exist (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/me/applications/{applicationId}/confirm:
+    post:
+      tags: [Applications]
+      operationId: confirmMembershipOffer
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: Confirm an accepted club membership offer (US-05 / Task69)
+      description: >-
+        Requires SESSION, X-CSRF-TOKEN, ACTIVE user account, and ownership of
+        applicationId (403 ACCESS_DENIED if owned by another user; 404 RESOURCE_NOT_FOUND
+        if nonexistent). Under T74-D05 and T74-D07, if the application is already
+        CONFIRMED, returns 200 OK with idempotentReplay: true and the recorded
+        outcome without re-checking deadline/student/club status or writing duplicate
+        membership/history rows. For a fresh confirmation, requires ACTIVE student
+        profile and ACTIVE target club (403 ACCESS_DENIED otherwise), locks the
+        applicant's student_profiles row, round, and application in deterministic
+        order, verifies results_published_at <= serverNow < confirmation_deadline
+        (T74-D06), rejects any existing club_memberships row for (club_id, user_id)
+        in any status (ACTIVE, INACTIVE, LEFT, REMOVED) with 409 EXISTING_CLUB_MEMBERSHIP
+        (T74-D07), enforces the 5-active-club limit (409 MEMBERSHIP_LIMIT_REACHED),
+        and atomically transitions the application to CONFIRMED while inserting the
+        ACTIVE club_memberships row.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '90001'
+      responses:
+        '200':
+          description: Membership offer confirmed (or idempotent replay of an already confirmed offer)
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipOfferResponse'
+              example:
+                applicationId: '90001'
+                clubId: '20001'
+                roundId: '70001'
+                status: CONFIRMED
+                displayStatusLabel: ยืนยันสิทธิ์แล้ว
+                respondedAt: '2026-10-28T04:15:00Z'
+                membershipId: '60001'
+                idempotentReplay: false
+        '400':
+          $ref: '#/components/responses/InvalidResourceId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Application does not exist (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Offer expired, results not published, opposite action already taken, existing membership row in any status, or 5-club limit reached
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/MembershipOfferConflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/me/applications/{applicationId}/decline:
+    post:
+      tags: [Applications]
+      operationId: declineMembershipOffer
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: Decline an accepted club membership offer (US-05 / Task69)
+      description: >-
+        Requires SESSION, X-CSRF-TOKEN, ACTIVE user account, and ownership of
+        applicationId (does not require student profile or club to be ACTIVE per
+        Permission Matrix section 3). If the application is already DECLINED,
+        returns 200 OK with idempotentReplay: true and no writes (T74-D05).
+        If already CONFIRMED, returns 409 ALREADY_RESPONDED (no change of mind in MVP).
+        For a fresh decline, locks the application row, verifies ACCEPTED status,
+        non-cancelled round, and results_published_at <= serverNow < confirmation_deadline
+        (T74-D06), then updates status to DECLINED and records history without
+        creating a membership.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '90001'
+      responses:
+        '200':
+          description: Membership offer declined (or idempotent replay of an already declined offer)
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipOfferResponse'
+              example:
+                applicationId: '90001'
+                clubId: '20001'
+                roundId: '70001'
+                status: DECLINED
+                displayStatusLabel: สละสิทธิ์
+                respondedAt: '2026-10-28T04:20:00Z'
+                membershipId: null
+                idempotentReplay: false
+        '400':
+          $ref: '#/components/responses/InvalidResourceId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Application does not exist (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Offer expired, results not published, or already confirmed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/MembershipOfferConflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/admin/dashboard/stats:
+    get:
+      tags: [Admin Dashboard]
+      operationId: getAdminDashboardStats
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: Get university-wide club recruitment and membership statistics for Admin (US-10 / Task71)
+      description: >-
+        Requires SESSION, an ACTIVE account, and current database users.system_role = ADMIN
+        (rechecked on every request per Task79). Non-admin users including club
+        committee members and presidents without global ADMIN receive 403 ACCESS_DENIED.
+        Returns aggregate statistics across all clubs matching the search/category/academicYear/semester
+        filters without exposing individual applicant answers or documents, and
+        without join double-counting (T74-D08).
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive substring filter on club name.
+          schema:
+            type: string
+            maxLength: 200
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+        - name: academicYear
+          in: query
+          required: false
+          description: Filter recruitment round metrics by recruitment_rounds.academic_year.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 32767
+          example: 2569
+        - name: semester
+          in: query
+          required: false
+          description: Filter recruitment round metrics by recruitment_rounds.semester.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+          example: 1
+        - name: clubStatus
+          in: query
+          required: false
+          description: Filter clubs by status; defaults to ALL so Admin can view all clubs (US-10.BR-03).
+          schema:
+            type: string
+            enum: [ALL, ACTIVE, INACTIVE]
+            default: ALL
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: University-wide aggregate statistics and paginated per-club breakdown
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboardStatsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /actuator/health:
     get:
       tags: [Operations]
@@ -1381,6 +2365,35 @@ components:
         role:
           type: string
           enum: [USER, ADMIN]
+        studentStatus:
+          type: [string, 'null']
+          enum: [ACTIVE, INACTIVE, GRADUATED, UNKNOWN, null]
+          description: >-
+            Optional real-time student status projected from student_profiles when
+            available (Task79). Null for non-student accounts (e.g., ADMIN without
+            a student profile).
+        activeCommitteeAssignments:
+          type: array
+          description: >-
+            Real-time list of active committee memberships for the authenticated user,
+            used by the frontend to toggle Committee Workspace and club edit CTAs
+            without relogin (Task79).
+          items:
+            $ref: '#/components/schemas/ActiveCommitteeAssignmentSummary'
+    ActiveCommitteeAssignmentSummary:
+      type: object
+      additionalProperties: false
+      required: [clubId, clubName, positionTitle]
+      properties:
+        clubId:
+          type: string
+          pattern: '^[0-9]+$'
+        clubName:
+          type: string
+          maxLength: 200
+        positionTitle:
+          type: [string, 'null']
+          maxLength: 100
     ClubDetail:
       type: object
       required: [id, categoryId, name, description, objectives, contactUrl, facebookUrl, instagramUrl, contactEmail, affiliationLevel, affiliationName, imageUrl, bannerUrl, status, category, tags, recruitmentRounds]
@@ -1450,6 +2463,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PublicRecruitmentRound'
+        canEditProfile:
+          type: boolean
+          description: >-
+            True when the caller is an active committee member for this club or a
+            system ADMIN (Task81).
     ClubUpdateRequest:
       type: object
       additionalProperties: false
@@ -1599,6 +2617,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PublicClubTag'
+        canEditProfile:
+          type: boolean
+          description: >-
+            Optional capability flag indicating whether the caller can edit this club's
+            profile (false for anonymous callers or non-committee users; true for active
+            committee members of this club or system ADMINs — Task81).
     PublicClubCategory:
       type: object
       additionalProperties: false
@@ -1624,6 +2648,83 @@ components:
           description: Decimal string representing a database bigint identifier.
         name:
           type: string
+    PublicClubCategoryList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicClubCategory'
+    PublicClubTagList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicClubTag'
+    PublicClubSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, shortDescription, affiliationLevel, affiliationName, imageUrl, bannerUrl, category, tags, isOpenForApplication, activeRoundCount, nextClosingRoundAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+          maxLength: 19
+        name:
+          type: string
+          maxLength: 200
+        shortDescription:
+          type: string
+          maxLength: 500
+          description: Truncated or summary public club description for directory cards.
+        affiliationLevel:
+          type: [string, 'null']
+          maxLength: 30
+        affiliationName:
+          type: [string, 'null']
+          maxLength: 200
+        imageUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        bannerUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        category:
+          $ref: '#/components/schemas/PublicClubCategory'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicClubTag'
+        isOpenForApplication:
+          type: boolean
+          description: True when at least one round is currently open at the request evaluation instant.
+        activeRoundCount:
+          type: integer
+          minimum: 0
+        nextClosingRoundAt:
+          type: [string, 'null']
+          format: date-time
+          description: Earliest closesAt among currently open rounds, or null when none are open.
+    PublicClubSearchPage:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicClubSummary'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
     OpenPublicRecruitmentRound:
       type: object
       additionalProperties: false
@@ -1681,6 +2782,830 @@ components:
         totalPages:
           type: integer
           minimum: 0
+    InternalApplicationStatus:
+      type: string
+      description: >-
+        Authoritative internal application lifecycle status stored in
+        applications.status. Pre-publication decisions (ACCEPTED, REJECTED) are
+        visible to Committee/Admin but masked from applicants until
+        resultsPublishedAt is set (T74-D02).
+      enum:
+        - SUBMITTED
+        - UNDER_REVIEW
+        - ACCEPTED
+        - REJECTED
+        - CONFIRMED
+        - DECLINED
+        - EXPIRED
+    ApplicantVisibleStatus:
+      type: string
+      description: >-
+        Applicant-visible projection of application status (T74-D02). While
+        round.resultsPublishedAt is null, internal ACCEPTED and REJECTED are
+        projected as UNDER_REVIEW so draft committee decisions never leak before
+        publication.
+      enum:
+        - SUBMITTED
+        - UNDER_REVIEW
+        - ACCEPTED
+        - REJECTED
+        - CONFIRMED
+        - DECLINED
+        - EXPIRED
+    CommitteeRoundSummary:
+      type: object
+      additionalProperties: false
+      required: [id, clubId, clubName, title, status, opensAt, closesAt, closedAt, resultsPublishedAt, resultsPublishedByUserId]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        clubId:
+          type: string
+          pattern: '^[0-9]+$'
+        clubName:
+          type: string
+          maxLength: 200
+        title:
+          type: string
+          maxLength: 200
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, CLOSED, CANCELLED]
+        opensAt:
+          type: string
+          format: date-time
+        closesAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: [string, 'null']
+          format: date-time
+        resultsPublishedAt:
+          type: [string, 'null']
+          format: date-time
+        resultsPublishedByUserId:
+          type: [string, 'null']
+          pattern: '^[0-9]+$'
+    ApplicantIdentitySummary:
+      type: object
+      additionalProperties: false
+      required: [userId, studentCode, fullNameTh, fullNameEn, email, phone, facultyName, departmentName, studyYear]
+      properties:
+        userId:
+          type: string
+          pattern: '^[0-9]+$'
+        studentCode:
+          type: string
+          maxLength: 30
+        fullNameTh:
+          type: string
+          maxLength: 200
+        fullNameEn:
+          type: [string, 'null']
+          maxLength: 200
+        email:
+          type: [string, 'null']
+          format: email
+          maxLength: 254
+        phone:
+          type: [string, 'null']
+          maxLength: 30
+        facultyName:
+          type: [string, 'null']
+          maxLength: 150
+        departmentName:
+          type: [string, 'null']
+          maxLength: 150
+        studyYear:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 10
+    CommitteeApplicationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, roundId, applicant, status, submittedAt, reviewedAt, confirmationDeadlineAt, confirmedAt, declinedAt, expiredAt, updatedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        roundId:
+          type: string
+          pattern: '^[0-9]+$'
+        applicant:
+          $ref: '#/components/schemas/ApplicantIdentitySummary'
+        status:
+          $ref: '#/components/schemas/InternalApplicationStatus'
+        submittedAt:
+          type: string
+          format: date-time
+        reviewedAt:
+          type: [string, 'null']
+          format: date-time
+        confirmationDeadlineAt:
+          type: [string, 'null']
+          format: date-time
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+        declinedAt:
+          type: [string, 'null']
+          format: date-time
+        expiredAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CommitteeApplicationPage:
+      type: object
+      additionalProperties: false
+      required: [round, statusCounts, items, page]
+      properties:
+        round:
+          $ref: '#/components/schemas/CommitteeRoundSummary'
+        statusCounts:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+          description: Map of InternalApplicationStatus keys to counts within this round.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitteeApplicationSummary'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    CommitteeQuestionAnswerView:
+      type: object
+      additionalProperties: false
+      required: [questionId, questionText, questionType, isRequired, displayOrder, answerText, selectedOptionIds, selectedOptionLabels]
+      properties:
+        questionId:
+          type: string
+          pattern: '^[0-9]+$'
+        questionText:
+          type: string
+        questionType:
+          type: string
+          enum: [SHORT_TEXT, LONG_TEXT, SINGLE_CHOICE, MULTI_CHOICE, LINK]
+        isRequired:
+          type: boolean
+        displayOrder:
+          type: integer
+          minimum: 1
+        answerText:
+          type: [string, 'null']
+        selectedOptionIds:
+          type: array
+          items:
+            type: string
+            pattern: '^[0-9]+$'
+        selectedOptionLabels:
+          type: array
+          items:
+            type: string
+    CommitteeDocumentLinkView:
+      type: object
+      additionalProperties: false
+      required: [id, documentType, title, url, createdAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        documentType:
+          type: string
+          enum: [PORTFOLIO, RESUME, TRANSCRIPT, OTHER]
+        title:
+          type: string
+          maxLength: 200
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        createdAt:
+          type: string
+          format: date-time
+    CommitteeReviewNoteView:
+      type: object
+      additionalProperties: false
+      required: [id, reviewerUserId, reviewerDisplayName, score, note, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        reviewerUserId:
+          type: string
+          pattern: '^[0-9]+$'
+        reviewerDisplayName:
+          type: string
+        score:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 100
+        note:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CommitteeStatusHistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [id, fromStatus, toStatus, changedByUserId, reason, createdAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        fromStatus:
+          oneOf:
+            - $ref: '#/components/schemas/InternalApplicationStatus'
+            - type: 'null'
+        toStatus:
+          $ref: '#/components/schemas/InternalApplicationStatus'
+        changedByUserId:
+          type: [string, 'null']
+          pattern: '^[0-9]+$'
+        reason:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+    CommitteeApplicationDetail:
+      type: object
+      additionalProperties: false
+      required: [id, round, applicant, status, applicantNote, submittedAt, reviewedAt, confirmationDeadlineAt, confirmedAt, declinedAt, expiredAt, answers, documentLinks, reviewNotes, statusHistory, updatedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        round:
+          $ref: '#/components/schemas/CommitteeRoundSummary'
+        applicant:
+          $ref: '#/components/schemas/ApplicantIdentitySummary'
+        status:
+          $ref: '#/components/schemas/InternalApplicationStatus'
+        applicantNote:
+          type: [string, 'null']
+        submittedAt:
+          type: string
+          format: date-time
+        reviewedAt:
+          type: [string, 'null']
+          format: date-time
+        confirmationDeadlineAt:
+          type: [string, 'null']
+          format: date-time
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+        declinedAt:
+          type: [string, 'null']
+          format: date-time
+        expiredAt:
+          type: [string, 'null']
+          format: date-time
+        answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitteeQuestionAnswerView'
+        documentLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitteeDocumentLinkView'
+        reviewNotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitteeReviewNoteView'
+        statusHistory:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitteeStatusHistoryEntry'
+        updatedAt:
+          type: string
+          format: date-time
+    ApplicationDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      description: >-
+        Draft review state or selection decision before round results are published
+        (S2-DECISION-DRAFT / T74-D02). Allowed only while round.status = CLOSED and
+        round.resultsPublishedAt is null.
+      properties:
+        status:
+          type: string
+          enum: [UNDER_REVIEW, ACCEPTED, REJECTED]
+        score:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 100
+        note:
+          type: [string, 'null']
+          maxLength: 2000
+        reason:
+          type: [string, 'null']
+          maxLength: 500
+          description: Optional audit reason recorded in application_status_history.
+    ApplicationDecisionConflict:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [reason]
+          properties:
+            code:
+              type: string
+              const: RESOURCE_CONFLICT
+            reason:
+              type: string
+              enum:
+                - ROUND_NOT_CLOSED
+                - RESULTS_ALREADY_PUBLISHED
+                - INVALID_STATUS_TRANSITION
+    PublishResultsRequest:
+      type: object
+      additionalProperties: false
+      required: [confirmationDeadlineAt]
+      description: >-
+        Publishes all pre-recorded ACCEPTED and REJECTED decisions for a closed round
+        and sets confirmation_deadline_at on all ACCEPTED applications in the round
+        (S2-PUBLICATION-DRAFT / T74-D02).
+      properties:
+        confirmationDeadlineAt:
+          type: string
+          format: date-time
+          description: >-
+            Must be strictly after the server's current UTC timestamp (publishedAt)
+            and strictly after round.closesAt.
+    PublishResultsResponse:
+      type: object
+      additionalProperties: false
+      required: [roundId, status, resultsPublishedAt, resultsPublishedByUserId, confirmationDeadlineAt, totalApplications, acceptedCount, rejectedCount]
+      properties:
+        roundId:
+          type: string
+          pattern: '^[0-9]+$'
+        status:
+          type: string
+          const: CLOSED
+        resultsPublishedAt:
+          type: string
+          format: date-time
+        resultsPublishedByUserId:
+          type: string
+          pattern: '^[0-9]+$'
+        confirmationDeadlineAt:
+          type: string
+          format: date-time
+        totalApplications:
+          type: integer
+          minimum: 0
+        acceptedCount:
+          type: integer
+          minimum: 0
+        rejectedCount:
+          type: integer
+          minimum: 0
+    PublishResultsConflict:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [reason]
+          properties:
+            code:
+              type: string
+              const: RESOURCE_CONFLICT
+            reason:
+              type: string
+              enum:
+                - ROUND_NOT_CLOSED
+                - RESULTS_ALREADY_PUBLISHED
+                - UNDECIDED_APPLICATIONS_REMAIN
+    ApplicantClubSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, imageUrl, categoryName]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        name:
+          type: string
+          maxLength: 200
+        imageUrl:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+        categoryName:
+          type: [string, 'null']
+          maxLength: 100
+    ApplicantRoundSummary:
+      type: object
+      additionalProperties: false
+      required: [id, title, status, opensAt, closesAt, closedAt, resultsPublishedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        title:
+          type: string
+          maxLength: 200
+        status:
+          type: string
+          enum: [PUBLISHED, CLOSED, CANCELLED]
+        opensAt:
+          type: string
+          format: date-time
+        closesAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: [string, 'null']
+          format: date-time
+        resultsPublishedAt:
+          type: [string, 'null']
+          format: date-time
+    ApplicantApplicationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, club, round, status, resultsPublished, canConfirmOffer, canDeclineOffer, submittedAt, confirmationDeadlineAt, confirmedAt, declinedAt, expiredAt, updatedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        club:
+          $ref: '#/components/schemas/ApplicantClubSummary'
+        round:
+          $ref: '#/components/schemas/ApplicantRoundSummary'
+        status:
+          $ref: '#/components/schemas/ApplicantVisibleStatus'
+        resultsPublished:
+          type: boolean
+          description: True when round.resultsPublishedAt is non-null.
+        canConfirmOffer:
+          type: boolean
+          description: >-
+            True only when resultsPublished is true, status is ACCEPTED, and the
+            current server UTC time is less than or equal to confirmationDeadlineAt.
+        canDeclineOffer:
+          type: boolean
+          description: >-
+            True only when resultsPublished is true, status is ACCEPTED, and the
+            current server UTC time is less than or equal to confirmationDeadlineAt.
+        submittedAt:
+          type: string
+          format: date-time
+        confirmationDeadlineAt:
+          type: [string, 'null']
+          format: date-time
+          description: Masked as null while resultsPublished is false.
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+        declinedAt:
+          type: [string, 'null']
+          format: date-time
+        expiredAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ApplicantApplicationPage:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicantApplicationSummary'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    ApplicantDocumentLinkView:
+      type: object
+      additionalProperties: false
+      required: [id, documentType, title, url]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        documentType:
+          type: string
+          enum: [PORTFOLIO, RESUME, TRANSCRIPT, OTHER]
+        title:
+          type: string
+          maxLength: 200
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          pattern: '^https://\S+$'
+    ApplicantStatusHistoryEntry:
+      type: object
+      additionalProperties: false
+      description: >-
+        Applicant-safe status timeline entry. Pre-publication ACCEPTED/REJECTED
+        draft transitions are masked or coalesced into UNDER_REVIEW until
+        round.resultsPublishedAt is set, and changedByUserId / internal committee
+        reasons are never exposed.
+      required: [status, occurredAt, label]
+      properties:
+        status:
+          $ref: '#/components/schemas/ApplicantVisibleStatus'
+        occurredAt:
+          type: string
+          format: date-time
+        label:
+          type: string
+    ApplicantApplicationDetail:
+      type: object
+      additionalProperties: false
+      description: >-
+        Applicant-owned application detail projection. Excludes committee reviewNotes,
+        scores, and internal reviewer identities (US-04 / T74-D02).
+      required: [id, club, round, status, resultsPublished, canConfirmOffer, canDeclineOffer, applicantNote, submittedAt, confirmationDeadlineAt, confirmedAt, declinedAt, expiredAt, answers, documentLinks, statusTimeline, updatedAt]
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9]+$'
+        club:
+          $ref: '#/components/schemas/ApplicantClubSummary'
+        round:
+          $ref: '#/components/schemas/ApplicantRoundSummary'
+        status:
+          $ref: '#/components/schemas/ApplicantVisibleStatus'
+        resultsPublished:
+          type: boolean
+        canConfirmOffer:
+          type: boolean
+        canDeclineOffer:
+          type: boolean
+        applicantNote:
+          type: [string, 'null']
+        submittedAt:
+          type: string
+          format: date-time
+        confirmationDeadlineAt:
+          type: [string, 'null']
+          format: date-time
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+        declinedAt:
+          type: [string, 'null']
+          format: date-time
+        expiredAt:
+          type: [string, 'null']
+          format: date-time
+        answers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitteeQuestionAnswerView'
+        documentLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicantDocumentLinkView'
+        statusTimeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicantStatusHistoryEntry'
+        updatedAt:
+          type: string
+          format: date-time
+    MembershipOfferResponse:
+      type: object
+      additionalProperties: false
+      required: [applicationId, clubId, roundId, status, confirmedAt, declinedAt, clubMembershipId, membershipStatus]
+      properties:
+        applicationId:
+          type: string
+          pattern: '^[0-9]+$'
+        clubId:
+          type: string
+          pattern: '^[0-9]+$'
+        roundId:
+          type: string
+          pattern: '^[0-9]+$'
+        status:
+          type: string
+          enum: [CONFIRMED, DECLINED]
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+        declinedAt:
+          type: [string, 'null']
+          format: date-time
+        clubMembershipId:
+          type: [string, 'null']
+          pattern: '^[0-9]+$'
+          description: Present when status is CONFIRMED and club_memberships row is created/activated.
+        membershipStatus:
+          type: [string, 'null']
+          enum: [ACTIVE, null]
+    MembershipOfferConflict:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [reason]
+          properties:
+            code:
+              type: string
+              const: RESOURCE_CONFLICT
+            reason:
+              type: string
+              enum:
+                - OFFER_NOT_AVAILABLE
+                - OFFER_EXPIRED
+                - ALREADY_CLUB_MEMBER
+                - CLUB_INACTIVE
+                - STUDENT_NOT_ACTIVE
+                - INVALID_STATUS_TRANSITION
+    AdminDashboardStatsResponse:
+      type: object
+      additionalProperties: false
+      required: [generatedAt, filters, summary, applicationsByCategory, topClubsByApplications, clubStats]
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        filters:
+          $ref: '#/components/schemas/AdminDashboardAppliedFilters'
+        summary:
+          $ref: '#/components/schemas/AdminDashboardSummaryMetrics'
+        applicationsByCategory:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminCategoryStatsItem'
+        topClubsByApplications:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminTopClubItem'
+        clubStats:
+          $ref: '#/components/schemas/AdminClubStatsPage'
+    AdminDashboardAppliedFilters:
+      type: object
+      additionalProperties: false
+      required: [academicYear, semester, categoryId, clubStatus]
+      properties:
+        academicYear:
+          type: [integer, 'null']
+        semester:
+          type: [string, 'null']
+          enum: ['1', '2', '3', 'SUMMER', null]
+        categoryId:
+          type: [string, 'null']
+          pattern: '^[0-9]+$'
+        clubStatus:
+          type: string
+          enum: [ACTIVE, INACTIVE, ALL]
+    AdminDashboardSummaryMetrics:
+      type: object
+      additionalProperties: false
+      required: [totalClubs, activeClubs, inactiveClubs, clubsCurrentlyRecruiting, totalRecruitmentRounds, openRecruitmentRounds, totalApplications, statusBreakdown, activeMembershipsCount]
+      properties:
+        totalClubs:
+          type: integer
+          minimum: 0
+        activeClubs:
+          type: integer
+          minimum: 0
+        inactiveClubs:
+          type: integer
+          minimum: 0
+        clubsCurrentlyRecruiting:
+          type: integer
+          minimum: 0
+        totalRecruitmentRounds:
+          type: integer
+          minimum: 0
+        openRecruitmentRounds:
+          type: integer
+          minimum: 0
+        totalApplications:
+          type: integer
+          minimum: 0
+        statusBreakdown:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+          description: Map of InternalApplicationStatus keys to aggregate counts.
+        activeMembershipsCount:
+          type: integer
+          minimum: 0
+    AdminCategoryStatsItem:
+      type: object
+      additionalProperties: false
+      required: [categoryId, categoryName, clubCount, totalApplications, confirmedApplications, activeMembersCount]
+      properties:
+        categoryId:
+          type: string
+          pattern: '^[0-9]+$'
+        categoryName:
+          type: string
+        clubCount:
+          type: integer
+          minimum: 0
+        totalApplications:
+          type: integer
+          minimum: 0
+        confirmedApplications:
+          type: integer
+          minimum: 0
+        activeMembersCount:
+          type: integer
+          minimum: 0
+    AdminTopClubItem:
+      type: object
+      additionalProperties: false
+      required: [clubId, clubName, categoryName, totalApplications, acceptedApplications, confirmedApplications, activeMembersCount]
+      properties:
+        clubId:
+          type: string
+          pattern: '^[0-9]+$'
+        clubName:
+          type: string
+        categoryName:
+          type: string
+        totalApplications:
+          type: integer
+          minimum: 0
+        acceptedApplications:
+          type: integer
+          minimum: 0
+        confirmedApplications:
+          type: integer
+          minimum: 0
+        activeMembersCount:
+          type: integer
+          minimum: 0
+    AdminClubStatsItem:
+      type: object
+      additionalProperties: false
+      required: [clubId, clubName, categoryId, categoryName, status, totalRounds, openRounds, totalApplications, submittedCount, underReviewCount, acceptedCount, rejectedCount, confirmedCount, declinedCount, expiredCount, activeMembersCount]
+      properties:
+        clubId:
+          type: string
+          pattern: '^[0-9]+$'
+        clubName:
+          type: string
+        categoryId:
+          type: string
+          pattern: '^[0-9]+$'
+        categoryName:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        totalRounds:
+          type: integer
+          minimum: 0
+        openRounds:
+          type: integer
+          minimum: 0
+        totalApplications:
+          type: integer
+          minimum: 0
+        submittedCount:
+          type: integer
+          minimum: 0
+        underReviewCount:
+          type: integer
+          minimum: 0
+        acceptedCount:
+          type: integer
+          minimum: 0
+        rejectedCount:
+          type: integer
+          minimum: 0
+        confirmedCount:
+          type: integer
+          minimum: 0
+        declinedCount:
+          type: integer
+          minimum: 0
+        expiredCount:
+          type: integer
+          minimum: 0
+        activeMembersCount:
+          type: integer
+          minimum: 0
+    AdminClubStatsPage:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminClubStatsItem'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
     Problem:
       type: object
       required: [type, title, status, code, traceId]
@@ -1700,6 +3625,13 @@ components:
           type: string
         code:
           type: string
+        reason:
+          type: string
+          description: >-
+            Optional sub-code providing deterministic domain disambiguation for
+            409 RESOURCE_CONFLICT responses (e.g., QUESTION_HAS_ANSWERS,
+            ROUND_NOT_CLOSED, RESULTS_ALREADY_PUBLISHED, UNDECIDED_APPLICATIONS_REMAIN,
+            OFFER_EXPIRED, ALREADY_CLUB_MEMBER).
         fieldErrors:
           type: array
           items:

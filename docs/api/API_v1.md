@@ -3,8 +3,8 @@
 | Property | Value |
 |---|---|
 | Version | `v1` |
-| Contract status | Partially implemented; endpoint status listed below |
-| Last updated | 2026-10-27 |
+| Contract status | Partially implemented; Sprint 2 contracts specified in `openapi.yaml` (v1.2.0), `rounds.openapi.yaml` (v1.1.0), and `task75-sprint2-design.md` |
+| Last updated | 2026-10-28 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
@@ -426,6 +426,27 @@ Actual result publication, not `resultsScheduledAt`, controls applicant visibili
 **Fresh action versus retry:** for a new confirmation/decline, acquire the relevant transaction protection, recheck current write rights/state/version, then sample backend time before writing and require `results_published_at <= serverNow < confirmation_deadline`. The same-final-action retry is not a new decision: after current session/Active account and ownership/resource authorization, return the recorded outcome without another deadline decision, `responded_at` update, member change or history row. If membership later changes for another reason, this replay does not restore it. Response encoding and the precise lock strategy still need API/BE Design; a lock on one application or its uniqueness constraint alone does not serialize the user's confirmations across clubs.
 
 Calling that replay a logical read does not define a new GET endpoint or waive CSRF for an unsafe request. The shared session, CSRF and current-account rules and their error codes still apply before returning a stored outcome.
+
+### 8.2 Task75 Sprint 2 System & API Design Specification (2026-10-28)
+
+Following the Task74 System Analysis handoff, the complete Sprint 2 technical contracts, OpenAPI schemas, RFC 7807 `409 RESOURCE_CONFLICT` `reason` vocabulary, database locking & expiry worker design, and frontend UI wireframes/status mappings are specified in:
+
+- **Master System Design Document:** [`docs/architecture/task75-sprint2-design.md`](../architecture/task75-sprint2-design.md)
+- **Primary OpenAPI 3.1 Specification (`v1.2.0`):** [`docs/api/openapi.yaml`](openapi.yaml)
+- **Recruitment Rounds OpenAPI 3.0.3 Specification (`v1.1.0`):** [`docs/api/rounds.openapi.yaml`](rounds.openapi.yaml)
+
+| Sprint 2 Feature / Task | Specified Endpoint(s) | Primary OpenAPI Schema(s) |
+|---|---|---|
+| **US-01 / Task62–63** Public Club Directory & Filters | `GET /api/v1/public/clubs`, `GET /api/v1/public/club-categories`, `GET /api/v1/public/interest-tags` | `PublicClubSearchPage`, `PublicClubSummary`, `PublicClubCategoryList`, `PublicClubTagList` |
+| **Task79** Real-Time Auth Session Refresh | `GET /api/v1/auth/me` | `CurrentUser` (`studentStatus`, `activeCommitteeAssignments`) |
+| **Task81** Club Profile Edit Capability Flag | `GET /api/v1/public/clubs/{id}`, `GET /api/v1/clubs/{clubId}` | `PublicClubProfile.canEditProfile`, `ClubDetail.canEditProfile` |
+| **US-08 / Task51** Question Edit/Delete Conflict | `PUT / DELETE /api/v1/rounds/{roundId}/questions/{questionId}` | `Problem` (`409 RESOURCE_CONFLICT`, `reason: QUESTION_HAS_ANSWERS`) |
+| **US-09 / Task65–66** Committee Application Review (Read-Only) | `GET /api/v1/rounds/{roundId}/applications`, `GET /api/v1/rounds/{roundId}/applications/{applicationId}` | `CommitteeApplicationPage`, `CommitteeApplicationDetail` |
+| **S2-DECISION-DRAFT / Task67–68** Pre-Publication Review & Decision | `PUT /api/v1/rounds/{roundId}/applications/{applicationId}/decision` | `ApplicationDecisionRequest`, `CommitteeApplicationDetail`, `ApplicationDecisionConflict` |
+| **S2-PUBLICATION-DRAFT / Task67–68** Batch Result Publication | `POST /api/v1/rounds/{roundId}/publish-results` | `PublishResultsRequest`, `PublishResultsResponse`, `PublishResultsConflict` |
+| **US-04 / Task64 & Task56** Applicant Application Tracking & Detail | `GET /api/v1/me/applications`, `GET /api/v1/me/applications/{applicationId}` | `ApplicantApplicationPage`, `ApplicantApplicationDetail`, `ApplicantVisibleStatus` |
+| **US-05 / Task69–70** Membership Offer Confirm / Decline | `POST /api/v1/me/applications/{applicationId}/confirm`, `POST /api/v1/me/applications/{applicationId}/decline` | `MembershipOfferResponse`, `MembershipOfferConflict` |
+| **US-10 / Task71–72** Admin Central Dashboard Statistics | `GET /api/v1/admin/dashboard/stats` | `AdminDashboardStatsResponse`, `AdminDashboardSummaryMetrics`, `AdminClubStatsPage` |
 
 ## 9. Compatibility and change policy
 
