@@ -26,6 +26,7 @@
 
 **ขอบเขตงานที่ต้องทำ (Actionable Scope)**
 1. **My Applications API:** พัฒนา `GET /api/v1/applications/my` ดึงเฉพาะใบสมัครของนักศึกษาที่ล็อกอินอยู่
+   > **หมายเหตุจาก Task75 (`openapi.yaml` Canonical Path):** ให้ใช้ Canonical Path `GET /api/v1/me/applications` และ `GET /api/v1/me/applications/{applicationId}` ตาม [`docs/api/openapi.yaml`](../../api/openapi.yaml) และ [`docs/architecture/task75-sprint2-design.md`](../../architecture/task75-sprint2-design.md) (สอดคล้องกับ Header `Location` ของ `POST /api/v1/rounds/{roundId}/applications`) โดยไม่ต้องเปิด Path Alias ซ้ำซ้อน
 2. **Application Status UI:** พัฒนาหน้าเว็บแสดงการ์ดใบสมัครแต่ละชมรม พร้อมป้ายสถานะ (รอตรวจ, นัดสัมภาษณ์, ผ่าน, ไม่ผ่าน)
 3. **Timeline / Detail View:** แสดงรายละเอียดวันที่ส่ง, หมายเหตุจากกรรมการ, และขั้นตอนถัดไป
 4. **Privacy Isolation:** ตรวจสอบอย่างรัดกุมไม่ให้เห็นข้อมูลใบสมัครของนักศึกษาคนอื่น

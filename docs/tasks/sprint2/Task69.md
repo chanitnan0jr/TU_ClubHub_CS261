@@ -26,6 +26,7 @@
 
 **ขอบเขตงานที่ต้องทำ (Actionable Scope)**
 1. **Confirm & Decline Endpoints:** พัฒนา `POST /api/v1/applications/:id/confirm` และ `/decline`
+   > **หมายเหตุจาก Task75 (`openapi.yaml` Canonical Path):** ให้ใช้ Canonical Path `POST /api/v1/me/applications/{applicationId}/confirm` และ `POST /api/v1/me/applications/{applicationId}/decline` ตาม [`docs/api/openapi.yaml`](../../api/openapi.yaml) และ [`docs/architecture/task75-sprint2-design.md`](../../architecture/task75-sprint2-design.md) โดยไม่ต้องเปิด Path Alias ซ้ำซ้อน
 2. **Automatic Member Creation:** เมื่อกดยืนยันสิทธิ์ ให้สร้าง Record ในตาราง Club Member โดยอัตโนมัติภายใน Transaction เดียวกัน
 3. **Deadline & Status Validation:** ตรวจสอบว่าต้องเป็นใบสมัครที่ผ่านการคัดเลือกและยังไม่เลยกำหนดเวลา
 4. **Automated Tests:** เขียน Test กรณีการยืนยันสิทธิ์สำเร็จ, การสละสิทธิ์, และกรณีหมดเวลา

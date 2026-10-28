@@ -27,6 +27,7 @@
 **ขอบเขตงานที่ต้องทำ (Actionable Scope)**
 1. **Club Applications List API:** พัฒนา `GET /api/v1/clubs/:id/applications` รองรับการกรองตามสถานะและรอบรับสมัคร
 2. **Application Detail API:** พัฒนา `GET /api/v1/clubs/:id/applications/:appId` เพื่อดูคำตอบและเอกสารแนบของผู้สมัคร
+   > **หมายเหตุจาก Task75 (`openapi.yaml` Canonical Path):** ให้ใช้ Canonical Path แบบอ้างอิงตามรอบรับสมัคร คือ `GET /api/v1/rounds/{roundId}/applications`, `GET /api/v1/rounds/{roundId}/applications/{applicationId}`, และ Optional `POST /api/v1/rounds/{roundId}/applications/{applicationId}/start-review` ตาม [`docs/api/openapi.yaml`](../../api/openapi.yaml) และ [`docs/architecture/task75-sprint2-design.md`](../../architecture/task75-sprint2-design.md) โดยไม่ต้องเปิด Path Alias ซ้ำซ้อน
 3. **Club Committee Security Check:** ตรวจสอบสิทธิ์เข้มงวดให้ดูได้เฉพาะผู้สมัครของชมรมที่ตนเองเป็นกรรมการเท่านั้น
 4. **Automated Tests:** เขียน Test ตรวจสอบการเข้าถึงทั้งกรณีที่มีสิทธิ์และไม่มีสิทธิ์
 

@@ -37,9 +37,9 @@ info:
       T74-D03: separate-decision-and-publication-contracts-specified
       T74-D04: applicant-pre-publication-masking-and-history-allowlist-specified
       T74-D05: same-final-action-replay-without-writes-opposite-action-409
-      T74-D06: fresh-action-server-time-after-lock-recheck-automatic-expiry-60s-worker
+      T74-D06: fresh-action-server-time-after-lock-recheck-automatic-expiry-worker-schedule-pending-po-review
       T74-D07: same-application-replay-no-writes-all-prior-membership-rows-reject-fresh-confirmation-no-reactivation
-      T74-D08: admin-dashboard-metrics-and-academic-year-semester-filtering-specified
+      T74-D08: admin-dashboard-metric-definitions-and-academic-year-semester-filtering-proposed-pending-po-review
       T74-D09: application-form-read-and-submission-contract-confirmed
 servers:
   - url: /
@@ -173,9 +173,12 @@ paths:
     get:
       tags: [Authentication]
       operationId: getCurrentUser
-      x-implementation-status: implemented
+      x-implementation-status: partially-implemented
+      x-sprint2-extensions-status: pending-task79
       summary: Get the authenticated user's real-time account identity and effective committee assignments
       description: >-
+        Baseline user.id and user.role are implemented; Sprint 2 extensions
+        studentStatus and activeCommitteeAssignments are specified for Task79.
         The returned role, studentStatus, and activeCommitteeAssignments are for UI
         presentation and route guarding only; the backend rechecks authorization on
         every request. Expired sessions return 401 AUTHENTICATION_REQUIRED.
@@ -258,8 +261,7 @@ paths:
         tagId without duplicating clubs that have multiple tags (US-01.BR-08), and
         optional recruitmentStatus filtering (default ALL so active clubs without
         open rounds remain discoverable). Blank or whitespace-only q is treated as
-        omitted. Filters combine with logical AND. Also mapped as GET /api/v1/clubs
-        for Task62 compatibility.
+        omitted. Filters combine with logical AND.
       security: []
       parameters:
         - name: q
@@ -373,7 +375,7 @@ paths:
       x-implementation-status: pending
       x-contract-status: specified-in-task75
       summary: List all club categories for public search filters (US-01 / Task62)
-      description: Public endpoint; returns all club categories ordered by display_order ASC, id ASC.
+      description: Public endpoint; returns all club categories from club_categories ordered by name ASC, id ASC.
       security: []
       responses:
         '200':
@@ -403,7 +405,7 @@ paths:
       x-implementation-status: pending
       x-contract-status: specified-in-task75
       summary: List all interest tags for public search filters (US-01 / Task62)
-      description: Public endpoint; returns all interest tags ordered by name ASC, id ASC.
+      description: Public endpoint; returns all interest tags from tags ordered by name ASC, id ASC.
       security: []
       responses:
         '200':
@@ -426,16 +428,21 @@ paths:
     get:
       tags: [Public Clubs]
       operationId: getPublicClubProfile
-      x-implementation-status: implemented
+      x-implementation-status: partially-implemented
+      x-sprint2-extensions-status: pending-task81
       summary: Get an active club's public profile
       description: >-
         Public endpoint; authentication is not required. Returns only an ACTIVE
         club. If the club does not exist or is inactive, return the same 404
         response so its non-public existence is not disclosed. Only the explicitly
         listed public profile fields and safe category/tag summaries may be exposed.
-        When called with an active authenticated session, canEditProfile reflects
-        whether the caller currently holds an effective COMMITTEE or PRESIDENT
-        assignment for this club (Task81); anonymous callers receive canEditProfile: false.
+        Baseline profile fields are implemented; Sprint 2 adds optional canEditProfile
+        (Task81). When called with an active authenticated session, canEditProfile
+        reflects whether the caller currently holds an effective COMMITTEE or PRESIDENT
+        assignment for this club (ADMIN alone without an effective committee assignment
+        for this club receives false); anonymous callers receive canEditProfile: false.
+        Because canEditProfile varies by caller session, responses must include
+        Cache-Control: no-store.
         Database bigint identifiers are decimal strings on the wire. The id path
         value must contain decimal digits and fit a positive signed 64-bit integer.
       security: []
@@ -452,6 +459,11 @@ paths:
       responses:
         '200':
           description: Active club public profile
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
           content:
             application/json:
               schema:
@@ -602,6 +614,11 @@ paths:
       responses:
         '200':
           description: Public club detail
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
           content:
             application/json:
               schema:
@@ -1294,7 +1311,7 @@ paths:
         - name: q
           in: query
           required: false
-          description: Optional case-insensitive search on applicant studentCode or fullName.
+          description: Optional case-insensitive search on applicant studentCode or displayName.
           schema:
             type: string
             maxLength: 200
@@ -1340,10 +1357,12 @@ paths:
                     applicant:
                       userId: '10001'
                       studentCode: '6609650001'
-                      fullName: Somchai Jaidee
-                      faculty: Faculty of Science and Technology
-                      department: Computer Science
-                      yearLevel: 2
+                      displayName: Somchai Jaidee
+                      email: somchai.jai@dome.tu.ac.th
+                      facultyName: Faculty of Science and Technology
+                      departmentName: Computer Science
+                      programName: Computer Science
+                      studyYear: 2
                     submittedAt: '2026-10-19T09:30:00Z'
                     status: SUBMITTED
                     decidedAt: null
@@ -1425,10 +1444,12 @@ paths:
                 applicant:
                   userId: '10001'
                   studentCode: '6609650001'
-                  fullName: Somchai Jaidee
-                  faculty: Faculty of Science and Technology
-                  department: Computer Science
-                  yearLevel: 2
+                  displayName: Somchai Jaidee
+                  email: somchai.jai@dome.tu.ac.th
+                  facultyName: Faculty of Science and Technology
+                  departmentName: Computer Science
+                  programName: Computer Science
+                  studyYear: 2
                 motivation: I would like to help organize club activities.
                 questionsWithAnswers:
                   - questionId: '81001'
@@ -1459,7 +1480,7 @@ paths:
                     toStatus: SUBMITTED
                     actorId: '10001'
                     reason: APPLICATION_SUBMITTED
-                    createdAt: '2026-10-19T09:30:00Z'
+                    changedAt: '2026-10-19T09:30:00Z'
         '400':
           $ref: '#/components/responses/InvalidResourceId'
         '401':
@@ -1472,6 +1493,133 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/rounds/{roundId}/applications/{applicationId}/start-review:
+    post:
+      tags: [Committee Review & Results]
+      operationId: startApplicationReview
+      x-implementation-status: pending
+      x-contract-status: specified-in-task75
+      summary: Explicitly mark an application as UNDER_REVIEW and/or save a committee discussion note (S2-DECISION-DRAFT / T74-D02)
+      description: >-
+        Optional explicit review action per T74-D02; GET operations never transition
+        application status automatically. Requires SESSION, X-CSRF-TOKEN, and an
+        effective COMMITTEE or PRESIDENT assignment for the club owning roundId,
+        with no self-review conflict. Transitions a SUBMITTED application to
+        UNDER_REVIEW (recording a SUBMITTED -> UNDER_REVIEW row in application_status_history
+        with changed_at = serverNow) and optionally upserts an application_reviews
+        row for (application_id, reviewer_id) with recommendation = DISCUSS (or the
+        supplied recommendation) and internal_comment. Allowed while the round is
+        PUBLISHED, not CANCELLED, and results_published_at IS NULL.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '70001'
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '90001'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartApplicationReviewRequest'
+            example:
+              recommendation: DISCUSS
+              internalComment: Good workshop background; verify schedule availability.
+              version: 0
+      responses:
+        '200':
+          description: Application marked UNDER_REVIEW and/or review note saved
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitteeApplicationDetail'
+              example:
+                id: '90001'
+                clubId: '20001'
+                roundId: '70001'
+                applicant:
+                  userId: '10001'
+                  studentCode: '6609650001'
+                  displayName: Somchai Jaidee
+                  email: somchai.jai@dome.tu.ac.th
+                  facultyName: Faculty of Science and Technology
+                  departmentName: Computer Science
+                  programName: Computer Science
+                  studyYear: 2
+                motivation: I would like to help organize club activities.
+                questionsWithAnswers:
+                  - questionId: '81001'
+                    questionText: Describe an activity you helped organize.
+                    isRequired: true
+                    displayOrder: 1
+                    answerText: I have organized student workshops.
+                links:
+                  - id: '95001'
+                    label: Portfolio
+                    url: https://example.org/portfolio
+                    displayOrder: 1
+                status: UNDER_REVIEW
+                resultMessage: null
+                decidedBy: null
+                decidedAt: null
+                respondedAt: null
+                version: 1
+                submittedAt: '2026-10-19T09:30:00Z'
+                reviews:
+                  - id: '97001'
+                    reviewerId: '10002'
+                    reviewerDisplayName: Committee Member
+                    recommendation: DISCUSS
+                    internalComment: Good workshop background; verify schedule availability.
+                    createdAt: '2026-10-25T18:00:00Z'
+                    updatedAt: '2026-10-25T18:00:00Z'
+                    version: 0
+                statusHistory:
+                  - fromStatus: null
+                    toStatus: SUBMITTED
+                    actorId: '10001'
+                    reason: APPLICATION_SUBMITTED
+                    changedAt: '2026-10-19T09:30:00Z'
+                  - fromStatus: SUBMITTED
+                    toStatus: UNDER_REVIEW
+                    actorId: '10002'
+                    reason: COMMITTEE_REVIEW_STARTED
+                    changedAt: '2026-10-25T18:00:00Z'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Round or application does not exist (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Results already published, round cancelled/draft, invalid status transition, or version mismatch
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApplicationDecisionConflict'
         '500':
           $ref: '#/components/responses/ServerError'
         '503':
@@ -1491,6 +1639,9 @@ paths:
         (results_published_at IS NULL). Supports direct transition from SUBMITTED
         or UNDER_REVIEW to ACCEPTED or REJECTED, and allows updating ACCEPTED/REJECTED
         prior to publication with optimistic lock version checking (T74-D02, T74-D03).
+        When internalNote is provided, upserts application_reviews for (application_id,
+        reviewer_id) with internal_comment = internalNote and recommendation mapped
+        from decision (ACCEPT for ACCEPTED, REJECT for REJECTED).
         Does not expose the decision to the applicant until POST /publish-results commits.
       security:
         - SessionCookie: []
@@ -1529,6 +1680,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommitteeApplicationDetail'
+              example:
+                id: '90001'
+                clubId: '20001'
+                roundId: '70001'
+                applicant:
+                  userId: '10001'
+                  studentCode: '6609650001'
+                  displayName: Somchai Jaidee
+                  email: somchai.jai@dome.tu.ac.th
+                  facultyName: Faculty of Science and Technology
+                  departmentName: Computer Science
+                  programName: Computer Science
+                  studyYear: 2
+                motivation: I would like to help organize club activities.
+                questionsWithAnswers:
+                  - questionId: '81001'
+                    questionText: Describe an activity you helped organize.
+                    isRequired: true
+                    displayOrder: 1
+                    answerText: I have organized student workshops.
+                links:
+                  - id: '95001'
+                    label: Portfolio
+                    url: https://example.org/portfolio
+                    displayOrder: 1
+                status: ACCEPTED
+                resultMessage: Congratulations! Please confirm your membership before the deadline.
+                decidedBy: '10002'
+                decidedAt: '2026-10-25T19:00:00Z'
+                respondedAt: null
+                version: 1
+                submittedAt: '2026-10-19T09:30:00Z'
+                reviews:
+                  - id: '97001'
+                    reviewerId: '10002'
+                    reviewerDisplayName: Committee Member
+                    recommendation: ACCEPT
+                    internalComment: Strong portfolio and workshop experience.
+                    createdAt: '2026-10-25T19:00:00Z'
+                    updatedAt: '2026-10-25T19:00:00Z'
+                    version: 0
+                statusHistory:
+                  - fromStatus: null
+                    toStatus: SUBMITTED
+                    actorId: '10001'
+                    reason: APPLICATION_SUBMITTED
+                    changedAt: '2026-10-19T09:30:00Z'
+                  - fromStatus: SUBMITTED
+                    toStatus: ACCEPTED
+                    actorId: '10002'
+                    reason: COMMITTEE_DECISION
+                    changedAt: '2026-10-25T19:00:00Z'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -2056,6 +2259,76 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminDashboardStatsResponse'
+              example:
+                generatedAt: '2026-10-28T10:30:00Z'
+                filters:
+                  academicYear: 2569
+                  semester: 1
+                  categoryId: null
+                  clubStatus: ACTIVE
+                summary:
+                  totalClubs: 42
+                  activeClubs: 40
+                  inactiveClubs: 2
+                  clubsCurrentlyRecruiting: 15
+                  totalRecruitmentRounds: 48
+                  openRecruitmentRounds: 16
+                  totalApplications: 1280
+                  uniqueApplicants: 845
+                  confirmedNewMembers: 410
+                  currentActiveMemberships: 1950
+                  confirmationRatePercent: 78.85
+                  statusBreakdown:
+                    SUBMITTED: 120
+                    UNDER_REVIEW: 210
+                    ACCEPTED: 110
+                    REJECTED: 320
+                    CONFIRMED: 410
+                    DECLINED: 65
+                    WITHDRAWN: 15
+                    EXPIRED: 30
+                categoryBreakdown:
+                  - categoryId: '1'
+                    categoryName: วิชาการและนวัตกรรม
+                    clubCount: 12
+                    totalRounds: 14
+                    totalApplications: 490
+                    acceptedCount: 220
+                    confirmedCount: 185
+                    activeMemberCount: 640
+                topClubs:
+                  - clubId: '20001'
+                    clubName: ชมรมพัฒนาซอฟต์แวร์แห่งมหาวิทยาลัยธรรมศาสตร์
+                    categoryName: วิชาการและนวัตกรรม
+                    totalApplications: 165
+                    acceptedCount: 60
+                    confirmedCount: 54
+                    activeMemberCount: 142
+                clubs:
+                  items:
+                    - clubId: '20001'
+                      clubName: ชมรมพัฒนาซอฟต์แวร์แห่งมหาวิทยาลัยธรรมศาสตร์
+                      category:
+                        id: '1'
+                        name: วิชาการและนวัตกรรม
+                      clubStatus: ACTIVE
+                      hasOpenRecruitment: true
+                      roundCount: 2
+                      totalApplications: 165
+                      submittedCount: 10
+                      underReviewCount: 25
+                      acceptedCount: 6
+                      rejectedCount: 60
+                      confirmedCount: 54
+                      declinedCount: 7
+                      withdrawnCount: 1
+                      expiredCount: 2
+                      activeMemberCount: 142
+                  page:
+                    number: 0
+                    size: 20
+                    totalElements: 40
+                    totalPages: 2
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -2383,7 +2656,11 @@ components:
     ActiveCommitteeAssignmentSummary:
       type: object
       additionalProperties: false
-      required: [clubId, clubName, positionTitle]
+      required: [clubId, clubName, permissionRole, positionName, startsAt, endsAt]
+      description: >-
+        Effective committee membership projected from club_committee_assignments
+        where status = 'ACTIVE' and starts_at <= now and (ends_at is null or
+        ends_at > now), joined with clubs.status = 'ACTIVE' (Task79).
       properties:
         clubId:
           type: string
@@ -2391,9 +2668,18 @@ components:
         clubName:
           type: string
           maxLength: 200
-        positionTitle:
+        permissionRole:
+          type: string
+          enum: [COMMITTEE, PRESIDENT]
+        positionName:
           type: [string, 'null']
           maxLength: 100
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: [string, 'null']
+          format: date-time
     ClubDetail:
       type: object
       required: [id, categoryId, name, description, objectives, contactUrl, facebookUrl, instagramUrl, contactEmail, affiliationLevel, affiliationName, imageUrl, bannerUrl, status, category, tags, recruitmentRounds]
@@ -2466,8 +2752,11 @@ components:
         canEditProfile:
           type: boolean
           description: >-
-            True when the caller is an active committee member for this club or a
-            system ADMIN (Task81).
+            True ONLY when the authenticated caller holds an effective
+            COMMITTEE or PRESIDENT assignment for this club (Task81). System
+            ADMIN without an effective committee assignment for this club
+            receives false because PUT /api/v1/clubs/{clubId} is restricted to
+            the club's effective committee members.
     ClubUpdateRequest:
       type: object
       additionalProperties: false
@@ -2621,8 +2910,10 @@ components:
           type: boolean
           description: >-
             Optional capability flag indicating whether the caller can edit this club's
-            profile (false for anonymous callers or non-committee users; true for active
-            committee members of this club or system ADMINs — Task81).
+            profile (false for anonymous callers, non-committee users, and system ADMINs
+            without an effective committee assignment for this club; true ONLY when the
+            authenticated caller holds an effective COMMITTEE or PRESIDENT assignment
+            for this club — Task81).
     PublicClubCategory:
       type: object
       additionalProperties: false
@@ -2669,7 +2960,7 @@ components:
     PublicClubSummary:
       type: object
       additionalProperties: false
-      required: [id, name, shortDescription, affiliationLevel, affiliationName, imageUrl, bannerUrl, category, tags, isOpenForApplication, activeRoundCount, nextClosingRoundAt]
+      required: [id, name, description, affiliationLevel, affiliationName, imageUrl, category, tags, hasOpenRecruitment]
       properties:
         id:
           type: string
@@ -2678,10 +2969,9 @@ components:
         name:
           type: string
           maxLength: 200
-        shortDescription:
+        description:
           type: string
-          maxLength: 500
-          description: Truncated or summary public club description for directory cards.
+          description: Public club description projected for directory cards.
         affiliationLevel:
           type: [string, 'null']
           maxLength: 30
@@ -2693,27 +2983,18 @@ components:
           format: uri
           maxLength: 2048
           pattern: '^https://\S+$'
-        bannerUrl:
-          type: [string, 'null']
-          format: uri
-          maxLength: 2048
-          pattern: '^https://\S+$'
         category:
           $ref: '#/components/schemas/PublicClubCategory'
         tags:
           type: array
           items:
             $ref: '#/components/schemas/PublicClubTag'
-        isOpenForApplication:
+        hasOpenRecruitment:
           type: boolean
-          description: True when at least one round is currently open at the request evaluation instant.
-        activeRoundCount:
-          type: integer
-          minimum: 0
-        nextClosingRoundAt:
-          type: [string, 'null']
-          format: date-time
-          description: Earliest closesAt among currently open rounds, or null when none are open.
+          description: >-
+            True when at least one round for this club has publication_status =
+            'PUBLISHED', closed_at IS NULL, and opens_at <= now < closes_at at
+            the request evaluation instant.
     PublicClubSearchPage:
       type: object
       additionalProperties: false
@@ -2786,9 +3067,10 @@ components:
       type: string
       description: >-
         Authoritative internal application lifecycle status stored in
-        applications.status. Pre-publication decisions (ACCEPTED, REJECTED) are
-        visible to Committee/Admin but masked from applicants until
-        resultsPublishedAt is set (T74-D02).
+        applications.status (V1__init_schema.sql). Pre-publication internal
+        states (SUBMITTED, UNDER_REVIEW, ACCEPTED, REJECTED) are visible to
+        Committee/Admin but masked as SUBMITTED from applicants until
+        round.results_published_at is set (T74-D02 / T74-D04).
       enum:
         - SUBMITTED
         - UNDER_REVIEW
@@ -2796,26 +3078,30 @@ components:
         - REJECTED
         - CONFIRMED
         - DECLINED
+        - WITHDRAWN
         - EXPIRED
     ApplicantVisibleStatus:
       type: string
       description: >-
-        Applicant-visible projection of application status (T74-D02). While
-        round.resultsPublishedAt is null, internal ACCEPTED and REJECTED are
-        projected as UNDER_REVIEW so draft committee decisions never leak before
-        publication.
+        Applicant-visible projection of application status (T74-D02 / T74-D04).
+        While round.results_published_at is null, internal SUBMITTED,
+        UNDER_REVIEW, ACCEPTED, and REJECTED all project as SUBMITTED
+        (displayStatusLabel: "รอพิจารณา") so internal review progress and
+        draft decisions never leak before publication. After publication,
+        internal ACCEPTED projects as ACCEPTED_PENDING_CONFIRMATION
+        (displayStatusLabel: "ผ่านการคัดเลือก (รอยืนยันสิทธิ์)").
       enum:
         - SUBMITTED
-        - UNDER_REVIEW
-        - ACCEPTED
+        - ACCEPTED_PENDING_CONFIRMATION
         - REJECTED
         - CONFIRMED
         - DECLINED
         - EXPIRED
+        - WITHDRAWN
     CommitteeRoundSummary:
       type: object
       additionalProperties: false
-      required: [id, clubId, clubName, title, status, opensAt, closesAt, closedAt, resultsPublishedAt, resultsPublishedByUserId]
+      required: [id, clubId, title, publicationStatus, opensAt, closesAt, closedAt, resultsPublishedAt, confirmationDeadline, version]
       properties:
         id:
           type: string
@@ -2823,15 +3109,13 @@ components:
         clubId:
           type: string
           pattern: '^[0-9]+$'
-        clubName:
-          type: string
-          maxLength: 200
         title:
           type: string
           maxLength: 200
-        status:
+        publicationStatus:
           type: string
-          enum: [DRAFT, PUBLISHED, CLOSED, CANCELLED]
+          enum: [DRAFT, PUBLISHED, CANCELLED]
+          description: Persisted recruitment_rounds.publication_status.
         opensAt:
           type: string
           format: date-time
@@ -2844,37 +3128,42 @@ components:
         resultsPublishedAt:
           type: [string, 'null']
           format: date-time
-        resultsPublishedByUserId:
+        confirmationDeadline:
           type: [string, 'null']
-          pattern: '^[0-9]+$'
+          format: date-time
+        version:
+          type: integer
+          minimum: 0
+          description: Optimistic locking version of recruitment_rounds.
     ApplicantIdentitySummary:
       type: object
       additionalProperties: false
-      required: [userId, studentCode, fullNameTh, fullNameEn, email, phone, facultyName, departmentName, studyYear]
+      required: [userId, studentCode, displayName, email, facultyName, departmentName, programName, studyYear]
+      description: >-
+        Applicant identity projected from users (display_name, email) and
+        student_profiles (student_code, faculty_name, department_name,
+        program_name, study_year) in V1__init_schema.sql.
       properties:
         userId:
           type: string
           pattern: '^[0-9]+$'
         studentCode:
           type: string
-          maxLength: 30
-        fullNameTh:
+          maxLength: 20
+        displayName:
           type: string
           maxLength: 200
-        fullNameEn:
-          type: [string, 'null']
-          maxLength: 200
         email:
-          type: [string, 'null']
+          type: string
           format: email
           maxLength: 254
-        phone:
-          type: [string, 'null']
-          maxLength: 30
         facultyName:
           type: [string, 'null']
           maxLength: 150
         departmentName:
+          type: [string, 'null']
+          maxLength: 150
+        programName:
           type: [string, 'null']
           maxLength: 150
         studyYear:
@@ -2884,52 +3173,37 @@ components:
     CommitteeApplicationSummary:
       type: object
       additionalProperties: false
-      required: [id, roundId, applicant, status, submittedAt, reviewedAt, confirmationDeadlineAt, confirmedAt, declinedAt, expiredAt, updatedAt]
+      required: [id, applicant, submittedAt, status, decidedAt, respondedAt, version]
       properties:
         id:
           type: string
           pattern: '^[0-9]+$'
-        roundId:
-          type: string
-          pattern: '^[0-9]+$'
         applicant:
           $ref: '#/components/schemas/ApplicantIdentitySummary'
-        status:
-          $ref: '#/components/schemas/InternalApplicationStatus'
         submittedAt:
           type: string
           format: date-time
-        reviewedAt:
+        status:
+          $ref: '#/components/schemas/InternalApplicationStatus'
+        decidedAt:
           type: [string, 'null']
           format: date-time
-        confirmationDeadlineAt:
+          description: applications.decided_at timestamp when ACCEPTED or REJECTED was recorded.
+        respondedAt:
           type: [string, 'null']
           format: date-time
-        confirmedAt:
-          type: [string, 'null']
-          format: date-time
-        declinedAt:
-          type: [string, 'null']
-          format: date-time
-        expiredAt:
-          type: [string, 'null']
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
+          description: applications.responded_at timestamp when CONFIRMED, DECLINED, or EXPIRED was recorded.
+        version:
+          type: integer
+          minimum: 0
+          description: Optimistic locking version of applications.
     CommitteeApplicationPage:
       type: object
       additionalProperties: false
-      required: [round, statusCounts, items, page]
+      required: [round, items, page]
       properties:
         round:
           $ref: '#/components/schemas/CommitteeRoundSummary'
-        statusCounts:
-          type: object
-          additionalProperties:
-            type: integer
-            minimum: 0
-          description: Map of InternalApplicationStatus keys to counts within this round.
         items:
           type: array
           items:
@@ -2939,16 +3213,17 @@ components:
     CommitteeQuestionAnswerView:
       type: object
       additionalProperties: false
-      required: [questionId, questionText, questionType, isRequired, displayOrder, answerText, selectedOptionIds, selectedOptionLabels]
+      required: [questionId, questionText, isRequired, displayOrder, answerText]
+      description: >-
+        Screening question joined with the applicant's text answer
+        (application_questions + application_answers). V1 supports text questions
+        only; answerText is null when an optional question was left unanswered.
       properties:
         questionId:
           type: string
           pattern: '^[0-9]+$'
         questionText:
           type: string
-        questionType:
-          type: string
-          enum: [SHORT_TEXT, LONG_TEXT, SINGLE_CHOICE, MULTI_CHOICE, LINK]
         isRequired:
           type: boolean
         displayOrder:
@@ -2956,27 +3231,16 @@ components:
           minimum: 1
         answerText:
           type: [string, 'null']
-        selectedOptionIds:
-          type: array
-          items:
-            type: string
-            pattern: '^[0-9]+$'
-        selectedOptionLabels:
-          type: array
-          items:
-            type: string
     CommitteeDocumentLinkView:
       type: object
       additionalProperties: false
-      required: [id, documentType, title, url, createdAt]
+      required: [id, label, url, displayOrder]
+      description: Document link projected from application_links (id, label, url, display_order).
       properties:
         id:
           type: string
           pattern: '^[0-9]+$'
-        documentType:
-          type: string
-          enum: [PORTFOLIO, RESUME, TRANSCRIPT, OTHER]
-        title:
+        label:
           type: string
           maxLength: 200
         url:
@@ -2984,132 +3248,182 @@ components:
           format: uri
           maxLength: 2048
           pattern: '^https://\S+$'
-        createdAt:
-          type: string
-          format: date-time
-    CommitteeReviewNoteView:
+        displayOrder:
+          type: integer
+          minimum: 1
+    CommitteeReviewEntry:
       type: object
       additionalProperties: false
-      required: [id, reviewerUserId, reviewerDisplayName, score, note, createdAt, updatedAt]
+      required: [id, reviewerId, reviewerDisplayName, recommendation, internalComment, createdAt, updatedAt, version]
+      description: >-
+        Internal committee review note projected from application_reviews
+        (id, reviewer_id, recommendation, internal_comment, created_at,
+        updated_at, version) joined with users.display_name.
       properties:
         id:
           type: string
           pattern: '^[0-9]+$'
-        reviewerUserId:
+        reviewerId:
           type: string
           pattern: '^[0-9]+$'
         reviewerDisplayName:
           type: string
-        score:
-          type: [number, 'null']
-          minimum: 0
-          maximum: 100
-        note:
+          maxLength: 200
+        recommendation:
+          type: string
+          enum: [ACCEPT, REJECT, DISCUSS]
+          description: Persisted application_reviews.recommendation (NOT NULL in V1__init_schema.sql).
+        internalComment:
           type: [string, 'null']
+          maxLength: 2000
+          description: Persisted application_reviews.internal_comment.
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+        version:
+          type: integer
+          minimum: 0
     CommitteeStatusHistoryEntry:
       type: object
       additionalProperties: false
-      required: [id, fromStatus, toStatus, changedByUserId, reason, createdAt]
+      required: [fromStatus, toStatus, actorId, reason, changedAt]
+      description: >-
+        Status transition audit row projected from application_status_history
+        (from_status, to_status, actor_id, reason, changed_at).
       properties:
-        id:
-          type: string
-          pattern: '^[0-9]+$'
         fromStatus:
           oneOf:
             - $ref: '#/components/schemas/InternalApplicationStatus'
             - type: 'null'
         toStatus:
           $ref: '#/components/schemas/InternalApplicationStatus'
-        changedByUserId:
+        actorId:
           type: [string, 'null']
           pattern: '^[0-9]+$'
+          description: Null for system-initiated transitions such as background offer expiry.
         reason:
           type: [string, 'null']
-        createdAt:
+        changedAt:
           type: string
           format: date-time
+          description: Persisted application_status_history.changed_at timestamp.
     CommitteeApplicationDetail:
       type: object
       additionalProperties: false
-      required: [id, round, applicant, status, applicantNote, submittedAt, reviewedAt, confirmationDeadlineAt, confirmedAt, declinedAt, expiredAt, answers, documentLinks, reviewNotes, statusHistory, updatedAt]
+      required: [id, clubId, roundId, applicant, motivation, questionsWithAnswers, links, status, resultMessage, decidedBy, decidedAt, respondedAt, version, submittedAt, reviews, statusHistory]
       properties:
         id:
           type: string
           pattern: '^[0-9]+$'
-        round:
-          $ref: '#/components/schemas/CommitteeRoundSummary'
+        clubId:
+          type: string
+          pattern: '^[0-9]+$'
+        roundId:
+          type: string
+          pattern: '^[0-9]+$'
         applicant:
           $ref: '#/components/schemas/ApplicantIdentitySummary'
-        status:
-          $ref: '#/components/schemas/InternalApplicationStatus'
-        applicantNote:
-          type: [string, 'null']
-        submittedAt:
+        motivation:
           type: string
-          format: date-time
-        reviewedAt:
-          type: [string, 'null']
-          format: date-time
-        confirmationDeadlineAt:
-          type: [string, 'null']
-          format: date-time
-        confirmedAt:
-          type: [string, 'null']
-          format: date-time
-        declinedAt:
-          type: [string, 'null']
-          format: date-time
-        expiredAt:
-          type: [string, 'null']
-          format: date-time
-        answers:
+        questionsWithAnswers:
           type: array
           items:
             $ref: '#/components/schemas/CommitteeQuestionAnswerView'
-        documentLinks:
+        links:
           type: array
           items:
             $ref: '#/components/schemas/CommitteeDocumentLinkView'
-        reviewNotes:
+        status:
+          $ref: '#/components/schemas/InternalApplicationStatus'
+        resultMessage:
+          type: [string, 'null']
+          maxLength: 1000
+        decidedBy:
+          type: [string, 'null']
+          pattern: '^[0-9]+$'
+        decidedAt:
+          type: [string, 'null']
+          format: date-time
+        respondedAt:
+          type: [string, 'null']
+          format: date-time
+        version:
+          type: integer
+          minimum: 0
+        submittedAt:
+          type: string
+          format: date-time
+        reviews:
           type: array
           items:
-            $ref: '#/components/schemas/CommitteeReviewNoteView'
+            $ref: '#/components/schemas/CommitteeReviewEntry'
         statusHistory:
           type: array
           items:
             $ref: '#/components/schemas/CommitteeStatusHistoryEntry'
-        updatedAt:
-          type: string
-          format: date-time
+    StartApplicationReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [version]
+      description: >-
+        Transitions an application from SUBMITTED to UNDER_REVIEW (or updates
+        review notes while already in UNDER_REVIEW) before round results are
+        published (T74-D02). When recommendation or internalComment is provided,
+        recommendation is required because application_reviews.recommendation is
+        NOT NULL in V1__init_schema.sql (defaults to DISCUSS when omitted while
+        internalComment is present).
+      properties:
+        recommendation:
+          type: [string, 'null']
+          enum: [ACCEPT, REJECT, DISCUSS, null]
+          description: >-
+            Optional committee review recommendation stored in
+            application_reviews.recommendation. If internalComment is provided
+            and recommendation is omitted/null, the backend defaults
+            recommendation to DISCUSS.
+        internalComment:
+          type: [string, 'null']
+          maxLength: 2000
+          description: Optional internal review comment stored in application_reviews.internal_comment.
+        version:
+          type: integer
+          minimum: 0
+          description: Expected applications.version for optimistic locking.
     ApplicationDecisionRequest:
       type: object
       additionalProperties: false
-      required: [status]
+      required: [decision, version]
       description: >-
-        Draft review state or selection decision before round results are published
-        (S2-DECISION-DRAFT / T74-D02). Allowed only while round.status = CLOSED and
-        round.resultsPublishedAt is null.
+        Records or updates a pre-publication selection decision (ACCEPTED or
+        REJECTED) on an application after the round has closed and while
+        round.results_published_at is null (T74-D02 / T74-D03). When
+        internalNote is non-blank, the backend also upserts the caller's
+        application_reviews row (mapping decision ACCEPTED -> recommendation
+        ACCEPT and REJECTED -> recommendation REJECT, with internal_comment =
+        internalNote).
       properties:
-        status:
+        decision:
           type: string
-          enum: [UNDER_REVIEW, ACCEPTED, REJECTED]
-        score:
-          type: [number, 'null']
-          minimum: 0
-          maximum: 100
-        note:
+          enum: [ACCEPTED, REJECTED]
+        resultMessage:
+          type: [string, 'null']
+          maxLength: 1000
+          description: >-
+            Applicant-facing feedback stored in applications.result_message;
+            hidden from the applicant until round.results_published_at is set.
+        internalNote:
           type: [string, 'null']
           maxLength: 2000
-        reason:
-          type: [string, 'null']
-          maxLength: 500
-          description: Optional audit reason recorded in application_status_history.
+          description: >-
+            Committee-only note stored in application_reviews.internal_comment
+            and/or application_status_history.reason; never exposed to applicants.
+        version:
+          type: integer
+          minimum: 0
+          description: Expected applications.version for optimistic locking.
     ApplicationDecisionConflict:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -3122,51 +3436,51 @@ components:
             reason:
               type: string
               enum:
-                - ROUND_NOT_CLOSED
+                - ROUND_CANCELLED
+                - ROUND_NOT_PUBLISHED
+                - ROUND_STILL_OPEN
                 - RESULTS_ALREADY_PUBLISHED
                 - INVALID_STATUS_TRANSITION
+                - VERSION_MISMATCH
     PublishResultsRequest:
       type: object
       additionalProperties: false
-      required: [confirmationDeadlineAt]
+      required: [version]
       description: >-
-        Publishes all pre-recorded ACCEPTED and REJECTED decisions for a closed round
-        and sets confirmation_deadline_at on all ACCEPTED applications in the round
-        (S2-PUBLICATION-DRAFT / T74-D02).
+        Atomically publishes all pre-recorded ACCEPTED and REJECTED decisions
+        for a closed recruitment round by setting
+        recruitment_rounds.results_published_at = serverNow and queuing outbox
+        notifications for all decided applications (T74-D03). The round's
+        confirmation_deadline is already stored on recruitment_rounds.
       properties:
-        confirmationDeadlineAt:
-          type: string
-          format: date-time
-          description: >-
-            Must be strictly after the server's current UTC timestamp (publishedAt)
-            and strictly after round.closesAt.
+        version:
+          type: integer
+          minimum: 0
+          description: Expected recruitment_rounds.version for optimistic locking.
     PublishResultsResponse:
       type: object
       additionalProperties: false
-      required: [roundId, status, resultsPublishedAt, resultsPublishedByUserId, confirmationDeadlineAt, totalApplications, acceptedCount, rejectedCount]
+      required: [roundId, clubId, resultsPublishedAt, confirmationDeadline, acceptedCount, rejectedCount, roundVersion]
       properties:
         roundId:
           type: string
           pattern: '^[0-9]+$'
-        status:
+        clubId:
           type: string
-          const: CLOSED
+          pattern: '^[0-9]+$'
         resultsPublishedAt:
           type: string
           format: date-time
-        resultsPublishedByUserId:
-          type: string
-          pattern: '^[0-9]+$'
-        confirmationDeadlineAt:
+        confirmationDeadline:
           type: string
           format: date-time
-        totalApplications:
-          type: integer
-          minimum: 0
         acceptedCount:
           type: integer
           minimum: 0
         rejectedCount:
+          type: integer
+          minimum: 0
+        roundVersion:
           type: integer
           minimum: 0
     PublishResultsConflict:
@@ -3181,13 +3495,17 @@ components:
             reason:
               type: string
               enum:
-                - ROUND_NOT_CLOSED
+                - ROUND_CANCELLED
+                - ROUND_NOT_PUBLISHED
+                - ROUND_STILL_OPEN
                 - RESULTS_ALREADY_PUBLISHED
-                - UNDECIDED_APPLICATIONS_REMAIN
+                - CONFIRMATION_DEADLINE_EXPIRED
+                - APPLICATIONS_INCOMPLETE
+                - VERSION_MISMATCH
     ApplicantClubSummary:
       type: object
       additionalProperties: false
-      required: [id, name, imageUrl, categoryName]
+      required: [id, name, imageUrl]
       properties:
         id:
           type: string
@@ -3200,13 +3518,10 @@ components:
           format: uri
           maxLength: 2048
           pattern: '^https://\S+$'
-        categoryName:
-          type: [string, 'null']
-          maxLength: 100
     ApplicantRoundSummary:
       type: object
       additionalProperties: false
-      required: [id, title, status, opensAt, closesAt, closedAt, resultsPublishedAt]
+      required: [id, title, academicYear, semester, opensAt, closesAt, resultsPublishedAt, confirmationDeadline]
       properties:
         id:
           type: string
@@ -3214,25 +3529,29 @@ components:
         title:
           type: string
           maxLength: 200
-        status:
-          type: string
-          enum: [PUBLISHED, CLOSED, CANCELLED]
+        academicYear:
+          type: integer
+          minimum: 2500
+          maximum: 2700
+        semester:
+          type: integer
+          enum: [1, 2, 3]
         opensAt:
           type: string
           format: date-time
         closesAt:
           type: string
           format: date-time
-        closedAt:
+        resultsPublishedAt:
           type: [string, 'null']
           format: date-time
-        resultsPublishedAt:
+        confirmationDeadline:
           type: [string, 'null']
           format: date-time
     ApplicantApplicationSummary:
       type: object
       additionalProperties: false
-      required: [id, club, round, status, resultsPublished, canConfirmOffer, canDeclineOffer, submittedAt, confirmationDeadlineAt, confirmedAt, declinedAt, expiredAt, updatedAt]
+      required: [id, club, round, submittedAt, applicantVisibleStatus, displayStatusLabel, canConfirm, canDecline, respondedAt]
       properties:
         id:
           type: string
@@ -3241,39 +3560,30 @@ components:
           $ref: '#/components/schemas/ApplicantClubSummary'
         round:
           $ref: '#/components/schemas/ApplicantRoundSummary'
-        status:
-          $ref: '#/components/schemas/ApplicantVisibleStatus'
-        resultsPublished:
-          type: boolean
-          description: True when round.resultsPublishedAt is non-null.
-        canConfirmOffer:
-          type: boolean
-          description: >-
-            True only when resultsPublished is true, status is ACCEPTED, and the
-            current server UTC time is less than or equal to confirmationDeadlineAt.
-        canDeclineOffer:
-          type: boolean
-          description: >-
-            True only when resultsPublished is true, status is ACCEPTED, and the
-            current server UTC time is less than or equal to confirmationDeadlineAt.
         submittedAt:
           type: string
           format: date-time
-        confirmationDeadlineAt:
-          type: [string, 'null']
-          format: date-time
-          description: Masked as null while resultsPublished is false.
-        confirmedAt:
-          type: [string, 'null']
-          format: date-time
-        declinedAt:
-          type: [string, 'null']
-          format: date-time
-        expiredAt:
-          type: [string, 'null']
-          format: date-time
-        updatedAt:
+        applicantVisibleStatus:
+          $ref: '#/components/schemas/ApplicantVisibleStatus'
+        displayStatusLabel:
           type: string
+          description: Localized Thai status label corresponding to applicantVisibleStatus.
+        canConfirm:
+          type: boolean
+          description: >-
+            True ONLY when round.publication_status = 'PUBLISHED',
+            round.results_published_at is non-null, internal status is ACCEPTED,
+            and round.results_published_at <= serverNow < round.confirmation_deadline
+            (strict < per T74-D06).
+        canDecline:
+          type: boolean
+          description: >-
+            True ONLY when round.publication_status = 'PUBLISHED',
+            round.results_published_at is non-null, internal status is ACCEPTED,
+            and round.results_published_at <= serverNow < round.confirmation_deadline
+            (strict < per T74-D06).
+        respondedAt:
+          type: [string, 'null']
           format: date-time
     ApplicantApplicationPage:
       type: object
@@ -3289,15 +3599,9 @@ components:
     ApplicantDocumentLinkView:
       type: object
       additionalProperties: false
-      required: [id, documentType, title, url]
+      required: [label, url, displayOrder]
       properties:
-        id:
-          type: string
-          pattern: '^[0-9]+$'
-        documentType:
-          type: string
-          enum: [PORTFOLIO, RESUME, TRANSCRIPT, OTHER]
-        title:
+        label:
           type: string
           maxLength: 200
         url:
@@ -3305,30 +3609,34 @@ components:
           format: uri
           maxLength: 2048
           pattern: '^https://\S+$'
+        displayOrder:
+          type: integer
+          minimum: 1
     ApplicantStatusHistoryEntry:
       type: object
       additionalProperties: false
       description: >-
-        Applicant-safe status timeline entry. Pre-publication ACCEPTED/REJECTED
-        draft transitions are masked or coalesced into UNDER_REVIEW until
-        round.resultsPublishedAt is set, and changedByUserId / internal committee
-        reasons are never exposed.
-      required: [status, occurredAt, label]
+        Applicant-safe status timeline entry. Pre-publication internal review
+        transitions (UNDER_REVIEW, ACCEPTED, REJECTED) are hidden until
+        round.results_published_at is set, and actor_id / internal committee
+        reasons are never exposed (T74-D04).
+      required: [status, displayStatusLabel, occurredAt]
       properties:
         status:
           $ref: '#/components/schemas/ApplicantVisibleStatus'
+        displayStatusLabel:
+          type: string
         occurredAt:
           type: string
           format: date-time
-        label:
-          type: string
     ApplicantApplicationDetail:
       type: object
       additionalProperties: false
       description: >-
-        Applicant-owned application detail projection. Excludes committee reviewNotes,
-        scores, and internal reviewer identities (US-04 / T74-D02).
-      required: [id, club, round, status, resultsPublished, canConfirmOffer, canDeclineOffer, applicantNote, submittedAt, confirmationDeadlineAt, confirmedAt, declinedAt, expiredAt, answers, documentLinks, statusTimeline, updatedAt]
+        Applicant-owned application detail projection. Excludes committee
+        reviews, internal comments, recommendations, and internal reviewer
+        identities (US-04 / T74-D02 / T74-D04).
+      required: [id, club, round, motivation, questionsWithAnswers, links, submittedAt, applicantVisibleStatus, displayStatusLabel, resultMessage, canConfirm, canDecline, respondedAt, statusHistory]
       properties:
         id:
           type: string
@@ -3337,50 +3645,41 @@ components:
           $ref: '#/components/schemas/ApplicantClubSummary'
         round:
           $ref: '#/components/schemas/ApplicantRoundSummary'
-        status:
-          $ref: '#/components/schemas/ApplicantVisibleStatus'
-        resultsPublished:
-          type: boolean
-        canConfirmOffer:
-          type: boolean
-        canDeclineOffer:
-          type: boolean
-        applicantNote:
-          type: [string, 'null']
-        submittedAt:
+        motivation:
           type: string
-          format: date-time
-        confirmationDeadlineAt:
-          type: [string, 'null']
-          format: date-time
-        confirmedAt:
-          type: [string, 'null']
-          format: date-time
-        declinedAt:
-          type: [string, 'null']
-          format: date-time
-        expiredAt:
-          type: [string, 'null']
-          format: date-time
-        answers:
+        questionsWithAnswers:
           type: array
           items:
             $ref: '#/components/schemas/CommitteeQuestionAnswerView'
-        documentLinks:
+        links:
           type: array
           items:
             $ref: '#/components/schemas/ApplicantDocumentLinkView'
-        statusTimeline:
+        submittedAt:
+          type: string
+          format: date-time
+        applicantVisibleStatus:
+          $ref: '#/components/schemas/ApplicantVisibleStatus'
+        displayStatusLabel:
+          type: string
+        resultMessage:
+          type: [string, 'null']
+          description: Null while round.results_published_at is null.
+        canConfirm:
+          type: boolean
+        canDecline:
+          type: boolean
+        respondedAt:
+          type: [string, 'null']
+          format: date-time
+        statusHistory:
           type: array
           items:
             $ref: '#/components/schemas/ApplicantStatusHistoryEntry'
-        updatedAt:
-          type: string
-          format: date-time
     MembershipOfferResponse:
       type: object
       additionalProperties: false
-      required: [applicationId, clubId, roundId, status, confirmedAt, declinedAt, clubMembershipId, membershipStatus]
+      required: [applicationId, clubId, roundId, status, displayStatusLabel, respondedAt, membershipId, idempotentReplay]
       properties:
         applicationId:
           type: string
@@ -3394,19 +3693,21 @@ components:
         status:
           type: string
           enum: [CONFIRMED, DECLINED]
-        confirmedAt:
-          type: [string, 'null']
+        displayStatusLabel:
+          type: string
+        respondedAt:
+          type: string
           format: date-time
-        declinedAt:
-          type: [string, 'null']
-          format: date-time
-        clubMembershipId:
+        membershipId:
           type: [string, 'null']
           pattern: '^[0-9]+$'
-          description: Present when status is CONFIRMED and club_memberships row is created/activated.
-        membershipStatus:
-          type: [string, 'null']
-          enum: [ACTIVE, null]
+          description: Present when status is CONFIRMED (the created club_memberships.id); null when status is DECLINED.
+        idempotentReplay:
+          type: boolean
+          description: >-
+            False on the initial transition from ACCEPTED; true when a retry of
+            the same action (confirm on CONFIRMED or decline on DECLINED) is
+            replayed idempotently (T74-D05).
     MembershipOfferConflict:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -3419,16 +3720,21 @@ components:
             reason:
               type: string
               enum:
-                - OFFER_NOT_AVAILABLE
-                - OFFER_EXPIRED
-                - ALREADY_CLUB_MEMBER
-                - CLUB_INACTIVE
-                - STUDENT_NOT_ACTIVE
-                - INVALID_STATUS_TRANSITION
+                - ALREADY_RESPONDED
+                - CONFIRMATION_DEADLINE_EXPIRED
+                - ROUND_CANCELLED
+                - RESULTS_NOT_PUBLISHED
+                - APPLICATION_NOT_ACCEPTED
+                - EXISTING_CLUB_MEMBERSHIP
+                - MEMBERSHIP_LIMIT_REACHED
     AdminDashboardStatsResponse:
       type: object
       additionalProperties: false
-      required: [generatedAt, filters, summary, applicationsByCategory, topClubsByApplications, clubStats]
+      description: >-
+        University-wide aggregate statistics and paginated per-club breakdown
+        for system administrators (US-10 / Task69 / T74-D08 — metric definitions
+        proposed in Task75, pending PO/Reviewer sign-off).
+      required: [generatedAt, filters, summary, categoryBreakdown, topClubs, clubs]
       properties:
         generatedAt:
           type: string
@@ -3437,15 +3743,15 @@ components:
           $ref: '#/components/schemas/AdminDashboardAppliedFilters'
         summary:
           $ref: '#/components/schemas/AdminDashboardSummaryMetrics'
-        applicationsByCategory:
+        categoryBreakdown:
           type: array
           items:
             $ref: '#/components/schemas/AdminCategoryStatsItem'
-        topClubsByApplications:
+        topClubs:
           type: array
           items:
             $ref: '#/components/schemas/AdminTopClubItem'
-        clubStats:
+        clubs:
           $ref: '#/components/schemas/AdminClubStatsPage'
     AdminDashboardAppliedFilters:
       type: object
@@ -3454,9 +3760,11 @@ components:
       properties:
         academicYear:
           type: [integer, 'null']
+          minimum: 2500
+          maximum: 2700
         semester:
-          type: [string, 'null']
-          enum: ['1', '2', '3', 'SUMMER', null]
+          type: [integer, 'null']
+          enum: [1, 2, 3, null]
         categoryId:
           type: [string, 'null']
           pattern: '^[0-9]+$'
@@ -3466,7 +3774,7 @@ components:
     AdminDashboardSummaryMetrics:
       type: object
       additionalProperties: false
-      required: [totalClubs, activeClubs, inactiveClubs, clubsCurrentlyRecruiting, totalRecruitmentRounds, openRecruitmentRounds, totalApplications, statusBreakdown, activeMembershipsCount]
+      required: [totalClubs, activeClubs, inactiveClubs, clubsCurrentlyRecruiting, totalRecruitmentRounds, openRecruitmentRounds, totalApplications, uniqueApplicants, confirmedNewMembers, currentActiveMemberships, confirmationRatePercent, statusBreakdown]
       properties:
         totalClubs:
           type: integer
@@ -3489,19 +3797,33 @@ components:
         totalApplications:
           type: integer
           minimum: 0
+        uniqueApplicants:
+          type: integer
+          minimum: 0
+        confirmedNewMembers:
+          type: integer
+          minimum: 0
+        currentActiveMemberships:
+          type: integer
+          minimum: 0
+        confirmationRatePercent:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: >-
+            Percentage of published offers that were confirmed:
+            ROUND(100.0 * confirmedCount / NULLIF(acceptedCount + confirmedCount + declinedCount + expiredCount, 0), 2),
+            or 0.0 when the denominator is 0.
         statusBreakdown:
           type: object
           additionalProperties:
             type: integer
             minimum: 0
           description: Map of InternalApplicationStatus keys to aggregate counts.
-        activeMembershipsCount:
-          type: integer
-          minimum: 0
     AdminCategoryStatsItem:
       type: object
       additionalProperties: false
-      required: [categoryId, categoryName, clubCount, totalApplications, confirmedApplications, activeMembersCount]
+      required: [categoryId, categoryName, clubCount, totalRounds, totalApplications, acceptedCount, confirmedCount, activeMemberCount]
       properties:
         categoryId:
           type: string
@@ -3511,19 +3833,26 @@ components:
         clubCount:
           type: integer
           minimum: 0
+        totalRounds:
+          type: integer
+          minimum: 0
         totalApplications:
           type: integer
           minimum: 0
-        confirmedApplications:
+        acceptedCount:
           type: integer
           minimum: 0
-        activeMembersCount:
+          description: Total applications that reached an accepted offer (ACCEPTED, CONFIRMED, DECLINED, EXPIRED).
+        confirmedCount:
+          type: integer
+          minimum: 0
+        activeMemberCount:
           type: integer
           minimum: 0
     AdminTopClubItem:
       type: object
       additionalProperties: false
-      required: [clubId, clubName, categoryName, totalApplications, acceptedApplications, confirmedApplications, activeMembersCount]
+      required: [clubId, clubName, categoryName, totalApplications, acceptedCount, confirmedCount, activeMemberCount]
       properties:
         clubId:
           type: string
@@ -3535,37 +3864,33 @@ components:
         totalApplications:
           type: integer
           minimum: 0
-        acceptedApplications:
+        acceptedCount:
           type: integer
           minimum: 0
-        confirmedApplications:
+        confirmedCount:
           type: integer
           minimum: 0
-        activeMembersCount:
+        activeMemberCount:
           type: integer
           minimum: 0
     AdminClubStatsItem:
       type: object
       additionalProperties: false
-      required: [clubId, clubName, categoryId, categoryName, status, totalRounds, openRounds, totalApplications, submittedCount, underReviewCount, acceptedCount, rejectedCount, confirmedCount, declinedCount, expiredCount, activeMembersCount]
+      required: [clubId, clubName, category, clubStatus, hasOpenRecruitment, roundCount, totalApplications, submittedCount, underReviewCount, acceptedCount, rejectedCount, confirmedCount, declinedCount, withdrawnCount, expiredCount, activeMemberCount]
       properties:
         clubId:
           type: string
           pattern: '^[0-9]+$'
         clubName:
           type: string
-        categoryId:
-          type: string
-          pattern: '^[0-9]+$'
-        categoryName:
-          type: string
-        status:
+        category:
+          $ref: '#/components/schemas/PublicClubCategory'
+        clubStatus:
           type: string
           enum: [ACTIVE, INACTIVE]
-        totalRounds:
-          type: integer
-          minimum: 0
-        openRounds:
+        hasOpenRecruitment:
+          type: boolean
+        roundCount:
           type: integer
           minimum: 0
         totalApplications:
@@ -3589,10 +3914,13 @@ components:
         declinedCount:
           type: integer
           minimum: 0
+        withdrawnCount:
+          type: integer
+          minimum: 0
         expiredCount:
           type: integer
           minimum: 0
-        activeMembersCount:
+        activeMemberCount:
           type: integer
           minimum: 0
     AdminClubStatsPage:
@@ -3630,8 +3958,11 @@ components:
           description: >-
             Optional sub-code providing deterministic domain disambiguation for
             409 RESOURCE_CONFLICT responses (e.g., QUESTION_HAS_ANSWERS,
-            ROUND_NOT_CLOSED, RESULTS_ALREADY_PUBLISHED, UNDECIDED_APPLICATIONS_REMAIN,
-            OFFER_EXPIRED, ALREADY_CLUB_MEMBER).
+            ROUND_CANCELLED, ROUND_NOT_PUBLISHED, ROUND_STILL_OPEN,
+            RESULTS_ALREADY_PUBLISHED, CONFIRMATION_DEADLINE_EXPIRED,
+            APPLICATIONS_INCOMPLETE, INVALID_STATUS_TRANSITION, VERSION_MISMATCH,
+            ALREADY_RESPONDED, RESULTS_NOT_PUBLISHED, APPLICATION_NOT_ACCEPTED,
+            ALREADY_MEMBER, EXISTING_CLUB_MEMBERSHIP, MEMBERSHIP_LIMIT_REACHED).
         fieldErrors:
           type: array
           items:
