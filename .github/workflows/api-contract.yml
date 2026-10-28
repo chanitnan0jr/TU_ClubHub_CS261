@@ -1,0 +1,42 @@
+name: API Contract
+
+# ci.yml skips docs-only changes, so OpenAPI files are linted here.
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docs/api/**'
+      - 'redocly.yaml'
+      - '.github/workflows/api-contract.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'docs/api/**'
+      - 'redocly.yaml'
+      - '.github/workflows/api-contract.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: OpenAPI Lint (Redocly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # redocly.yaml at the repository root makes invalid examples errors.
+      - name: Lint OpenAPI files
+        run: npx --yes @redocly/cli@1.34.5 lint docs/api/openapi.yaml docs/api/rounds.openapi.yaml
