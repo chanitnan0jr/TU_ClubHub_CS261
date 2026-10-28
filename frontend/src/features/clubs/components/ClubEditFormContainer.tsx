@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useClubProfile } from '../hooks/useClubProfile';
 import {
   EMPTY_CLUB_EDIT_FORM,
@@ -29,13 +29,14 @@ export const ClubEditFormContainer: React.FC<Props> = ({ clubId }) => {
 
   const [formData, setFormData] = useState<ClubEditFormValues>(EMPTY_CLUB_EDIT_FORM);
   const [fieldErrors, setFieldErrors] = useState<ClubEditFormErrors>({});
+  const [formSource, setFormSource] = useState<typeof data>(null);
 
-  useEffect(() => {
-    if (data) {
-      setFormData(toClubEditFormValues(data));
-      setFieldErrors({});
-    }
-  }, [data]);
+  // Refill the form whenever a loaded or saved profile arrives, during render rather than in an effect.
+  if (data && data !== formSource) {
+    setFormSource(data);
+    setFormData(toClubEditFormValues(data));
+    setFieldErrors({});
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

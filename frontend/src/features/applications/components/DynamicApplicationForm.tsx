@@ -111,7 +111,7 @@ export const DynamicApplicationForm: React.FC = () => {
         setStep('success');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
-    } catch (err) {
+    } catch {
       alert('เกิดข้อผิดพลาดในการส่งใบสมัคร กรุณาลองใหม่อีกครั้ง');
     } finally {
       setIsSubmitting(false);
