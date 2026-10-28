@@ -72,7 +72,7 @@ This task intentionally adds no endpoint handler. The existing OpenAPI operation
 
 No Controller or broad exception advice was introduced simply to claim those HTTP behaviors are already implemented.
 
-The current implementation fulfills these HTTP duties through the scoped Controller, exception handler and body advice. It also sets a bounded transaction-local submission lock timeout and classifies duplicate violations through driver constraint metadata. The original test totals below remain historical rather than current-suite totals.
+The current implementation fulfills these HTTP duties through the scoped Controller and exception handler; `main`'s `ActiveAccountFilter` checks a suspended account before the body is read. It also sets a bounded transaction-local submission lock timeout and classifies duplicate violations through driver constraint metadata. The original test totals below remain historical rather than current-suite totals.
 
 ## Test coverage
 
