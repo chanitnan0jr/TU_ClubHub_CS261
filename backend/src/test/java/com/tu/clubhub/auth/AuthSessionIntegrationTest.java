@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.session.Session;
 import org.springframework.session.SessionRepository;
@@ -59,6 +60,9 @@ class AuthSessionIntegrationTest {
 
 	@Autowired
 	private SessionRepository<?> sessionRepository;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
 	void clearUsers() {
@@ -280,6 +284,60 @@ class AuthSessionIntegrationTest {
 				.andExpect(jsonPath("$.token").isNotEmpty());
 	}
 
+	@Test
+	void suspendedAccountIsRejectedOnProtectedRequestAndLosesItsSession() throws Exception {
+		AuthenticatedSession session = loginAsDemo();
+		suspendDemoAccount();
+
+		mockMvc.perform(get("/api/v1/auth/me").cookie(session.cookie()))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("ACCOUNT_NOT_ALLOWED"));
+
+		mockMvc.perform(get("/api/v1/auth/me").cookie(session.cookie()))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+	}
+
+	@Test
+	void suspendedAccountCanStillUsePublicEndpointsAnonymously() throws Exception {
+		AuthenticatedSession session = loginAsDemo();
+		suspendDemoAccount();
+
+		mockMvc.perform(get("/api/v1/auth/csrf").cookie(session.cookie()))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/v1/auth/me").cookie(session.cookie()))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void suspendedAccountCanStillLogOut() throws Exception {
+		AuthenticatedSession session = loginAsDemo();
+		suspendDemoAccount();
+
+		mockMvc.perform(post("/api/v1/auth/logout")
+				.cookie(session.cookie())
+				.header(session.csrf().headerName(), session.csrf().token()))
+			.andExpect(status().isNoContent());
+	}
+
+	private AuthenticatedSession loginAsDemo() throws Exception {
+		CsrfSession anonymous = getCsrfSession();
+		MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+				.cookie(anonymous.cookie())
+				.header(anonymous.csrf().headerName(), anonymous.csrf().token())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(LOGIN_BODY))
+			.andExpect(status().isOk())
+			.andReturn();
+		LoginResponse login = objectMapper.readValue(result.getResponse().getContentAsString(), LoginResponse.class);
+		return new AuthenticatedSession(cookie(result.getResponse()), login.csrf());
+	}
+
+	private void suspendDemoAccount() {
+		jdbcTemplate.update("UPDATE users SET account_status = 'SUSPENDED' WHERE tu_username = ?", DEMO_USERNAME);
+	}
+
 	private CsrfSession getCsrfSession() throws Exception {
 		MvcResult result = mockMvc.perform(get("/api/v1/auth/csrf"))
 				.andExpect(status().isOk())
@@ -296,6 +354,9 @@ class AuthSessionIntegrationTest {
 				.orElse(null);
 		assertNotNull(cookie, "Spring Session should set its HTTP-only session cookie");
 		return cookie;
+	}
+
+	private record AuthenticatedSession(Cookie cookie, CsrfTokenResponse csrf) {
 	}
 
 	private record CsrfSession(Cookie cookie, CsrfTokenResponse csrf) {

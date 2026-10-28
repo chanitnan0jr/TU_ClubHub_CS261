@@ -4,6 +4,7 @@ import java.util.List;
 import java.time.Clock;
 
 import com.tu.clubhub.auth.dto.ProblemResponse;
+import com.tu.clubhub.user.repository.UserAccountRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,8 +22,8 @@ import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import tools.jackson.databind.ObjectMapper;
@@ -68,6 +69,7 @@ public class SecurityConfiguration {
 			SecurityContextRepository securityContextRepository,
 			CsrfTokenRepository csrfTokenRepository,
 			CsrfTokenRequestHandler csrfTokenRequestHandler,
+			UserAccountRepository userAccountRepository,
 			ObjectMapper objectMapper) throws Exception {
 		http
 				.securityContext(context -> context
@@ -78,27 +80,10 @@ public class SecurityConfiguration {
 						.csrfTokenRepository(csrfTokenRepository)
 						.csrfTokenRequestHandler(csrfTokenRequestHandler))
 				.addFilterAfter(new AbsoluteSessionTimeoutFilter(objectMapper), SecurityContextHolderFilter.class)
+				// After CSRF so an invalid token is still reported as CSRF_INVALID.
+				.addFilterAfter(new ActiveAccountFilter(userAccountRepository, objectMapper), CsrfFilter.class)
 				.authorizeHttpRequests(authorize -> authorize
-						.requestMatchers(
-								"/",
-								"/index.html",
-								"/favicon.ico",
-								"/assets/**",
-								"/*.svg",
-								"/*.png",
-								"/*.ico",
-								"/*.json",
-								"/login",
-								"/clubs/**",
-								"/profile",
-								"/dashboard/**"
-						).permitAll()
-						.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
-						.requestMatchers(HttpMethod.GET,
-								"/api/v1/public/clubs/*",
-								"/api/v1/public/clubs/*/recruitment-rounds").permitAll()
-						.requestMatchers(HttpMethod.GET, "/api/v1/clubs/**").permitAll()
-						.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+						.requestMatchers(PublicRoutes.MATCHER).permitAll()
 						.anyRequest().authenticated())
 				.requestCache(cache -> cache.disable())
 				.formLogin(form -> form.disable())

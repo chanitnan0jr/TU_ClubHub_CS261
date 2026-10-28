@@ -1,7 +1,9 @@
 package com.tu.clubhub.recruitment.service;
 
+import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import com.tu.clubhub.committee.security.ClubSecurity;
 import com.tu.clubhub.recruitment.domain.RecruitmentRound;
+import com.tu.clubhub.recruitment.dto.RoundResponse;
 import com.tu.clubhub.recruitment.dto.RoundWriteRequest;
 import com.tu.clubhub.recruitment.repository.RecruitmentRoundRepository;
 import jakarta.validation.Validation;
@@ -10,6 +12,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
@@ -28,6 +32,7 @@ class RecruitmentRoundLifecycleEdgeCasesTest {
     private static final Instant NOW = Instant.parse("2026-10-18T12:00:00Z");
     private static final long CLUB = 1L;
     private static final long ROUND = 10L;
+    private static final long COMMITTEE_USER = 100L;
 
     private RecruitmentRoundRepository repository;
     private ClubSecurity clubSecurity;
@@ -45,10 +50,15 @@ class RecruitmentRoundLifecycleEdgeCasesTest {
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 validatorFactory.getValidator());
         when(clubSecurity.isCommittee(CLUB)).thenReturn(true);
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(
+                        new ClubHubPrincipal(COMMITTEE_USER, "committee", "USER"),
+                        null, List.of()));
     }
 
     @AfterEach
     void tearDown() {
+        SecurityContextHolder.clearContext();
         validatorFactory.close();
     }
 
@@ -63,7 +73,7 @@ class RecruitmentRoundLifecycleEdgeCasesTest {
                 .thenReturn(Optional.of(after));
         when(repository.publishRound(CLUB, ROUND, 0L, NOW)).thenReturn(1);
 
-        RecruitmentRound result = service.publishRound(CLUB, ROUND, 0L);
+        RoundResponse result = service.publishRound(CLUB, ROUND, 0L);
 
         assertEquals("PUBLISHED", result.publicationStatus());
         verify(repository).publishRound(CLUB, ROUND, 0L, NOW);

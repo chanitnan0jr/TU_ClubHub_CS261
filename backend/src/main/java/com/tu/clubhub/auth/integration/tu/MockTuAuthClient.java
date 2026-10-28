@@ -12,7 +12,8 @@ public final class MockTuAuthClient implements TuAuthClient {
 	private static final Map<String, DemoAccount> ACCOUNTS = Map.of(
 			DEMO_USERNAME,
 			new DemoAccount(DEMO_PASSWORD, new TuAuthUser(
-					DEMO_USERNAME, "Demo Student", "student-demo@dome.tu.ac.th", "student", "Demo Department", "Demo Faculty"))
+					DEMO_USERNAME, "Demo Student", "student-demo@dome.tu.ac.th", "student", "Demo Department", "Demo Faculty",
+					"ปกติ", null))
 	);
 
 	@Override

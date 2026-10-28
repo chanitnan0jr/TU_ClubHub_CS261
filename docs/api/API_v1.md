@@ -3,13 +3,15 @@
 | Property | Value |
 |---|---|
 | Version | `v1` |
-| Contract status | Partially implemented; endpoint status listed below |
-| Last updated | 2026-10-21 |
+| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.2.0), `rounds.openapi.yaml` (v1.1.0), and `task75-sprint2-design.md` |
+| Last updated | 2026-10-28 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
 
 Authorization policy was adopted on 2026-10-19 in the [Permission Matrix](../security/permission-matrix.md). Its Active, term, self-review, and Admin rules are decided; the matrix separately records implementation gaps. Adoption does not imply that future product endpoints exist.
+
+**Task74 decision update, 2026-10-27:** product decisions below are recorded from the user's instruction and are **Pending Team Review**; they do not constitute a completed PO/Reviewer sign-off or a runtime deployment. In particular, the private-resource error policy changes from hiding an existing unauthorized application with `404` to returning `403 ACCESS_DENIED`; nonexistent resources use `404 RESOURCE_NOT_FOUND`. See [§8.1](#81-task74-sprint-2-contract-handoff--draft--pending-review), [§9](#9-compatibility-and-change-policy), and the [decision log](../architecture/system-architecture.md#s2-decision-log).
 
 The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](openapi.yaml). Recruitment management uses the separate OpenAPI 3.0.3 document [rounds.openapi.yaml](rounds.openapi.yaml). Keep both aligned with their contracts and frontend DTOs.
 
@@ -29,7 +31,7 @@ Initial source review on 2026-10-19; application POST status updated on 2026-10-
 | `POST /api/v1/rounds/{roundId}/applications` (§11) | Implemented: transactional service, HTTP handler, shared Problem errors, session/CSRF; see [Task45 verification](../testing/task45-concurrency-and-rollback.md) | No submission client |
 | `/actuator/health` | Implemented | Operational endpoint |
 
-The [permission matrix](../security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย) lists remaining Active, PRESIDENT, account-refresh, and self-review checks. Real TU access and verified student-status provisioning still require integration work.
+The [permission matrix](../security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย) lists remaining Active, PRESIDENT, account-refresh, and self-review checks. Login-time student-profile provisioning/synchronization exists in [UserAccountService](../../backend/src/main/java/com/tu/clubhub/user/service/UserAccountService.java); real TU access and verification of upstream student-status mapping remain integration work. Login does not create memberships, assignments, or privileged roles.
 
 ## 1. Contract scope
 
@@ -355,8 +357,8 @@ All `/api/v1` errors use `Content-Type: application/problem+json`. The response 
 |---|---|---|
 | `400` | `VALIDATION_FAILED`, `INVALID_RESOURCE_ID` | Malformed JSON, invalid parameter, or field validation failure |
 | `401` | `AUTHENTICATION_REQUIRED`, `AUTHENTICATION_FAILED` | Missing/invalid authentication or rejected login credentials |
-| `403` | `ACCESS_DENIED`, `CSRF_INVALID`, `ACCOUNT_NOT_ALLOWED` | Authenticated user lacks permission, CSRF check fails, or account is not allowed |
-| `404` | `RESOURCE_NOT_FOUND`, `CLUB_NOT_FOUND` | Resource does not exist or is not visible to this caller |
+| `403` | `ACCESS_DENIED`, `CSRF_INVALID`, `ACCOUNT_NOT_ALLOWED` | Authenticated user lacks permission to an existing private resource, another access rule fails, CSRF check fails, or account is not allowed |
+| `404` | `RESOURCE_NOT_FOUND`, `CLUB_NOT_FOUND` | Resource does not exist; public/availability visibility exceptions remain explicitly documented per endpoint |
 | `405` | `METHOD_NOT_ALLOWED` | The path exists but does not support the request method |
 | `409` | `RESOURCE_CONFLICT` | Duplicate request or invalid current-state transition |
 | `429` | `RATE_LIMITED` | Request rate limit exceeded; include `Retry-After` when known |
@@ -367,15 +369,17 @@ The table is the shared error vocabulary. An endpoint's OpenAPI operation lists 
 
 ## 7. Authorization rules
 
-The [Permission Matrix](../security/permission-matrix.md) is authoritative. The following rules are adopted policy, including for product APIs that are not implemented yet:
+The [Permission Matrix](../security/permission-matrix.md) is authoritative. The following rules combine the adopted 2026-10-19 baseline with the explicitly marked user decisions recorded on 2026-10-27 (Pending Team Review), including for product APIs that are not implemented yet:
 
 - Public reads require no login and expose only active clubs and recruitment information allowed by the public endpoint.
 - All protected operations require a valid session and an `ACTIVE` account checked against current database state. On detecting suspension, return `403 ACCOUNT_NOT_ALLOWED` and invalidate the session. Public access and session cleanup remain available; unsafe requests still require CSRF.
 - Student eligibility requires a verified `student_profiles.student_status = 'ACTIVE'`. Successful TU login alone does not establish eligibility. Missing or unverified status grants no student or committee privileges.
 - Committee access requires an active account, student profile, club, membership, and assignment for the actual resource's club. Membership must have started and not ended; assignment must be unrevoked with `starts_at <= now < ends_at`. The start is inclusive and the end exclusive, using backend UTC time. Recheck inside write transactions; no scheduled expiry job or client refresh is needed to remove expired privileges.
 - The global role remains `USER` or `ADMIN`; `COMMITTEE`/`PRESIDENT` are club assignment roles. Admin has no term of its own, but acting as committee requires the same effective assignment as anyone else.
-- Applicants may access only their own applications. An active account may read its existing private records even when student or club status is inactive. Hide unpublished results and internal review notes. Applicant access to another person's private resource returns `404 RESOURCE_NOT_FOUND`.
-- Confirming an offer requires active student and club status, ownership, a published accepted result in a non-cancelled round, and `now < confirmation_deadline`. Declining requires active account, ownership, the same result/deadline conditions, but does not require student or club Active status.
+- Applicants may access only their own applications. An active account may read its existing private records even when student or club status is inactive. Hide unpublished results and internal review notes. Under the user's 2026-10-27 decision T74-D01, access to an existing unauthorized private application/resource returns `403 ACCESS_DENIED`; a nonexistent resource returns `404 RESOURCE_NOT_FOUND`. Do not retain the former other-owner `404` hiding policy. This changes the target contract, not the current runtime; public inactive-club and form/submission availability responses remain the explicit endpoint rules below.
+- A fresh confirmation requires active student and club status, ownership, a published accepted result in a non-cancelled round, and `results_published_at <= serverNow < confirmation_deadline`. A fresh decline requires active account, ownership, the same result/deadline conditions, but does not require student or club Active status. Recheck current write permissions and state in the transaction, then sample server time after the relevant lock/recheck before writing; frontend time never decides eligibility.
+- Under the user's T74-D05 decision, an authenticated, Active owner repeating the same already-recorded final action receives that stored outcome without another decision, membership write or history row. This retry is an authorized read of the existing outcome, so do not impose the fresh-action deadline or create a new response time; recheck current session/account/ownership. An opposite final action is `409 RESOURCE_CONFLICT`, with no change of mind in MVP. Response DTOs remain to be designed; never replay a raw entity or restore a later-changed membership. This rule does not change submission's duplicate `409`.
+- Under the user's final T74-D07 decision, a fresh confirmation is rejected unchanged if any membership row already exists for the applicant and target club, whether `ACTIVE`, `INACTIVE`, `LEFT` or `REMOVED`. The exception is the exact same-application final-action retry above, which only reads its stored outcome. MVP has no reactivation/rejoin through a new confirmation; preserve the existing membership row, source and history. This confirmation rule does not expand the already-defined submission/form checks.
 - A user who has an application in a round, in any status, cannot use committee permissions for that round. This includes internal reads, round changes, decisions, cancellation, and publication; withdrawing an application does not lift the restriction. Filter such rounds before committee pagination/counts.
 - COMMITTEE/PRESIDENT may record internal decisions after recruitment closes and before publication. Only an effective PRESIDENT without an application in that round may publish results or cancel a round, subject to the state/time rules in the matrix. Editing published results and accepting/declining on behalf of others are denied.
 - Admin may access aggregate university statistics and manage committee appointments and limited initial membership provisioning. Admin cannot appoint itself, read application content through its global role, or override Active, terms, ownership, self-review, or published decisions. The app does not grant global-role/account-status/club-status management permissions in this scope.
@@ -391,20 +395,64 @@ The table includes new APIs and unfinished parts of existing contracts. Define m
 |---|---|---|
 | US-01 | Club search and filters | Search/filter fields, sort options, and category/tag semantics |
 | US-04 | Applicant application list/detail/history | Owner-only access and hiding unpublished results/internal notes are decided; section 11 reserves `GET /api/v1/me/applications` and `GET /api/v1/me/applications/{applicationId}`; define response/status mapping |
-| US-05 | Confirm or decline an offer | Ownership/Active/deadline permissions are decided; implement publication, idempotency, and membership transaction |
+| US-05 | Confirm or decline an offer | User decisions record retry, opposite-action conflict, transaction-time checks and rejection of all prior target membership rows for fresh confirmation; define operation/DTOs and implement publication/atomicity/concurrency |
 | US-06 | Club profile editing extensions | Pending GET integration, category/tag writes, and concurrent update policy; PUT already exists |
 | US-07 | Recruitment management completion | GET list/detail and CANCEL from rounds.openapi.yaml remain pending; define cancellation reason and complete permission checks |
-| US-08 | Recruitment question integration | Use the existing round POST/PUT questions contract; current policy permits changes only on drafts without applications; define any future question versioning separately |
+| US-08 | Recruitment question integration | Round POST/PUT and per-question list/create/update/delete/reorder APIs exist, and the question-management page uses them; current policy permits changes only on drafts without applications; define any future question versioning separately |
 | US-09 | Committee application review | Scope, privacy boundaries, and self-review are decided in the matrix; current story remains read-only; decision/publication need separate implementation work |
+| Selection-results Draft | Explicit review action, internal decisions and result publication | See [selection-results-draft.md](../stories/sprint2/selection-results-draft.md); the user confirmed ชนิตว์นันท์ as Owner of the two Draft Stories. FE/BE owners remain to be assigned; temporary IDs, team review, operation paths/DTOs/audit design and handlers remain pending |
 | US-10 | Central dashboard | Admin aggregate access is decided; define metrics and academic-period attribution |
 | Backlog | Committee appointment administration | Admin-only authorization is decided; define appointment/revocation/bootstrap APIs and audit storage |
 | Backlog | In-app notifications | Event triggers, read/unread behavior, and ownership |
 
-US-03 submission is now specified in [section 11](#11-application-submission); verified student-status integration and endpoint implementation remain required. Application status values referenced by the architecture are `SUBMITTED`, `UNDER_REVIEW`, `ACCEPTED`, `REJECTED`, `CONFIRMED`, `DECLINED`, `WITHDRAWN`, and `EXPIRED`. Submission creates `SUBMITTED`, displayed as Pending; other transitions remain separate workflows. Do not publish internal decision data or application history before `resultsPublishedAt`.
+US-03 submission is now specified in [section 11](#11-application-submission); login-time student-profile synchronization exists, while verification against real TU responses and submission endpoint implementation remain required. Application status values referenced by the architecture are `SUBMITTED`, `UNDER_REVIEW`, `ACCEPTED`, `REJECTED`, `CONFIRMED`, `DECLINED`, `WITHDRAWN`, and `EXPIRED`. Submission creates `SUBMITTED`, displayed as Pending; enum presence does not approve every action for Sprint 2. The user's T74-D02 decision excludes `INTERVIEW` from MVP and makes `UNDER_REVIEW` optional through an explicit action only; US-09 reads never change state. Direct `SUBMITTED → ACCEPTED/REJECTED` is allowed after actual recruitment close under the existing committee/state rules. `WITHDRAWN` action support still needs explicit scope. `EXPIRED` denotes automatic timeout, displayed as “สละสิทธิ์ (หมดเวลาตอบรับ)”, and remains distinct from voluntary `DECLINED`. Do not publish internal decisions or revealing history/messages/notifications before actual `resultsPublishedAt`; internal review notes remain private after publication.
+
+### 8.1 Task74 Sprint 2 contract handoff — Draft / Pending Review
+
+Prepared on 2026-10-27 from repository evidence and updated with the user's product decisions on the same date. Those instructions are recorded decisions, **Pending Team Review**, rather than a claim that formal PO/Reviewer sign-off or implementation occurred. The [Task74 review artefact](../architecture/task74-sprint2-analysis.md) links the [application state machine](../architecture/system-architecture.md#s2-application-state-machine), [business-rule index](../architecture/system-architecture.md#s2-business-rules), [permission matrix](../security/permission-matrix.md#s2-permission-matrix), and [decision log](../architecture/system-architecture.md#s2-decision-log). Keep rules in those canonical locations; this section records contract dependencies only.
+
+| Contract/design area | Existing baseline and remaining work | Decision dependency |
+|---|---|---|
+| Applicant list/detail/history — US-04 | §11 reserves the `/me/applications` collection/detail URIs, but response/history DTOs and handlers are missing. T74-D01 records the user's decision: an existing unauthorized private resource uses `403 ACCESS_DENIED`; nonexistent uses `404 RESOURCE_NOT_FOUND`. This supersedes the former other-owner `404` policy. Define pre/post-publication status mapping and a field/history allowlist. Reads never set `UNDER_REVIEW`. | T74-D01 recorded / Pending Team Review; T74-D04 open |
+| Committee list/detail — US-09 | Read-only; paths/DTOs still need design. Use the actual round/club, current assignment/term and all-status self-review restrictions before pagination/count. Existing unauthorized private resources use `403`, missing resources `404`. Opening an application does not record a decision or change state; optional `UNDER_REVIEW` requires a separate explicit action. | T74-D01/02 recorded / Pending Team Review; T74-D04 open |
+| Internal decision and result publication | The user confirmed ชนิตว์นันท์ as Owner of the two [Draft Stories/AC](../stories/sprint2/selection-results-draft.md); FE/BE assignment, team review, API contracts and handlers remain pending. Do not absorb writes into US-09. COMMITTEE/PRESIDENT may decide directly from SUBMITTED, or from optional UNDER_REVIEW, after actual close; MVP excludes INTERVIEW. PRESIDENT alone publishes under the existing matrix. Recruitment `PUBLISH` is not selection-result publication. Publication changes round metadata, not application status; design its audit rather than faking `ACCEPTED → ACCEPTED` history. | T74-D02 and D03 Owner recorded; team review, T74-D03 audit and T74-D04 visibility remain open |
+| Confirm/decline — US-05 | No complete operation/response DTO or handler. Fresh actions use actual publication and transaction-time checks; exact same-final-action retry returns the stored outcome after session/account/ownership checks with no new writes. Opposite final action is `409`, no change of mind. Fresh confirmation rejects any prior target membership row (`ACTIVE`/`INACTIVE`/`LEFT`/`REMOVED`) unchanged; no MVP reactivation. Same-application final-action retry only reads its stored outcome. Recheck the existing five-club ceiling with cross-club serialization for eligible fresh confirmation. | T74-D05/07 and timing part of D06 recorded / Pending Team Review; implementation/DTO/lock design pending |
+| Expiry processing — US-05 | Automatic expiry is recorded scope, not a public endpoint. At/after deadline, only unanswered, published accepted applications become `EXPIRED`; preserve decisions and final outcomes, with `responded_at`/system actor as in Schema. Sweep/catch-up mechanism, frequency and acceptable lag still need team Design. Request APIs enforce the deadline even if the worker is late. | T74-D06 timing/automatic expiry recorded; worker scheduling/lag open |
+| Dashboard — US-10 | Aggregate ADMIN-only contract/handler missing. `recruitment_rounds` already has `academic_year` and `semester`; define units, cohort/current-member meaning, multi-round aggregation and joins without double-counting. Global ADMIN grants no private applicant-content access. | T74-D08 |
+| Carry-over submission/form — US-03 / Task42 | Existing POST and form GET remain pending implementation. US-03 originates in Sprint 1; confirm carry-over metadata. Keep the requester-confirmed form-read policy pending PO/team review and leave duplicate/member/quota conflicts on POST unless that policy is explicitly changed. No new form version/ETag gate is implied. | T74-D09 |
+
+Actual result publication, not `resultsScheduledAt`, controls applicant visibility and the start of the response window. Internal decisions must not leak through errors or notifications. Appointment/revocation is a dependency when no eligible committee member/PRESIDENT is available; its existing policy does not add appointment administration to Sprint 2. Endpoint paths, payloads, new statuses, job timing and approval records for unresolved work are not created by this handoff.
+
+**Fresh action versus retry:** for a new confirmation/decline, acquire the relevant transaction protection, recheck current write rights/state/version, then sample backend time before writing and require `results_published_at <= serverNow < confirmation_deadline`. The same-final-action retry is not a new decision: after current session/Active account and ownership/resource authorization, return the recorded outcome without another deadline decision, `responded_at` update, member change or history row. If membership later changes for another reason, this replay does not restore it. Response encoding and the precise lock strategy still need API/BE Design; a lock on one application or its uniqueness constraint alone does not serialize the user's confirmations across clubs.
+
+Calling that replay a logical read does not define a new GET endpoint or waive CSRF for an unsafe request. The shared session, CSRF and current-account rules and their error codes still apply before returning a stored outcome.
+
+### 8.2 Task75 Sprint 2 System & API Design Specification (2026-10-28)
+
+Following the Task74 System Analysis handoff, the complete Sprint 2 technical contracts, OpenAPI schemas, RFC 7807 `409 RESOURCE_CONFLICT` `reason` vocabulary, database locking & expiry worker design, and frontend UI wireframes/status mappings are specified in:
+
+- **Master System Design Document:** [`docs/architecture/task75-sprint2-design.md`](../architecture/task75-sprint2-design.md)
+- **Primary OpenAPI 3.1 Specification (`v1.2.0`):** [`docs/api/openapi.yaml`](openapi.yaml)
+- **Recruitment Rounds OpenAPI 3.0.3 Specification (`v1.1.0`):** [`docs/api/rounds.openapi.yaml`](rounds.openapi.yaml)
+
+| Sprint 2 Feature / Task | Specified Endpoint(s) | Primary OpenAPI Schema(s) |
+|---|---|---|
+| **US-01 / Task62–63** Public Club Directory & Filters | `GET /api/v1/public/clubs`, `GET /api/v1/public/club-categories`, `GET /api/v1/public/interest-tags` | `PublicClubSearchPage`, `PublicClubSummary`, `PublicClubCategoryList`, `PublicClubTagList` |
+| **Task79** Real-Time Auth Session Refresh | `GET /api/v1/auth/me` | `CurrentUser` (`studentStatus`, `activeCommitteeAssignments`) |
+| **Task81** Club Profile Edit Capability Flag | `GET /api/v1/public/clubs/{id}`, `GET /api/v1/clubs/{clubId}` | `PublicClubProfile.canEditProfile`, `ClubDetail.canEditProfile` |
+| **US-08 / Task51** Question Edit/Delete Conflict | `PUT / DELETE /api/v1/rounds/{roundId}/questions/{questionId}` | `Problem` (`409 RESOURCE_CONFLICT`, `reason: QUESTION_HAS_ANSWERS`) |
+| **US-09 / Task65–66** Committee Application Review (Read-Only + Optional Start Review) | `GET /api/v1/rounds/{roundId}/applications`, `GET /api/v1/rounds/{roundId}/applications/{applicationId}`, `POST /api/v1/rounds/{roundId}/applications/{applicationId}/start-review` | `CommitteeApplicationPage`, `CommitteeApplicationDetail`, `StartApplicationReviewRequest` |
+| **S2-DECISION-DRAFT / Task67–68** Pre-Publication Review & Decision | `PUT /api/v1/rounds/{roundId}/applications/{applicationId}/decision` | `ApplicationDecisionRequest`, `CommitteeApplicationDetail`, `ApplicationDecisionConflict` |
+| **S2-PUBLICATION-DRAFT / Task67–68** Batch Result Publication | `POST /api/v1/rounds/{roundId}/publish-results` | `PublishResultsRequest`, `PublishResultsResponse`, `PublishResultsConflict` |
+| **US-04 / Task64 & Task56** Applicant Application Tracking & Detail | `GET /api/v1/me/applications`, `GET /api/v1/me/applications/{applicationId}` | `ApplicantApplicationPage`, `ApplicantApplicationDetail`, `ApplicantVisibleStatus` |
+| **US-05 / Task69–70** Membership Offer Confirm / Decline | `POST /api/v1/me/applications/{applicationId}/confirm`, `POST /api/v1/me/applications/{applicationId}/decline` | `MembershipOfferResponse`, `MembershipOfferConflict` |
+| **US-10 / Task71–72** Admin Central Dashboard Statistics | `GET /api/v1/admin/dashboard/stats` | `AdminDashboardStatsResponse`, `AdminDashboardSummaryMetrics`, `AdminClubStatsPage` |
 
 ## 9. Compatibility and change policy
 
 The path prefix `/api/v1` is the major API version. Adding optional response fields or new endpoints is additive. Removing/renaming fields, changing types, changing authentication, or changing established status/error behavior is breaking and requires a migration plan and a new major version.
+
+The 2026-10-27 user instruction changes the **target private-resource error policy** from other-owner/unauthorized `404` hiding to existing-unauthorized `403` and genuinely missing `404` (T74-D01). This is a breaking expectation for consumers of the earlier draft, even though the application-history/review handlers are not implemented. This document records the revised v1 design; it does not claim a runtime rollout, a completed team review or an automatic version migration. FE/BE/QA must update expected outcomes together and identify any existing consumer before release; an implemented consumer would require the migration/versioning review above. Public inactive-club hiding and the explicitly documented application-form/submission availability checks are unchanged by this private-application decision.
 
 Update this Markdown contract, the OpenAPI document, backend DTOs, and frontend types in the same change. Review API changes with both frontend and backend owners. Do not use a database entity as the wire contract.
 
@@ -421,7 +469,7 @@ Mark defined but unimplemented APIs as pending, and keep unresolved schemas iden
 
 ## 11. Application submission
 
-**Contract defined; implementation pending.** This section specifies [US-03](../stories/US-03.md) and [SD-05](../diagrams/sequence/SD-05-submit-application.md). Persistence uses the existing [V1 schema](../../backend/src/main/resources/db/migration/V1__init_schema.sql) and [ERD](../database/TU-ClubHub-ERD-Updated.dbml); no table or column additions are needed for this contract.
+**Contract defined; implementation pending.** This section specifies [US-03](../stories/sprint1/US-03.md) (Sprint 1 carry-over, pending scope metadata review) and [SD-05](../diagrams/sequence/SD-05-submit-application.md). Persistence uses the existing [V1 schema](../../backend/src/main/resources/db/migration/V1__init_schema.sql) and [ERD](../database/TU-ClubHub-ERD-Updated.dbml); no table or column additions are needed for this contract.
 
 Resource model:
 
@@ -441,12 +489,12 @@ Decisions on the items US-03 left open, adopted on 2026-10-19:
 | `motivation` length | 1–2,000 characters | Matches the default `application_questions.max_length`, so every text field an applicant fills in has the same limit. A club that needs a longer essay can add a question with a higher `max_length`. |
 | Document links | Optional; at most 5 per application | US-03 BR-06 allows an empty field, and requiring documents would block applicants who have none. Five links cover a portfolio, a résumé, and a few certificates. |
 | Membership limit scope | Every club recorded in TU-ClubHub, whatever its affiliation level | The project brief sets a five-club limit without distinguishing club types, and `clubs.affiliation_level` is optional with no agreed values. If the university confirms that only university-level clubs count, narrow the count; the API does not change. |
-| `Location` of a new application | `/api/v1/me/applications/{applicationId}`, read through US-04 | The applicant must be able to read the URI it receives. Applicant reads are owner-only and return `404` for other people's IDs, so they belong under `/me`. The round-nested collection stays available for committee reads in US-09. |
+| `Location` of a new application | `/api/v1/me/applications/{applicationId}`, read through US-04 | The applicant must be able to read the URI it receives. The 2026-10-27 T74-D01 decision supersedes the earlier owner-read hiding rule: an existing unauthorized application returns `403 ACCESS_DENIED`, a nonexistent application `404 RESOURCE_NOT_FOUND`. Committee list/detail paths and DTOs still need their own contract under read-only US-09. |
 | Inactive target club | `404 RESOURCE_NOT_FOUND` | Public endpoints already hide inactive clubs with `404`, and US-03 BR-02 avoids revealing resources that are not public. `403 ACCESS_DENIED` remains for the applicant's own eligibility. |
 
 ### `POST /api/v1/rounds/{roundId}/applications`
 
-Task42 uses the round-scoped path above, replacing the earlier **contract-only** `POST /api/v1/clubs/{clubId}/rounds/{roundId}/applications`. The existing `submitApplication` operation and request/response schemas are reused at the new path; no compatibility alias or second submission operation is specified. Resolve `clubId` from the stored round instead of accepting it in the path or body. Consumers of the earlier draft, including the existing SD-05 diagram, must use this path when implemented; the old diagram is historical route context, not an additional API contract. Confirm that handoff during team review.
+Task42 uses the round-scoped path above, replacing the earlier **contract-only** `POST /api/v1/clubs/{clubId}/rounds/{roundId}/applications`. The existing `submitApplication` operation and request/response schemas are reused at the new path; no compatibility alias or second submission operation is specified. Resolve `clubId` from the stored round instead of accepting it in the path or body. [SD-05](../diagrams/sequence/SD-05-submit-application.md) now uses this canonical path; confirm that all consumers use the same operation during team review. Updating the diagram does not imply that a handler or deployed client exists.
 
 Creates the current student's application. Requires a valid `SESSION` cookie, `X-CSRF-TOKEN`, and `Content-Type: application/json`. Path IDs and `questionId` are positive decimal strings without leading zeroes, up to `9223372036854775807`.
 
@@ -489,7 +537,7 @@ Loading the form does not reserve a submission or freeze round availability. If 
 
 #### Success response
 
-Return `201 Created` only after the entire transaction commits, with `Cache-Control: no-store` and `Location: /api/v1/me/applications/{id}`. US-04 implements `GET` at this URI and the applicant's list at `GET /api/v1/me/applications`; their response schemas are not defined here.
+Return `201 Created` only after the entire transaction commits, with `Cache-Control: no-store` and `Location: /api/v1/me/applications/{id}`. US-04 is responsible for the future `GET` at this URI and the applicant's list at `GET /api/v1/me/applications`; their response schemas and handlers are not defined or implemented by this submission contract.
 
 ```json
 {
@@ -567,7 +615,7 @@ Clients must not retry a `4xx` response unchanged. After a lost response or a `5
 
 ## 12. Round application form (Task42)
 
-**Review status: not reviewed or approved. Implementation pending.** Task42 specifies two operations in the existing OpenAPI 3.1.0 [openapi.yaml](openapi.yaml): `getRoundApplicationForm` and `submitApplication`. It does not add a specification file or change the committee management contract in `rounds.openapi.yaml` (3.0.3). Submission rules in §11 remain decided. On 2026-10-20 the Task42 requester confirmed that GET uses the same ACTIVE account/student and currently open-round checks as submission. This records that explicit task decision; it does not claim a PO/team review has occurred. The permission matrix has no dedicated applicant-form row yet; include it in the review handoff. Remaining questions are listed below. The requested round-scoped POST replaces the earlier contract-only club-nested route as explained in §11; no implementation or deployed-client compatibility is claimed.
+**Review status: not reviewed or approved. Implementation pending.** Task42 specifies two operations in the existing OpenAPI 3.1.0 [openapi.yaml](openapi.yaml): `getRoundApplicationForm` and `submitApplication`. It does not add a specification file or change the committee management contract in `rounds.openapi.yaml` (3.0.3). Submission rules in §11 remain decided. On 2026-10-20 the Task42 requester confirmed that GET uses the same ACTIVE account/student and currently open-round checks as submission. This records that explicit task decision; it does not claim a PO/team review has occurred. Task74 records the applicant-form action in the [permission-matrix handoff](../security/permission-matrix.md#s2-permission-matrix) for review; that documentation addition does not complete PO/team approval. Remaining questions are listed below and tracked under T74-D09. The requested round-scoped POST replaces the earlier contract-only club-nested route as explained in §11; no implementation or deployed-client compatibility is claimed.
 
 ### `GET /api/v1/rounds/{roundId}/application-form`
 
@@ -661,9 +709,9 @@ GET checks session/account → ID → verified student → visible resource → 
 
 | Rule / design input | Repository evidence |
 |---|---|
-| Authenticated student, required answers, HTTPS links, one submission per round, server-side time check, atomic writes | [US-03](../stories/US-03.md), AC-01–06 and BR-01–11; existing §11 decisions dated 2026-10-19. |
-| Student/club Active, Student rights for Committee/Admin, no role override; question edits only on drafts without applications | [Permission matrix](../security/permission-matrix.md), §§1–3; this policy takes precedence over older unresolved wording in stories. It has no dedicated form-read row; the Task42 requester confirmed the account/student/window policy on 2026-10-20. |
-| Text-only questions, stable question identity, required flag, display order | [US-08](../stories/US-08.md); [ApplicationQuestionService](../../backend/src/main/java/com/tu/clubhub/recruitment/service/ApplicationQuestionService.java) uses `questionText`, `isRequired`, and `displayOrder`; its committee-only read must not be reused as applicant authorization. |
+| Authenticated student, required answers, HTTPS links, one submission per round, server-side time check, atomic writes | [US-03](../stories/sprint1/US-03.md), AC-01–06 and BR-01–11; existing §11 decisions dated 2026-10-19. |
+| Student/club Active, Student rights for Committee/Admin, no role override; question edits only on drafts without applications | [Permission matrix](../security/permission-matrix.md), §§1–3; this policy takes precedence over older unresolved wording in stories. The Task42 requester confirmed the form-read account/student/window policy on 2026-10-20; Task74 records that action for PO/team review without claiming approval. |
+| Text-only questions, stable question identity, required flag, display order | [US-08](../stories/sprint1/US-08.md); [ApplicationQuestionService](../../backend/src/main/java/com/tu/clubhub/recruitment/service/ApplicationQuestionService.java) uses `questionText`, `isRequired`, and `displayOrder`; its committee-only read must not be reused as applicant authorization. |
 | Real persisted types/constraints | [V1 migration](../../backend/src/main/resources/db/migration/V1__init_schema.sql): `recruitment_rounds`, `application_questions`, `applications`, `application_answers`, `application_links`, `application_status_history`; [ERD](../database/TU-ClubHub-ERD-Updated.dbml). Questions have `max_length`, no question-type/options/file columns. |
 | Round fields | [RecruitmentRound](../../backend/src/main/java/com/tu/clubhub/recruitment/domain/RecruitmentRound.java); [rounds.openapi.yaml](rounds.openapi.yaml) for management semantics. No full internal schema is referenced by form responses. |
 | Server-side UTC clock, session/CSRF, no automatic public access for round-scoped routes | [SecurityConfiguration](../../backend/src/main/java/com/tu/clubhub/config/SecurityConfiguration.java), [AbsoluteSessionTimeoutFilter](../../backend/src/main/java/com/tu/clubhub/config/AbsoluteSessionTimeoutFilter.java); §§2–3. Current filters are not proof of the future endpoint's complete authorization. |
@@ -676,11 +724,11 @@ No review has taken place as part of writing this contract. The Task42 requester
 | Item | Question and options | Effect / proposed direction |
 |---|---|---|
 | R1 | Should an existing application, existing target membership, or the five-club limit additionally block reading? | Baseline account/student/window checks were confirmed by the requester. Keep duplicate/member conflicts on POST under this contract; adding them to GET would prevent revisiting a form for reference. The alternative is GET conflicts too, requiring explicit errors and precedence in both documents. |
-| R2 | Record the requester's confirmed read policy in the permission matrix and obtain PO/user-representative review. | The account/student/window policy is defined here from the 2026-10-20 task answer, not from Task35 public access. Read-only preview outside the window is not included; changing it later would require an explicit contract decision. |
+| R2 | Review the applicant-form action recorded in Task74's permission-matrix handoff and obtain PO/user-representative review. | The account/student/window policy is defined here from the 2026-10-20 task answer, not from Task35 public access. Recording the row is not approval. Read-only preview outside the window is not included; changing it later would require an explicit contract decision. |
 | R3 | Is the current immutable-after-publication question policy sufficient, or must the API reject any stale form snapshot even if IDs and constraints still validate? | Current decided policy needs no new version field; POST revalidates the stored set. Strict snapshot rejection or edits after publication require a separate versioning/precondition contract; do not silently add `formVersion`, `If-Match`, or `FORM_CHANGED`. |
-| R4 | Confirm all consumers move to Task42's round-scoped POST, and reconcile earlier SD-05 path references during handoff. | One submission operation/schema remains; no compatibility alias is defined. Applicant `Location` remains `/api/v1/me/applications/{id}` and that read API still needs implementation. |
+| R4 | Confirm all consumers use Task42's round-scoped POST; SD-05's reference has been corrected in the Task74 document update. | One submission operation/schema remains; no compatibility alias is defined. Applicant `Location` remains `/api/v1/me/applications/{id}` and that read API still needs implementation. A corrected document is not evidence of client integration. |
 
-- [ ] PO/user representative reviews the requester-confirmed read policy, resolves R1, and records the applicant-form action in the permission matrix (R2). Update both contracts together if the decision changes.
+- [ ] PO/user representative reviews the requester-confirmed read policy and its recorded permission-matrix action, resolves R1/R2, and records the actual review outcome. Update both contracts together if the decision changes.
 - [ ] PO/team confirms R3/R4, the text-only question model, optional 0–5 HTTPS links, and the existing §11 duplicate/membership rules.
 - [ ] Frontend/backend agree on the dedicated DTO allowlist, `eligibilityText: null`, empty questions, Unicode lengths, field-error paths, UTC serialization, and prototype mapping.
 - [ ] Backend plan covers current account/student checks, session/CSRF, resource hiding, same-round transaction lock, unique-conflict mapping, rollback, and transaction-time deadline checks.

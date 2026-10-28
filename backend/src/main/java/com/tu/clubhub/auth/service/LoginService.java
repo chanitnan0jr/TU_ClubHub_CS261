@@ -9,6 +9,7 @@ import com.tu.clubhub.auth.integration.tu.TuAuthClient;
 import com.tu.clubhub.auth.integration.tu.TuAuthUser;
 import com.tu.clubhub.user.domain.UserAccount;
 import com.tu.clubhub.user.service.UserAccountService;
+import com.tu.clubhub.user.service.UserAccountService.StudentIdentity;
 
 @Service
 public class LoginService {
@@ -39,8 +40,11 @@ public class LoginService {
 			throw new AuthenticationFailedException();
 		}
 
+		StudentIdentity student = identity.isStudent()
+				? new StudentIdentity(identity.username(), identity.faculty(), identity.department(), identity.studentStatus())
+				: null;
 		UserAccount account = userAccountService.provisionAfterVerifiedLogin(
-				identity.username(), identity.displayName(), identity.email());
+				identity.username(), identity.displayName(), identity.email(), student);
 		if (!"ACTIVE".equals(account.getAccountStatus())) {
 			throw new AccountNotAllowedException();
 		}

@@ -882,9 +882,10 @@ class ApplicationSubmissionHttpIntegrationTest {
         @Bean @Primary ControlledClock httpSubmissionClock(JdbcTemplate jdbc) { return new ControlledClock(jdbc); }
         @Bean FixtureIdentities fixtureIdentities() { return new FixtureIdentities(); }
         // Only the external TU provider is replaced with a fixture allowlist. Login/session/security are real.
+        // Login syncs student_profiles from tu_status; "ปกติ" keeps the fixture profiles ACTIVE.
         @Bean @Primary TuAuthClient fixtureTuAuth(FixtureIdentities identities) {
             return (username, password) -> identities.names.contains(username) && PASSWORD.equals(password)
-                    ? Optional.of(new TuAuthUser(username, "Fictional Task45 Student", null, "student", null, null))
+                    ? Optional.of(new TuAuthUser(username, "Fictional Task45 Student", null, "student", null, null, "ปกติ", null))
                     : Optional.empty();
         }
     }

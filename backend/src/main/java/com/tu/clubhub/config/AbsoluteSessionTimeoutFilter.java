@@ -34,7 +34,7 @@ public final class AbsoluteSessionTimeoutFilter extends OncePerRequestFilter {
 					&& System.currentTimeMillis() - loginTime >= ABSOLUTE_TIMEOUT.toMillis()) {
 				session.invalidate();
 				SecurityContextHolder.clearContext();
-				if (!isPublicRequest(request)) {
+				if (!PublicRoutes.MATCHER.matches(request)) {
 					SecurityConfiguration.writeProblem(objectMapper, response, request.getRequestURI(), 401,
 							"Authentication required", "Your session has expired. Sign in again.",
 							"AUTHENTICATION_REQUIRED");
@@ -43,16 +43,5 @@ public final class AbsoluteSessionTimeoutFilter extends OncePerRequestFilter {
 			}
 		}
 		filterChain.doFilter(request, response);
-	}
-
-	private static boolean isPublicRequest(HttpServletRequest request) {
-		if (!"GET".equals(request.getMethod())) {
-			return false;
-		}
-		String path = request.getRequestURI();
-		return "/api/v1/auth/csrf".equals(path)
-				|| "/actuator/health".equals(path)
-				|| path.startsWith("/api/v1/clubs/")
-				|| path.matches("/api/v1/public/clubs/[^/]+(?:/recruitment-rounds)?");
 	}
 }

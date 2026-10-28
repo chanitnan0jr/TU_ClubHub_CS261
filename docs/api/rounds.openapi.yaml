@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: TU ClubHub Recruitment Rounds API
-  version: 1.0.0
+  version: 1.1.0
   description: >-
     US-07/US-08. Committee-only management API, separate from existing public
     recruitment-rounds API. No physical DELETE; CLOSE/CANCEL retain applications.
@@ -17,11 +17,32 @@ info:
     that round as committee; exclude such rounds before listing/pagination/counts.
     COMMITTEE or PRESIDENT can create, edit, publish, and close rounds; CANCEL
     requires an effective PRESIDENT, an unpublished result, and an audited reason.
-    Selection-result publication is a separate future workflow, not PUBLISH here.
-    GET operations and CANCEL are not implemented yet; CANCEL also needs its reason
-    field specified before implementation. The matrix lists remaining guard work.
-    Source status reviewed on 2026-10-19: POST, PUT, and PATCH PUBLISH/CLOSE have
-    handlers. Frontend integration and complete permission enforcement remain pending.
+    Selection-result publication is specified on POST /api/v1/rounds/{roundId}/publish-results
+    in openapi.yaml (Task75), not PUBLISH here.
+    Task75 finalizes the Sprint 2 design contract (docs/architecture/task75-sprint2-design.md),
+    including 409 RESOURCE_CONFLICT with reason QUESTION_HAS_ANSWERS when attempting
+    to edit or delete a screening question that already has submitted answers (Task51),
+    and 403 ACCESS_DENIED for an existing private resource outside the caller's
+    authorization versus 404 RESOURCE_NOT_FOUND for a nonexistent resource (T74-D01).
+  x-sprint2-design-handoff:
+    status: specified-in-task75
+    prepared-at: '2026-10-28'
+    analysis-artefact: ../architecture/task74-sprint2-analysis.md
+    design-artefact: ../architecture/task75-sprint2-design.md
+    permission-matrix: ../security/permission-matrix.md#s2-permission-matrix
+    state-machine: ../architecture/system-architecture.md#s2-application-state-machine
+    business-rules: ../architecture/system-architecture.md#s2-business-rules
+    decision-log: ../architecture/system-architecture.md#s2-decision-log
+    selection-results-draft: ../stories/sprint2/selection-results-draft.md
+    decision-source: explicit-user-instruction-2026-10-27-and-task75-design
+    decision-review-status: ready-for-team-review
+    recorded-decisions:
+      T74-D01: existing-unauthorized-private-resource-403-nonexistent-404
+      T74-D02: no-interview-mvp-optional-explicit-review-direct-decision-after-close
+      T74-D03: separate-decision-and-publication-contracts-specified-in-openapi-yaml
+      T74-D05: same-final-action-replay-without-writes-opposite-action-409
+      T74-D06: fresh-action-server-time-after-lock-recheck-automatic-expiry-60s-worker-proposal-pending-po-review
+      T74-D07: same-application-replay-no-writes-all-prior-membership-rows-reject-fresh-confirmation-no-reactivation
 servers:
   - url: http://localhost:8080
 security:
@@ -56,13 +77,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -124,13 +145,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -210,13 +231,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -253,13 +274,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -322,13 +343,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/PRESIDENT/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/PRESIDENT/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -416,14 +437,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
-          description: Not an authorized active committee member of the round owner, self-review restriction,
-            or CSRF_INVALID
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: Round not found, or question does not belong to round
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -478,14 +498,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
-          description: Not an authorized active committee member of the round owner, self-review restriction,
-            or CSRF_INVALID
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: Round not found, or question does not belong to round
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -527,7 +546,9 @@ paths:
         for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
         an application to this round cannot read or manage its questions. Check authorization against the actual
         round owner, including within write transactions. PUT requires both fields; it does not change displayOrder.
-        Use PUT /order for ordering. The question must belong to roundId.
+        Use PUT /order for ordering. The question must belong to roundId. Modification is rejected with 409
+        RESOURCE_CONFLICT (reason QUESTION_HAS_ANSWERS) if one or more answers in application_answers reference
+        this question (Task51).
       parameters:
       - name: X-CSRF-TOKEN
         in: header
@@ -563,24 +584,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
-          description: Not an authorized active committee member of the round owner, self-review restriction,
-            or CSRF_INVALID
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: Round not found, or question does not belong to round
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '409':
-          description: Round state/edit-policy conflict or concurrent modification
+          description: Question already has submitted answers (reason QUESTION_HAS_ANSWERS), round state/edit-policy conflict, or concurrent modification
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-conflict
+                title: Question cannot be modified
+                status: 409
+                detail: Cannot modify a screening question that already has submitted answers.
+                instance: /api/v1/rounds/70001/questions/81001
+                code: RESOURCE_CONFLICT
+                reason: QUESTION_HAS_ANSWERS
+                fieldErrors: []
+                traceId: 01J9EXAMPLE7K4D5
         '415':
           description: Unsupported media type
           content:
@@ -596,7 +626,7 @@ paths:
         for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
         an application to this round cannot read or manage its questions. Check authorization against the actual
         round owner, including within write transactions. Deletion is rejected when one or more answers reference
-        this question (409 QUESTION_HAS_ANSWERS). Other edit-state policy conflicts also return 409. Never cascade-delete
+        this question (409 RESOURCE_CONFLICT with reason QUESTION_HAS_ANSWERS). Other edit-state policy conflicts also return 409. Never cascade-delete
         answers. Recompact remaining displayOrder values transactionally.
       parameters:
       - name: X-CSRF-TOKEN
@@ -623,24 +653,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
-          description: Not an authorized active committee member of the round owner, self-review restriction,
-            or CSRF_INVALID
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: Round not found, or question does not belong to round
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '409':
-          description: Round state/edit-policy conflict or concurrent modification
+          description: Question already has submitted answers (reason QUESTION_HAS_ANSWERS), round state/edit-policy conflict, or concurrent modification
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-conflict
+                title: Question cannot be deleted
+                status: 409
+                detail: Cannot delete a screening question that already has submitted answers.
+                instance: /api/v1/rounds/70001/questions/81001
+                code: RESOURCE_CONFLICT
+                reason: QUESTION_HAS_ANSWERS
+                fieldErrors: []
+                traceId: 01J9EXAMPLE7K4D5
   /api/v1/rounds/{roundId}/questions/order:
     parameters:
     - name: roundId
@@ -697,14 +736,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
-          description: Not an authorized active committee member of the round owner, self-review restriction,
-            or CSRF_INVALID
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '404':
-          description: Round not found, or question does not belong to round
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -816,6 +854,13 @@ components:
             - PUBLISH
             - CLOSE
             - CANCEL
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          pattern: \S
+          nullable: true
+          description: Required non-blank cancellation reason when action is CANCEL; omitted or null for PUBLISH and CLOSE.
       required:
         - version
         - action
@@ -1038,6 +1083,10 @@ components:
           type: string
         code:
           type: string
+        reason:
+          type: string
+          nullable: true
+          description: Machine-readable conflict reason for 409 RESOURCE_CONFLICT (e.g. QUESTION_HAS_ANSWERS, ROUND_NOT_EDITABLE, VERSION_MISMATCH, RESULTS_ALREADY_PUBLISHED).
         traceId:
           type: string
         fieldErrors:

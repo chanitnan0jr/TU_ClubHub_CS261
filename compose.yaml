@@ -28,6 +28,7 @@ services:
   # ============================================================================
   # Application Service: Spring Boot with embedded React frontend
   # Default service when running: docker compose up --build
+  # Demo data (dev only): run scripts/seed-dev-data.sh after the app has started
   # ============================================================================
   app:
     build:

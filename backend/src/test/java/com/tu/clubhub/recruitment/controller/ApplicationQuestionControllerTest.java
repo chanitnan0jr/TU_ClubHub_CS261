@@ -18,7 +18,7 @@ import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/** HTTP contract tests only. Security/CSRF require separate Spring integration tests. */
+/** HTTP contract and error-body tests. Security/CSRF require separate Spring integration tests. */
 class ApplicationQuestionControllerTest {
     private static final String BASE = "/api/v1/rounds/10/questions";
 
@@ -28,7 +28,9 @@ class ApplicationQuestionControllerTest {
     @BeforeEach
     void setUp() {
         service = mock(ApplicationQuestionService.class);
-        mvc = MockMvcBuilders.standaloneSetup(new ApplicationQuestionController(service)).build();
+        mvc = MockMvcBuilders.standaloneSetup(new ApplicationQuestionController(service))
+                .setControllerAdvice(new RecruitmentRoundExceptionHandler())
+                .build();
     }
 
     @Test
@@ -97,7 +99,23 @@ class ApplicationQuestionControllerTest {
         mvc.perform(put(BASE + "/order")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"questionIds\":[\"9223372036854775808\"]}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.instance").value(BASE + "/order"));
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void blankQuestionTextReturnsProblemWithFieldError() throws Exception {
+        mvc.perform(post(BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"questionText\":\" \",\"isRequired\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("questionText"));
 
         verifyNoInteractions(service);
     }
@@ -108,6 +126,10 @@ class ApplicationQuestionControllerTest {
                 .when(service).deleteQuestion(10L, 40L);
 
         mvc.perform(delete(BASE + "/40"))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("RESOURCE_CONFLICT"))
+                .andExpect(jsonPath("$.detail").value("Question has answers"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
 }

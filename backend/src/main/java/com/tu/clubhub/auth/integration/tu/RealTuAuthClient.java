@@ -69,7 +69,9 @@ public final class RealTuAuthClient implements TuAuthClient {
 				response.email(),
 				response.type(),
 				response.department(),
-				response.faculty()));
+				response.faculty(),
+				response.tuStatus(),
+				response.statusId()));
 	}
 
 	private static boolean isInvalidCredentials(String body) {
@@ -104,7 +106,9 @@ public final class RealTuAuthClient implements TuAuthClient {
 			String type,
 			String department,
 			String faculty,
-			String organization) {
+			String organization,
+			@JsonProperty("tu_status") String tuStatus,
+			@JsonProperty("statusid") String statusId) {
 	}
 
 	private record TuAuthErrorResponse(Boolean status, String message) {

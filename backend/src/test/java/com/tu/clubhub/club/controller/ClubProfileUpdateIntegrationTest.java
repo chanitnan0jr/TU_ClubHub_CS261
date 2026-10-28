@@ -9,6 +9,7 @@ import com.tu.clubhub.club.domain.Club;
 import com.tu.clubhub.club.repository.ClubRepository;
 import com.tu.clubhub.committee.domain.ClubCommitteeAssignment;
 import com.tu.clubhub.committee.repository.ClubCommitteeAssignmentRepository;
+import com.tu.clubhub.committee.security.ClubSecurity;
 import com.tu.clubhub.membership.domain.ClubMembership;
 import com.tu.clubhub.membership.repository.ClubMembershipRepository;
 import com.tu.clubhub.user.domain.UserAccount;
@@ -24,8 +25,10 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +37,10 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -73,6 +80,9 @@ class ClubProfileUpdateIntegrationTest {
 
     @Autowired
     private ClubCommitteeAssignmentRepository assignmentRepository;
+
+    @MockitoSpyBean
+    private ClubSecurity clubSecurity;
 
     private UserAccount committeeAccount;
     private UserAccount otherCommitteeAccount;
@@ -198,6 +208,10 @@ class ClubProfileUpdateIntegrationTest {
             membership.getId());
         assignmentRepository.saveAndFlush(
                 new ClubCommitteeAssignment(membership.getId(), "Committee", role, startsAt, endsAt, user.getId()));
+    }
+
+    private String targetClubName() {
+        return jdbcTemplate.queryForObject("SELECT name FROM clubs WHERE id = ?", String.class, TARGET_CLUB_ID);
     }
 
     private UsernamePasswordAuthenticationToken authFor(UserAccount account) {
@@ -560,6 +574,49 @@ class ClubProfileUpdateIntegrationTest {
                             .content(validPayload))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
+
+        @Test
+        @DisplayName("5F: Admin ที่ไม่มีตำแหน่งกรรมการของชมรมต้องได้ 403 และข้อมูลไม่เปลี่ยน")
+        void adminWithoutCommitteeAssignmentReturns403() throws Exception {
+            jdbcTemplate.update("UPDATE users SET system_role = 'ADMIN' WHERE id = ?", studentAccount.getId());
+            ClubHubPrincipal admin = new ClubHubPrincipal(
+                    studentAccount.getId(), studentAccount.getTuUsername(), "ADMIN");
+
+            mockMvc.perform(put("/api/v1/clubs/{clubId}", TARGET_CLUB_ID)
+                            .with(authentication(UsernamePasswordAuthenticationToken.authenticated(
+                                    admin, null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")))))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"name\": \"Admin Edit\", \"description\": \"x\"}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+            assertEquals("ชมรมดนตรีสากล", targetClubName());
+        }
+
+        @Test
+        @DisplayName("5G: ถูกถอนสิทธิ์หลังผ่าน Guard แต่ก่อน Service ตรวจซ้ำ ต้องได้ 403 และข้อมูลไม่เปลี่ยน")
+        void revocationAfterGuardIsRejectedByService() throws Exception {
+            // Revoke right after each check, so the guard passes and the service recheck sees the revocation.
+            doAnswer(invocation -> {
+                Object allowed = invocation.callRealMethod();
+                jdbcTemplate.update(
+                        "UPDATE club_committee_assignments SET status = 'REVOKED', revoked_at = ?, revoked_by = ?",
+                        Instant.now(), committeeAccount.getId());
+                return allowed;
+            }).when(clubSecurity).isCommittee(any());
+
+            mockMvc.perform(put("/api/v1/clubs/{clubId}", TARGET_CLUB_ID)
+                            .with(authentication(authFor(committeeAccount)))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"name\": \"Revoked Edit\", \"description\": \"x\"}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+            verify(clubSecurity, times(2)).isCommittee(TARGET_CLUB_ID);
+            assertEquals("ชมรมดนตรีสากล", targetClubName());
         }
 
         @Test

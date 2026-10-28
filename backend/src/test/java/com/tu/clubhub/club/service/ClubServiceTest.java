@@ -11,6 +11,7 @@ import com.tu.clubhub.club.repository.ClubProfileQueryRepository;
 import com.tu.clubhub.club.repository.ClubRepository;
 import com.tu.clubhub.club.service.ClubService.ClubNotFoundException;
 import com.tu.clubhub.club.service.ClubService.ClubValidationException;
+import com.tu.clubhub.committee.security.ClubSecurity;
 
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.access.AccessDeniedException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,6 +32,7 @@ class ClubServiceTest {
 
     private ClubRepository clubRepository;
     private ClubProfileQueryRepository profileQueryRepository;
+    private ClubSecurity clubSecurity;
     private ClubService service;
 
     @BeforeAll
@@ -41,11 +44,14 @@ class ClubServiceTest {
     void setupService() {
         clubRepository = mock(ClubRepository.class);
         profileQueryRepository = mock(ClubProfileQueryRepository.class);
+        clubSecurity = mock(ClubSecurity.class);
+        when(clubSecurity.isCommittee(any())).thenReturn(true);
 
         service = new ClubService(
                 factory.getValidator(),
                 clubRepository,
-                profileQueryRepository
+                profileQueryRepository,
+                clubSecurity
         );
     }
 
@@ -297,5 +303,34 @@ class ClubServiceTest {
                 clubRepository,
                 profileQueryRepository
         );
+    }
+
+    // ตรวจสิทธิ์ใน Service เองเมื่อถูกเรียกโดยไม่ผ่าน Controller Annotation
+    @Test
+    void nonCommitteeShouldBeDeniedWithoutTouchingClub() {
+        var data = request(null, null, null);
+        when(clubSecurity.isCommittee(41L)).thenReturn(false);
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> service.updateClub(41L, data)
+        );
+
+        verify(clubSecurity).isCommittee(41L);
+        verifyNoInteractions(clubRepository, profileQueryRepository);
+    }
+
+    // ผู้ไม่มีสิทธิ์ต้องได้ 403 ก่อน ไม่ได้เห็นผลตรวจข้อมูล
+    @Test
+    void permissionShouldBeCheckedBeforeValidation() {
+        var data = request("http://example.com/logo.png", "club@", null);
+        when(clubSecurity.isCommittee(41L)).thenReturn(false);
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> service.updateClub(41L, data)
+        );
+
+        verifyNoInteractions(clubRepository, profileQueryRepository);
     }
 }

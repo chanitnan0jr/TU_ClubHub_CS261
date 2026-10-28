@@ -9,6 +9,7 @@ import java.util.Set;
 
 import jakarta.validation.Validator;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ import com.tu.clubhub.club.dto.ClubResponseDto;
 import com.tu.clubhub.club.dto.ClubUpdateRequestDto;
 import com.tu.clubhub.club.repository.ClubProfileQueryRepository;
 import com.tu.clubhub.club.repository.ClubRepository;
+import com.tu.clubhub.committee.security.ClubSecurity;
 
 @Service
 public class ClubService {
@@ -24,15 +26,18 @@ public class ClubService {
     private final Validator validator;
     private final ClubRepository clubRepository;
     private final ClubProfileQueryRepository profileQueryRepository;
+    private final ClubSecurity clubSecurity;
 
     public ClubService(
             Validator validator,
             ClubRepository clubRepository,
-            ClubProfileQueryRepository profileQueryRepository
+            ClubProfileQueryRepository profileQueryRepository,
+            ClubSecurity clubSecurity
     ) {
         this.validator = validator;
         this.clubRepository = clubRepository;
         this.profileQueryRepository = profileQueryRepository;
+        this.clubSecurity = clubSecurity;
     }
 
     // ตรวจข้อมูล แก้ไข และบันทึกชมรม
@@ -41,6 +46,13 @@ public class ClubService {
             Long clubId,
             ClubUpdateRequestDto request
     ) {
+        // ตรวจสิทธิ์ซ้ำภายใน Transaction: ไม่พึ่ง @RequireClubCommittee ของ Controller อย่างเดียว
+        // และปฏิเสธก่อนอ่านหรือแก้ข้อมูลชมรม
+        if (!clubSecurity.isCommittee(clubId)) {
+            throw new AccessDeniedException(
+                    "You must be an active committee member of this club");
+        }
+
         validateUpdateRequest(request);
 
         Club club = clubRepository.findById(clubId)
