@@ -3,7 +3,7 @@
 | Property | Value |
 |---|---|
 | Version | `v1` |
-| Contract status | Partially implemented; Sprint 2 contracts specified in `openapi.yaml` (v1.2.0), `rounds.openapi.yaml` (v1.1.0), and `task75-sprint2-design.md` |
+| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.2.0), `rounds.openapi.yaml` (v1.1.0), and `task75-sprint2-design.md` |
 | Last updated | 2026-10-28 |
 | Audience | Frontend and backend developers |
 
@@ -17,7 +17,7 @@ The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](openapi.y
 
 ### Implementation status
 
-Reviewed from source on 2026-10-19; this table records handlers and integration, not test results or complete policy enforcement.
+Initial source review on 2026-10-19; application POST status updated on 2026-10-21. This table records handlers and integration, not test results or complete policy enforcement.
 
 | API | Backend status | Frontend status |
 |---|---|---|
@@ -28,7 +28,7 @@ Reviewed from source on 2026-10-19; this table records handlers and integration,
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
 | Committee round `GET` list/detail and `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
 | `GET /api/v1/rounds/{roundId}/application-form` (§12) | Account/student/window policy confirmed by Task42 requester; PO/team review pending; no handler | Form prototype only |
-| `POST /api/v1/rounds/{roundId}/applications` (§11) | Contract defined; no handler/service yet | No submission client |
+| `POST /api/v1/rounds/{roundId}/applications` (§11) | Implemented: transactional service, HTTP handler, shared Problem errors, session/CSRF; see [Task45 verification](../testing/task45-concurrency-and-rollback.md) | No submission client |
 | `/actuator/health` | Implemented | Operational endpoint |
 
 The [permission matrix](../security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย) lists remaining Active, PRESIDENT, account-refresh, and self-review checks. Login-time student-profile provisioning/synchronization exists in [UserAccountService](../../backend/src/main/java/com/tu/clubhub/user/service/UserAccountService.java); real TU access and verification of upstream student-status mapping remain integration work. Login does not create memberships, assignments, or privileged roles.
@@ -566,6 +566,8 @@ Recheck authorization, membership eligibility, question membership/requirements,
 
 Keep `uq_applications_round_applicant` as the final duplicate safeguard: concurrent identical submissions can produce only one application; translate that specific uniqueness conflict into `409` after rolling back. Other database failures must not be mislabeled as duplicates. Composite foreign keys already enforce application/round/club and answer/question/round consistency. Do not modify or create membership records during submission. This contract creates no `notifications` row; if an `APPLICATION_SUBMITTED` notification is added later, insert it in the same transaction (US-03 BR-09).
 
+A submission that waits too long for a database lock, or loses a deadlock, is rolled back and returns `503 SERVICE_UNAVAILABLE`. The bound applies to each lock wait, not to the whole request, and is not a quota. It defaults to 2 seconds and is set with `APPLICATION_SUBMISSION_LOCK_TIMEOUT`; a zero, negative, sub-millisecond, or over-2,147,483,647 ms value stops the backend at startup. Retrying is safe: if an earlier attempt committed, the retry returns `409 APPLICATION_ALREADY_EXISTS` instead of creating a second application.
+
 #### Errors
 
 Use the shared Problem format with `Cache-Control: no-store`. Error `type` values use the stable prefix `urn:tuclubhub:problem:` and the suffixes below.
@@ -581,7 +583,9 @@ Use the shared Problem format with `Cache-Control: no-store`. Error `type` value
 | `404` | `RESOURCE_NOT_FOUND` | `resource-not-found` | Round missing, its club missing or not `ACTIVE`, or round never published (`published_at IS NULL`). |
 | `409` | `RESOURCE_CONFLICT` | `resource-conflict` | A conflict identified by the required `reason` field below. |
 | `500` | `INTERNAL_ERROR` | `internal-error` | Unexpected failure; roll back all submission writes. |
-| `503` | `SERVICE_UNAVAILABLE` | `service-unavailable` | Database unavailable; do not report a successful submission. |
+| `503` | `SERVICE_UNAVAILABLE` | `service-unavailable` | Database unavailable, or a lock wait exceeded its bound; nothing is committed. Do not report a successful submission. |
+
+Following check 2 below, a suspended account receives `403 ACCOUNT_NOT_ALLOWED` and loses its session even when the body is missing or malformed. The account is checked again inside the submission, so a suspension that takes effect during the request also returns `403` and creates no application. Field errors from nested objects keep their indexed `field` path, for example `links[0].url`. A `links[].url` string that is not a valid HTTPS URI of at most 2,048 characters uses field-error code `INVALID_HTTPS_URL`; a missing or non-string `url` and other validation failures keep their own codes.
 
 Checks run in this order, and the first failure determines the response. This is the authoritative order for US-03; request checks needing no database lookup run before the eligibility check:
 
