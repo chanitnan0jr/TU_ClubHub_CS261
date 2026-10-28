@@ -43,7 +43,7 @@ public class ApplicationService {
     }
 
     /**
-     * Public proxy entry point. Lock order: applicant, profile, round, club,
+     * Public proxy entry point. Lock order: applicant, profile, club, round,
      * questions, memberships; all locks last until commit/rollback.
      * SUBMITTED is the persisted/API status displayed as Pending, per the contract.
      */
@@ -72,9 +72,10 @@ public class ApplicationService {
         if (repository.lockStudentStatus(userId).filter("ACTIVE"::equals).isEmpty()) {
             throw failure(403, "ACCESS_DENIED", "Verified active student status is required.");
         }
+        long clubId = repository.findRoundClubId(input.roundId()).orElseThrow(ApplicationService::notFound);
+        if (repository.lockClubStatus(clubId).filter("ACTIVE"::equals).isEmpty()) throw notFound();
         Round round = repository.lockRound(input.roundId()).orElseThrow(ApplicationService::notFound);
-        if (repository.lockClubStatus(round.clubId()).filter("ACTIVE"::equals).isEmpty()
-                || round.publishedAt() == null) throw notFound();
+        if (round.publishedAt() == null) throw notFound();
 
         // Sample only after acquiring the round lock, including time spent waiting for it.
         Instant now = clock.instant();

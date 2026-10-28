@@ -38,11 +38,20 @@ public class ApplicationRepository {
                 (rs, row) -> rs.getString("student_status"), userId).stream().findFirst();
     }
 
-    /** The same row is locked by round close/publish and question-edit services. */
+    /** A round's club never changes, so it is read unlocked to take the club lock first. */
+    public Optional<Long> findRoundClubId(long roundId) {
+        return jdbc.query("SELECT club_id FROM recruitment_rounds WHERE id = ?",
+                (rs, row) -> rs.getLong("club_id"), roundId).stream().findFirst();
+    }
+
+    /**
+     * Shared with other submissions; round close/cancel/publish and question edits take
+     * FOR UPDATE on the same row, so they still serialize with each submission.
+     */
     public Optional<Round> lockRound(long roundId) {
         return jdbc.query("""
                 SELECT id, club_id, publication_status, published_at, opens_at, closes_at, closed_at
-                FROM recruitment_rounds WHERE id = ? FOR UPDATE
+                FROM recruitment_rounds WHERE id = ? FOR SHARE
                 """, (rs, row) -> new Round(rs.getLong("id"), rs.getLong("club_id"),
                 rs.getString("publication_status"), instant(rs.getObject("published_at", OffsetDateTime.class)),
                 instant(rs.getObject("opens_at", OffsetDateTime.class)),

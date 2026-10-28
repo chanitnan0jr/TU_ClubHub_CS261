@@ -522,7 +522,10 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertTargetEmpty();
     }
 
-    /** Holds the first request inside the real service transaction, then observes actual DB waiters. */
+    /**
+     * Holds the first request inside the real service transaction. Requests from the same applicant
+     * must wait on it in the database; other students share the round lock and must finish meanwhile.
+     */
     private List<MvcResult> overlapping(List<Client> clients) throws Exception {
         return overlapping(clients, java.util.Collections.nCopies(clients.size(),
                 new SubmissionTarget(roundId, firstQuestion, secondQuestion)));
@@ -549,8 +552,14 @@ class ApplicationSubmissionHttpIntegrationTest {
                 await(ready);
                 start.countDown();
                 Visit first = clock.visits.get("request-0");
-                Set<Integer> blocked = awaitBlockedBy(first.pid(), clients.size() - 1);
-                for (var request : requests) assertFalse(request.isDone(), "Requests must overlap while DB locks are held");
+                boolean sameApplicant = clients.stream().allMatch(c -> c.userId() == clients.getFirst().userId());
+                Set<Integer> blocked = sameApplicant ? awaitBlockedBy(first.pid(), clients.size() - 1) : Set.of();
+                if (sameApplicant) {
+                    for (var request : requests) assertFalse(request.isDone(), "Requests must overlap while DB locks are held");
+                } else {
+                    for (var request : requests.subList(1, requests.size())) request.get(15, TimeUnit.SECONDS);
+                    assertFalse(requests.getFirst().isDone(), "Other students must finish while the first request holds its locks");
+                }
                 clock.release();
                 List<MvcResult> results = awaitResponses(requests);
                 Set<Integer> seen = new HashSet<>();
@@ -560,7 +569,7 @@ class ApplicationSubmissionHttpIntegrationTest {
                     assertNotNull(visit);
                     assertTrue(seen.add(visit.pid()), "Every overlapping request must use a different DB connection");
                     assertTrue(transactionIds.add(visit.transactionId()), "Every request must own a separate transaction");
-                    if (i != 0) assertTrue(blocked.contains(visit.pid()));
+                    if (sameApplicant && i != 0) assertTrue(blocked.contains(visit.pid()));
                 }
                 System.out.println("Task45 HTTP overlap: connections=" + seen.size() + ", blocked=" + blocked.size()
                         + ", visits=" + clock.visits);
