@@ -54,6 +54,9 @@ class ApplicationQuestionIntegrityTest {
                         principal, null, List.of()));
         SecurityContextHolder.setContext(context);
 
+        when(repository.findRoundScope(ROUND_ID))
+                .thenReturn(Optional.of(new RoundScope(
+                        ROUND_ID, CLUB_ID, "DRAFT", false, 0L)));
         when(repository.lockRoundScope(ROUND_ID))
                 .thenReturn(Optional.of(new RoundScope(
                         ROUND_ID, CLUB_ID, "DRAFT", false, 0L)));

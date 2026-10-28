@@ -174,15 +174,21 @@ public class ApplicationQuestionService {
 
         long userId = currentUserId();
 
-        RoundScope round = (forWrite
-                ? repository.lockRoundScope(roundId)
-                : repository.findRoundScope(roundId))
+        // A round's club never changes, so an unlocked read finds it. The committee
+        // recheck share-locks the assignment before the round lock (Task75 §4.2).
+        RoundScope round = repository.findRoundScope(roundId)
                 .orElseThrow(
                         () -> notFound("Recruitment round not found"));
 
         if (!clubSecurity.isCommittee(round.clubId())) {
             throw new AccessDeniedException(
                     "Active committee permission for the round's club is required");
+        }
+
+        if (forWrite) {
+            round = repository.lockRoundScope(roundId)
+                    .orElseThrow(
+                            () -> notFound("Recruitment round not found"));
         }
 
         if (repository.hasApplicationByApplicant(roundId, userId)) {

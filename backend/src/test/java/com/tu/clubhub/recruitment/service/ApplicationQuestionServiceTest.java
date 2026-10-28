@@ -62,6 +62,8 @@ class ApplicationQuestionServiceTest {
     }
 
     private void allowDraftWrite() {
+        when(repository.findRoundScope(ROUND_ID))
+                .thenReturn(Optional.of(new RoundScope(ROUND_ID, CLUB_ID, "DRAFT", false, 0L)));
         when(repository.lockRoundScope(ROUND_ID))
                 .thenReturn(Optional.of(new RoundScope(ROUND_ID, CLUB_ID, "DRAFT", false, 0L)));
         when(clubSecurity.isCommittee(CLUB_ID)).thenReturn(true);
@@ -115,6 +117,33 @@ class ApplicationQuestionServiceTest {
     }
 
     @Test
+    void aNonCommitteeWriteNeverLocksTheRound() {
+        when(repository.findRoundScope(ROUND_ID))
+                .thenReturn(Optional.of(new RoundScope(ROUND_ID, CLUB_ID, "DRAFT", false, 0L)));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.createQuestion(ROUND_ID, "Why join?", true));
+        verify(repository, never()).lockRoundScope(anyLong());
+    }
+
+    @Test
+    void writesRecheckCommitteeBeforeLockingTheRoundAndSelfReviewAfter() {
+        allowDraftWrite();
+        when(repository.insert(ROUND_ID, "Why join?", true)).thenReturn(QUESTION_ID);
+        when(repository.findByIdAndRound(ROUND_ID, QUESTION_ID))
+                .thenReturn(Optional.of(new Question(QUESTION_ID, ROUND_ID, "Why join?", true, 1)));
+        when(repository.bumpRoundVersion(eq(ROUND_ID), any(Instant.class))).thenReturn(1);
+
+        service.createQuestion(ROUND_ID, "Why join?", true);
+
+        var order = inOrder(repository, clubSecurity);
+        order.verify(repository).findRoundScope(ROUND_ID);
+        order.verify(clubSecurity).isCommittee(CLUB_ID);
+        order.verify(repository).lockRoundScope(ROUND_ID);
+        order.verify(repository).hasApplicationByApplicant(ROUND_ID, USER_ID);
+    }
+
+    @Test
     void anApplicantCannotReadRoundAsCommitteeEvenIfTheyWithdrew() {
         allowRead();
         when(repository.hasApplicationByApplicant(ROUND_ID, USER_ID)).thenReturn(true);
@@ -162,6 +191,8 @@ class ApplicationQuestionServiceTest {
 
     @Test
     void publishedRoundsCannotBeEdited() {
+        when(repository.findRoundScope(ROUND_ID))
+                .thenReturn(Optional.of(new RoundScope(ROUND_ID, CLUB_ID, "DRAFT", false, 0L)));
         when(repository.lockRoundScope(ROUND_ID))
                 .thenReturn(Optional.of(new RoundScope(ROUND_ID, CLUB_ID, "PUBLISHED", false, 0L)));
         when(clubSecurity.isCommittee(CLUB_ID)).thenReturn(true);
