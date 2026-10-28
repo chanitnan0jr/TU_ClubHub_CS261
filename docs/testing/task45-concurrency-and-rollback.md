@@ -81,7 +81,7 @@ The QA word `PENDING` continues to mean the UI label only. Every successful test
 - The pool has 12 connections, sufficient for five workers plus the coordinator/session queries. Test-only connection acquisition and SQL execution timeouts bound failure paths; production settings are untouched.
 - Worker requests use separate threads. A latch holds the first request inside its real Service transaction, after it owns the round lock. Other workers start behind a ready/start latch.
 - The test Clock queries `pg_backend_pid()` and `txid_current()` through the transaction-bound JdbcTemplate. Every overlapping request must have a distinct PID and transaction ID; sampling the Clock twice fails the test.
-- The coordinator follows the actual PostgreSQL wait graph with `pg_blocking_pids()`. It must observe all other requests blocked behind the first transaction while **all futures are unfinished**. A sequential execution cannot satisfy these assertions.
+- The coordinator follows the actual PostgreSQL wait graph with `pg_blocking_pids()`. For requests from the same applicant, it must observe all other requests blocked behind the first transaction while **all futures are unfinished**. Requests from other students share the round lock (`FOR SHARE`), so they must all finish while the first transaction is still held. A sequential execution cannot satisfy these assertions.
 - Once all waiters are proven, release the latch and read every Future. Responses and committed DB rows are checked together. Unexpected worker exceptions fail the test. No sleep or wall-clock admission window is used.
 - The deadline test uses a coordinator-held round lock. The Clock has no request visit while blocked; it moves directly to `closesAt`, then the lock is released. The eventual worker PID must match the observed waiter.
 - JDBC assertions run after request transactions finish; `targetRows` explicitly opens a new transaction and uses no persistence-context cache.
@@ -97,7 +97,7 @@ Five requests: five distinct PIDs (100, 102, 103, 104, 105); four observed DB wa
 Rollback overlap: holder PID 102 / tx 846; waiter PID 100 / tx 847
 ```
 
-These numbers identify that run only; they are not stable expected IDs or sequence-continuity assertions.
+These numbers identify that run only; they are not stable expected IDs or sequence-continuity assertions. That run predates the change of the submission round lock from `FOR UPDATE` to `FOR SHARE`; overlapping requests from different students now report no DB waiters.
 
 ## Failure injection and rollback proof
 
