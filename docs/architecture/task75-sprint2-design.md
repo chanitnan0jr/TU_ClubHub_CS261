@@ -28,7 +28,7 @@
 | **T74-D05** | การเรียกซ้ำ Action เดิมที่สำเร็จแล้ว (`confirm` ซ้ำเมื่อ `CONFIRMED` หรือ `decline` ซ้ำเมื่อ `DECLINED`) คืนผลเดิมโดยไม่เขียนข้อมูลซ้ำ; การเรียก Action สวนทางหรือหลังจบรายการคืน `409 RESOURCE_CONFLICT` | กำหนด `POST /api/v1/me/applications/{applicationId}/confirm` และ `/decline` คืน `200 OK` (`MembershipOfferResponse` พร้อม `idempotentReplay: true`) เมื่อ Action ตรงกับสถานะสุดท้ายเดิม และคืน `409` (`reason: ALREADY_RESPONDED`) เมื่อสวนทาง | [`openapi.yaml`](../api/openapi.yaml), [§2.5](#25-การยืนยันสิทธิ์หรือสละสิทธิ์เข้าชมรม-us-05--task69--task70) |
 | **T74-D06** | การตอบรับใหม่ตรวจ `results_published_at <= serverNow < confirmation_deadline` ณ จุดตัดสินหลังได้ DB Lock; เมื่อถึง `confirmation_deadline` งานอัตโนมัติเปลี่ยนเฉพาะ `ACCEPTED` ที่ประกาศแล้วและยังไม่ตอบรับเป็น `EXPIRED` | กำหนดลำดับ Row Lock, การอ่าน `Clock.instant()` หลังได้ Lock, และเสนอออกแบบ `ApplicationOfferExpiryWorker` (`@Scheduled` ทุก 60 วินาที + Startup Catch-up — **ข้อเสนอเชิงเทคนิค รอ PO/Reviewer ยืนยัน**) ที่เขียน `EXPIRED` พร้อม `actor_id = NULL`, `reason = 'CONFIRMATION_DEADLINE_EXPIRED'`, และ `changed_at = serverNow` | [§4.2](#42-ลำดับการล็อกข้อมูล-deterministic-locking-order-และการป้องกัน-race-condition), [§4.4](#44-การออกแบบ-background-worker-สำหรับตัดสิทธิ์เมื่อหมดเวลา-sd-11--t74-d06) |
 | **T74-D07** | การยืนยันสิทธิ์ใหม่ปฏิเสธด้วย `409 RESOURCE_CONFLICT` (`EXISTING_CLUB_MEMBERSHIP`) ทุกกรณีที่มีแถวเดิมใน `club_memberships` ของ `(club_id, user_id)` ไม่ว่าสถานะ `ACTIVE`, `INACTIVE`, `LEFT`, หรือ `REMOVED` (ไม่มี Reactivation ใน MVP) และตรวจเพดาน 5 ชมรม (`MEMBERSHIP_LIMIT_REACHED`) | กำหนด Query ตรวจสอบ `EXISTS (SELECT 1 FROM club_memberships WHERE club_id = :clubId AND user_id = :userId)` และการล็อกแถว `student_profiles` (`FOR UPDATE`) เพื่อป้องกันการกดยืนยันข้ามชมรมพร้อมกันเกิน 5 ชมรม | [`openapi.yaml`](../api/openapi.yaml), [§2.5](#25-การยืนยันสิทธิ์หรือสละสิทธิ์เข้าชมรม-us-05--task69--task70), [§4.2](#42-ลำดับการล็อกข้อมูล-deterministic-locking-order-และการป้องกัน-race-condition) |
-| **T74-D08** | แดชบอร์ดส่วนกลาง (`US-10`) สำหรับ `ADMIN` ต้องแยกระหว่างจำนวนใบสมัคร (`totalApplications`), จำนวนผู้สมัครไม่ซ้ำ (`uniqueApplicants`), สมาชิกใหม่ที่ยืนยันจากรอบที่กรอง (`confirmedNewMembers`) และสมาชิก Active ปัจจุบัน (`currentActiveMemberships`) โดยไม่เกิดยอดซ้ำจากการ Join | เสนอออกแบบ `GET /api/v1/admin/dashboard/stats` พร้อม Query Parameters (`q`, `categoryId`, `academicYear`, `semester`, `clubStatus`, `page`, `size`) และ Aggregation Schema ที่ใช้ Subquery/CTE แยกมิติชัดเจน (**ข้อเสนอเชิงเทคนิคใน Task75 รอ PO/Reviewer ยืนยัน**) | [`openapi.yaml`](../api/openapi.yaml), [§2.7](#27-แดชบอร์ดสถิติภาพรวมส่วนกลางสำหรับ-admin-us-10--task71--task72), [§4.5](#45-แนวทางการเขียน-aggregation-query-สำหรับ-admin-dashboard-us-10--t74-d08) |
+| **T74-D08** | **Pending business definition:** `US-10` ยังต้องเลือกว่าจะนับคนไม่ซ้ำหรือนับใบสมัคร, รวมรายชมรมหรือทั้งระบบ, และนับสมาชิกที่ยืนยันตาม Cohort ของรอบหรือสมาชิก Active ปัจจุบัน; ห้ามใช้ยอด `ACCEPTED` ที่ยังไม่ยืนยันแทนสมาชิกที่ลงทะเบียนแล้ว | เสนอออกแบบ `GET /api/v1/admin/dashboard/stats` พร้อม Query Parameters (`q`, `categoryId`, `academicYear`, `semester`, `clubStatus`, `page`, `size`) และเสนอให้แยก 4 หน่วยนับ ได้แก่ จำนวนใบสมัคร (`totalApplications`), ผู้สมัครไม่ซ้ำ (`uniqueApplicants`), สมาชิกใหม่ที่ยืนยันจากรอบที่กรอง (`confirmedNewMembers`) และสมาชิก Active ปัจจุบัน (`currentActiveMemberships`) โดยใช้ Subquery/CTE แยกมิติไม่ให้ยอดซ้ำจากการ Join (**ข้อเสนอเชิงเทคนิคใน Task75 รอ PO/Reviewer ตัดสิน T74-D08**) | [`openapi.yaml`](../api/openapi.yaml), [§2.7](#27-แดชบอร์ดสถิติภาพรวมส่วนกลางสำหรับ-admin-us-10--task71--task72), [§4.5](#45-แนวทางการเขียน-aggregation-query-สำหรับ-admin-dashboard-us-10--t74-d08) |
 | **T74-D09** | ยืนยันกฎการเปิดอ่านฟอร์มใบสมัคร (`Task42` / `US-03`): บังคับ Login (`SESSION`), บัญชี `ACTIVE`, นักศึกษา `ACTIVE`, ชมรม `ACTIVE` และรอบ `PUBLISHED` ที่เปิดอยู่; การตรวจสมัครซ้ำและโควตา 5 ชมรมตรวจที่ `POST` ตอนกดส่ง พร้อมส่งสถานะ Eligibility เบื้องต้นให้ UI | อัปเดตสถานะ `GET /api/v1/rounds/{roundId}/application-form` และ `POST /api/v1/rounds/{roundId}/applications` ใน `openapi.yaml` ให้เชื่อมโยงกับ `Task52` และ `Task53` | [`openapi.yaml`](../api/openapi.yaml), [§2.3](#23-แบบฟอร์มและการส่งใบสมัครออนไลน์-us-03--task42--task52--task53) |
 
 ---
@@ -43,11 +43,11 @@
 
 | หมวดฟีเจอร์ | HTTP Method & Path | Operation ID | สิทธิ์การเข้าถึง (Auth & Guard) | ไฟล์ Spec | งานที่เกี่ยวข้อง |
 |---|---|---|---|---|---|
-| **Auth & Role Sync** | `GET /api/v1/auth/me` | `getCurrentUser` | `SESSION` (`ACTIVE` account); ดึง `role`, `studentStatus`, และ `activeCommitteeAssignments` สดจาก DB (`partially-implemented`, ขยายใน `Task79`) | `openapi.yaml` | `Task79`, `Task80`, `Task81` |
+| **Auth & Role Sync** | `GET /api/v1/auth/me` | `getCurrentUser` | `SESSION` (`ACTIVE` account); ดึง `role`, `studentStatus`, และ `activeCommitteeAssignments` สดจาก DB (`partial`, ขยายใน `Task79`) | `openapi.yaml` | `Task79`, `Task80`, `Task81` |
 | **Public Club Search** | `GET /api/v1/public/clubs` | `searchPublicClubs` | Public (`security: []`); กรองเฉพาะ `clubs.status = 'ACTIVE'` | `openapi.yaml` | `US-01`, `Task62`, `Task63` |
 | **Public Club Master** | `GET /api/v1/public/club-categories` | `listPublicClubCategories` | Public (`security: []`); รายการหมวดหมู่ชมรมจาก `club_categories` เรียง `name ASC, id ASC` | `openapi.yaml` | `US-01`, `Task62`, `Task63` |
 | **Public Club Master** | `GET /api/v1/public/interest-tags` | `listPublicInterestTags` | Public (`security: []`); รายการแท็กความสนใจจาก `tags` เรียง `name ASC, id ASC` | `openapi.yaml` | `US-01`, `Task62`, `Task63` |
-| **Public Club Detail** | `GET /api/v1/public/clubs/{id}` | `getPublicClubProfile` | Public (`security: []`); `Cache-Control: no-store`; เพิ่ม `canEditProfile` เมื่อมี Session ของกรรมการที่มีผลของชมรมนั้น (`partially-implemented`, ขยายใน `Task81`) | `openapi.yaml` | `US-02`, `Task81` |
+| **Public Club Detail** | `GET /api/v1/public/clubs/{id}` | `getPublicClubProfile` | Public (`security: []`); `Cache-Control: no-store`; เพิ่ม `canEditProfile` เมื่อมี Session ของกรรมการที่มีผลของชมรมนั้น (`partial`, ขยายใน `Task81`) | `openapi.yaml` | `US-02`, `Task81` |
 | **Club Profile Edit** | `GET /api/v1/clubs/{clubId}`<br/>`PUT /api/v1/clubs/{clubId}` | `getClub`<br/>`updateClub` | `GET`: Public (`Cache-Control: no-store`, + `canEditProfile`)<br/>`PUT`: `SESSION` + `CSRF` + Effective `COMMITTEE`/`PRESIDENT` ของชมรมนั้นเท่านั้น | `openapi.yaml` | `US-06`, `Task81` |
 | **Question Lock** | `PUT /api/v1/rounds/{roundId}/questions/{questionId}`<br/>`DELETE /api/v1/rounds/{roundId}/questions/{questionId}` | `replaceApplicationQuestion`<br/>`deleteApplicationQuestion` | `SESSION` + `CSRF` + Effective `COMMITTEE`/`PRESIDENT` (ห้าม Self-review); คืน `409 QUESTION_HAS_ANSWERS` เมื่อมีคำตอบแล้ว | `rounds.openapi.yaml` | `US-08`, `Task51`, `Task60` |
 | **Application Form** | `GET /api/v1/rounds/{roundId}/application-form` | `getRoundApplicationForm` | `SESSION` + `ACTIVE` account + `ACTIVE` student; รอบต้อง `PUBLISHED` และอยู่ในช่วงเปิดรับ | `openapi.yaml` | `US-03`, `Task42`, `Task52`, `Task53` |
@@ -166,7 +166,7 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
 ```
 
 #### 2) `GET /api/v1/public/club-categories` และ `GET /api/v1/public/interest-tags`
-- `GET /api/v1/public/club-categories`: ดึงจากตาราง `club_categories` คืน `{"items": [{"id": "30001", "name": "วิชาการ"}, ...]}` เรียงตาม `name ASC, id ASC` (เนื่องจากตาราง `club_categories` ใน `V1__init_schema.sql` มีเฉพาะคอลัมน์ `id, code, name, description, created_at`)
+- `GET /api/v1/public/club-categories`: ดึงจากตาราง `club_categories` คืน `{"items": [{"id": "30001", "name": "วิชาการ"}, ...]}` เรียงตาม `name ASC, id ASC` (เนื่องจากตาราง `club_categories` ใน `V1__init_schema.sql` มีเฉพาะคอลัมน์ `id, name, description`)
 - `GET /api/v1/public/interest-tags`: ดึงจากตาราง `tags` ใน `V1__init_schema.sql` คืน `{"items": [{"id": "40001", "name": "Programming"}, ...]}` เรียงตาม `name ASC, id ASC` เพื่อให้หน้าค้นหา (`Task63`) สร้างตัวกรองจากฐานข้อมูลจริง
 
 ---
@@ -249,6 +249,11 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
     - ซ่อน `resultMessage: null`, `round.resultsPublishedAt: null`, `round.confirmationDeadline: null`
     - ตั้งค่า `canConfirm: false`, `canDecline: false` (`canConfirm` และ `canDecline` จะเป็น `true` ได้เฉพาะเมื่อประกาศผลแล้ว สถานะจริงเป็น `ACCEPTED` และ `results_published_at <= serverNow < confirmation_deadline` แบบ `<` เท่านั้น)
     - กรอง `statusHistory` ให้แสดงเฉพาะเหตุการณ์ `null -> SUBMITTED` (และ `WITHDRAWN` หากผู้สมัครถอนเอง); **ห้าม**ส่งแถว `UNDER_REVIEW`, `ACCEPTED`, `REJECTED` ออกไปใน JSON
+  - **หลังประกาศผล (`results_published_at IS NOT NULL`):** Backend สร้าง `statusHistory` ใหม่ตามกฎของ [`ApplicantStatusHistoryEntry`](../api/openapi.yaml) ไม่คัดลอกแถวจาก `application_status_history` ตรง ๆ เรียงจากเก่าไปใหม่:
+    - `SUBMITTED` ลงเวลา `submitted_at`
+    - ผลที่ประกาศหนึ่งรายการ (`ACCEPTED_PENDING_CONFIRMATION` หรือ `REJECTED`) ลงเวลา `results_published_at` ไม่ใช่ `decided_at`
+    - `CONFIRMED` / `DECLINED` ลงเวลา `responded_at`, `EXPIRED` ลงเวลา `confirmation_deadline` (แม้ Worker ยังไม่รัน) และ `WITHDRAWN` ลงเวลาที่บันทึกการถอน
+    - **ห้าม**ส่งแถว `UNDER_REVIEW` และผลที่กรรมการแก้ไปมาก่อนประกาศ (เช่น `ACCEPTED -> REJECTED -> ACCEPTED`) เพราะจะทำให้ผู้สมัครรู้ลำดับการพิจารณาภายใน (`US-04.BR-04`)
   - ห้ามส่ง `application_reviews` (ความเห็นภายในของกรรมการ) หรือ `decided_by` ออกไปใน DTO ของผู้สมัครไม่ว่าก่อนหรือหลังประกาศผล
 
 ---
@@ -340,8 +345,9 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
 #### 3) `POST /api/v1/rounds/{roundId}/applications/{applicationId}/start-review` (`T74-D02` / `US-09` — Optional Explicit Review Action)
 - **สิทธิ์การเข้าถึง:** `SESSION` + `CSRF` + Effective `COMMITTEE` หรือ `PRESIDENT` ของชมรมเจ้าของรอบ + ไม่มีใบสมัครตนเองในรอบนั้น
 - **การทำงานใน Transaction:**
-  - ล็อก `recruitment_rounds` (`FOR SHARE`) และ `applications` (`FOR UPDATE`); ตรวจ `round.results_published_at IS NULL` และ `application.version == request.version` (`409 VERSION_MISMATCH` หากไม่ตรง)
-  - หาก `application.status == 'SUBMITTED'`: เปลี่ยนเป็น `UNDER_REVIEW`, เพิ่ม `version = version + 1`, และเพิ่มแถวใน `application_status_history` (`from_status = 'SUBMITTED'`, `to_status = 'UNDER_REVIEW'`, `actor_id = sessionUserId`, `reason = 'COMMITTEE_STARTED_REVIEW'`, `changed_at = serverNow`)
+  - ล็อก `recruitment_rounds` (`FOR SHARE`) และ `applications` (`FOR UPDATE`) แล้วตรวจภายใต้ Lock: รอบต้องมี `publication_status = 'PUBLISHED'` (`409 ROUND_CANCELLED` หรือ `ROUND_NOT_PUBLISHED`), `round.results_published_at IS NULL` (`409 RESULTS_ALREADY_PUBLISHED`) และ `application.version == request.version` (`409 VERSION_MISMATCH` หากไม่ตรง)
+  - **เงื่อนไขเวลารอ PO ตัดสิน (`T74-D02` / [Draft Story AC-08](../stories/sprint2/selection-results-draft.md#s2-decision-draft)):** Contract นี้ไม่ตรวจ `ROUND_STILL_OPEN` จึงเริ่มพิจารณาได้ตั้งแต่รอบยังเปิดรับ ต้องให้ PO ยืนยันเงื่อนไขนี้ใน AC-08 ก่อน Implement
+  - หาก `application.status == 'SUBMITTED'`: เปลี่ยนเป็น `UNDER_REVIEW`, เพิ่ม `version = version + 1`, และเพิ่มแถวใน `application_status_history` (`from_status = 'SUBMITTED'`, `to_status = 'UNDER_REVIEW'`, `actor_id = sessionUserId`, `reason = 'COMMITTEE_REVIEW_STARTED'`, `changed_at = serverNow`)
   - หากส่ง `recommendation` (`ACCEPT` | `REJECT` | `DISCUSS`) หรือ `internalComment` มาด้วย: Upsert แถวใน `application_reviews` สำหรับ `(application_id, reviewer_id = sessionUserId)` โดยใช้คอลัมน์จริงใน `V1__init_schema.sql` คือ `recommendation` (`NOT NULL`; หากส่งเฉพาะ `internalComment` โดยไม่ระบุ `recommendation` ให้ใช้ค่าเริ่มต้น `'DISCUSS'`) และ `internal_comment`
 
 #### 4) `PUT /api/v1/rounds/{roundId}/applications/{applicationId}/decision` (`S2-DECISION-DRAFT` / `Task67`)
@@ -578,7 +584,7 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
 
 จากการตรวจสอบเทียบกันแบบตารางต่อตารางระหว่าง [`backend/src/main/resources/db/migration/V1__init_schema.sql`](../../backend/src/main/resources/db/migration/V1__init_schema.sql) และ [`docs/database/TU-ClubHub-ERD-Updated.dbml`](../database/TU-ClubHub-ERD-Updated.dbml):
 1. **ครบถ้วนทั้ง 17 ตารางธุรกิจใน `V1__init_schema.sql` (พร้อม `flyway_schema_history`):**
-   - 17 ตารางใน `V1__init_schema.sql` ได้แก่: `users`, `student_profiles`, `club_categories`, `clubs`, `tags`, `club_tags`, `club_memberships`, `membership_history`, `club_committee_assignments`, `recruitment_rounds`, `application_questions`, `applications`, `application_answers`, `application_links`, `application_reviews`, `application_status_history`, และ `notifications` (หมายเหตุ: HTTP Session ของ MVP ใช้ In-memory `MapSessionRepository` ใน `SessionConfiguration.java` ไม่ได้ใช้ตาราง `spring_session`)
+   - 17 ตารางใน `V1__init_schema.sql` ได้แก่: `users`, `student_profiles`, `club_categories`, `clubs`, `tags`, `club_tags`, `club_memberships`, `membership_history`, `club_committee_assignments`, `recruitment_rounds`, `application_questions`, `applications`, `application_answers`, `application_links`, `application_reviews`, `application_status_history`, และ `notifications` (หมายเหตุ: HTTP Session ใช้ Spring Session JDBC (`spring-boot-starter-session-jdbc`) ซึ่งเก็บในตาราง `SPRING_SESSION` และ `SPRING_SESSION_ATTRIBUTES` จาก [`V3__create_spring_session_tables.sql`](../../backend/src/main/resources/db/migration/V3__create_spring_session_tables.sql) แยกจาก 17 ตารางธุรกิจนี้)
 2. **รองรับทุกฟีเจอร์ใน Sprint 2 โดยไม่ต้องแก้โครงสร้างตารางเดิมแบบ Breaking Change:**
    - **Task51 (`QUESTION_HAS_ANSWERS`):** ตาราง `application_answers` มี Foreign Key `question_id REFERENCES application_questions(id) ON DELETE RESTRICT` และ Index `idx_answers_question_round (question_id, round_id)` พร้อมใช้งาน
    - **US-01 (`Task62`):** ตาราง `clubs`, `club_categories` (เรียงตาม `name ASC, id ASC`), `tags` (เรียงตาม `name ASC, id ASC`), และ `club_tags` มี Index `idx_clubs_category_status (category_id, status)` และ `idx_club_tags_tag (tag_id)` รองรับการกรองตามหมวดหมู่และแท็กโดยไม่เกิดแถวซ้ำ
@@ -587,7 +593,7 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
 
 > [!TIP]
 > **คำแนะนำด้าน Index สำหรับการค้นหาชมรม (`GET /api/v1/public/clubs`):**
-> ปัจจุบัน `clubs` มี `uq_clubs_name` และ `idx_clubs_category_status (category_id, status)` อยู่แล้ว ซึ่งเพียงพอสำหรับชุดข้อมูลระดับมหาวิทยาลัย (หลักสิบถึงหลักร้อยชมรม) ทั้งนี้ใน Query `GET /api/v1/public/clubs` ให้กรอง `c.status = 'ACTIVE'` ร่วมกับ `c.category_id` ก่อนทำ `LOWER(c.name) LIKE LOWER(:pattern)` เสมอ
+> ปัจจุบัน `clubs` มี Unique Constraint บน `name` (ประกาศแบบ Inline ใน `V1__init_schema.sql`) และ `idx_clubs_category_status (category_id, status)` อยู่แล้ว ซึ่งเพียงพอสำหรับชุดข้อมูลระดับมหาวิทยาลัย (หลักสิบถึงหลักร้อยชมรม) ทั้งนี้ใน Query `GET /api/v1/public/clubs` ให้กรอง `c.status = 'ACTIVE'` ร่วมกับ `c.category_id` ก่อนทำ `LOWER(c.name) LIKE LOWER(:pattern)` เสมอ
 
 ---
 
@@ -597,15 +603,17 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
 
 ```mermaid
 flowchart LR
-    L1["1. users / student_profiles<br/>(FOR UPDATE on applicant;<br/>FOR SHARE on committee actor)"] --> L2["2. clubs<br/>(FOR SHARE / FOR UPDATE)"]
-    L2 --> L3["3. club_committee_assignments<br/>(FOR SHARE / PESSIMISTIC_READ)"]
+    L1["1. users / student_profiles<br/>(FOR UPDATE on applicant;<br/>confirm / decline only)"] --> L2["2. club_committee_assignments<br/>(FOR SHARE via ClubSecurity;<br/>committee writes only)"]
+    L2 --> L3["3. clubs<br/>(FOR SHARE / FOR UPDATE)"]
     L3 --> L4["4. recruitment_rounds<br/>(FOR SHARE for child writes;<br/>FOR UPDATE for round state / publish)"]
     L4 --> L5["5. applications<br/>(FOR UPDATE)"]
     L5 --> L6["6. club_memberships /<br/>application_questions"]
 ```
 
 - **กฎการเลือกใช้ `FOR SHARE` vs `FOR UPDATE` บน `club_committee_assignments` และ `recruitment_rounds`:**
-  - **`club_committee_assignments`:** ใช้ `PESSIMISTIC_READ` (`FOR SHARE`) ตามที่กำหนดไว้แล้วใน [`ClubCommitteeAssignmentRepository.java`](../../backend/src/main/java/th/ac/tu/cs/tuclubhub/repository/ClubCommitteeAssignmentRepository.java) เพื่อยืนยันว่าสิทธิ์กรรมการไม่ถูกเพิกถอนระหว่างทำรายการเขียนโดยไม่บล็อกกรรมการคนอื่นของชมรมเดียวกัน
+  - **`club_committee_assignments`:** รายการเขียนของกรรมการตรวจสิทธิ์ซ้ำผ่าน [`ClubSecurity.isCommittee`](../../backend/src/main/java/com/tu/clubhub/committee/security/ClubSecurity.java) ภายใน Transaction ซึ่งเรียก `lockEffectiveAssignments` ใน [`ClubCommitteeAssignmentRepository.java`](../../backend/src/main/java/com/tu/clubhub/committee/repository/ClubCommitteeAssignmentRepository.java) และล็อกเฉพาะแถว Assignment ที่ให้สิทธิ์ด้วย `PESSIMISTIC_READ` (`FOR SHARE`) จนจบ Transaction เพื่อไม่ให้การเพิกถอนแทรกกลางคันโดยไม่บล็อกกรรมการคนอื่นของชมรมเดียวกัน ส่วนสถานะบัญชี นักศึกษา สมาชิกภาพ และชมรมอ่านค่าที่ Commit แล้ว **ไม่ล็อก** (ไม่ล็อกแถว `users` ของกรรมการผู้เรียก)
+  - **ตรวจสิทธิ์ก่อนล็อกแถวชมรม/รอบ:** การตรวจสิทธิ์นี้ต้องเกิดก่อนล็อก `clubs`, `recruitment_rounds` หรือ `applications` ตามลำดับที่ 2 (เช่นเดียวกับ `RecruitmentRoundService` และ `ClubService.updateClub` ในปัจจุบัน) สำหรับ Path ที่มีแค่ `roundId` ให้อ่าน `club_id` ของรอบแบบไม่ล็อกก่อน ตรวจสิทธิ์ แล้วจึงล็อกรอบ — ปัจจุบัน `ApplicationQuestionService` ล็อก `recruitment_rounds` (`FOR UPDATE`) ก่อนตรวจสิทธิ์ ต้องปรับให้ตรงลำดับนี้ใน `Task51` ซึ่งแก้ Service เดียวกัน
+  - **Path ที่จะเปลี่ยนหรือเพิกถอน Assignment ในอนาคต:** ต้องล็อกแถว `club_committee_assignments` ก่อนแถวอื่นในลำดับที่ 3–6 เพื่อไม่ให้ Deadlock กับรายการเขียนของกรรมการที่ถือ `FOR SHARE` อยู่
   - **`recruitment_rounds` (`FOR SHARE`):** ใช้สำหรับรายการที่แก้ไขแถวลูกแต่ต้องการตรึงสถานะและหน้าต่างเวลาของรอบไม่ให้เปลี่ยนระหว่างทาง ได้แก่ `POST /api/v1/rounds/{roundId}/applications`, `POST .../start-review`, `PUT .../decision`, และ `POST /api/v1/me/applications/{applicationId}/confirm` / `/decline` (ช่วยให้ผู้สมัครและกรรมการหลายคนทำงานพร้อมกันได้โดยไม่บล็อกกันเอง แต่ยังป้องกันไม่ให้ `PATCH CLOSE`, `PATCH CANCEL`, หรือ `POST /publish-results` แทรกกลางคัน)
   - **`recruitment_rounds` (`FOR UPDATE`):** ใช้สำหรับรายการที่เปลี่ยนสถานะของรอบโดยตรงหรือเป็นจุดกั้นระดับรอบ ได้แก่ `PATCH .../status` (`PUBLISH`, `CLOSE`, `CANCEL`), `POST /api/v1/rounds/{roundId}/publish-results`, และการเพิ่ม/แก้ไข/ลบ `application_questions`
 
@@ -719,7 +727,7 @@ CONSTRAINT chk_app_history_change CHECK (from_status IS NULL OR from_status <> t
 
 > [!IMPORTANT]
 > **ข้อกำหนดการลงทะเบียน SPA Deep-Link Routes ใน Backend (`SpaForwardController.java` & `PublicRoutes.java`):**
-> ปัจจุบัน [`SpaForwardController.java`](../../backend/src/main/java/th/ac/tu/cs/tuclubhub/config/web/SpaForwardController.java) และ [`PublicRoutes.java`](../../backend/src/main/java/th/ac/tu/cs/tuclubhub/config/security/PublicRoutes.java) เปิดรับเฉพาะ SPA Route Prefix `/login`, `/clubs/**`, `/profile`, และ `/dashboard/**` เท่านั้น ดังนั้นเมื่อพัฒนาหน้าจอที่มี Top-level Path ใหม่ ได้แก่ `/rounds/:roundId/apply` (`Task53`), `/me/applications` & `/me/applications/:applicationId` (`Task64`, `Task70`), และ `/admin/dashboard` (`Task72`, `Task80`) **ต้อง** เพิ่มการแมป `GET` สำหรับ `/rounds/{roundId}/apply`, `/me/applications`, `/me/applications/{applicationId}`, และ `/admin/dashboard` ในทั้ง `SpaForwardController.java` และ `PublicRoutes.java` เพื่อให้การกด Refresh หน้าเว็บหรือเปิดลิงก์ตรง (Deep Link) ส่ง `index.html` กลับไปยัง React Router ได้โดยไม่ติด `401` หรือ `404` จาก Spring MVC (ทั้งนี้ API จริงภายใต้ `/api/v1/**` ยังคงตรวจสิทธิ์ที่ Backend ทุกคำขอ)
+> ปัจจุบัน [`SpaForwardController.java`](../../backend/src/main/java/com/tu/clubhub/config/SpaForwardController.java) และ [`PublicRoutes.java`](../../backend/src/main/java/com/tu/clubhub/config/PublicRoutes.java) เปิดรับเฉพาะ SPA Route Prefix `/login`, `/clubs/**`, `/profile`, และ `/dashboard/**` เท่านั้น ดังนั้นเมื่อพัฒนาหน้าจอที่มี Top-level Path ใหม่ ได้แก่ `/rounds/:roundId/apply` (`Task53`), `/me/applications` & `/me/applications/:applicationId` (`Task64`, `Task70`), และ `/admin/dashboard` (`Task72`, `Task80`) **ต้อง** เพิ่มการแมป `GET` สำหรับ `/rounds/{roundId}/apply`, `/me/applications`, `/me/applications/{applicationId}`, และ `/admin/dashboard` ในทั้ง `SpaForwardController.java` และ `PublicRoutes.java` เพื่อให้การกด Refresh หน้าเว็บหรือเปิดลิงก์ตรง (Deep Link) ส่ง `index.html` กลับไปยัง React Router ได้โดยไม่ติด `401` หรือ `404` จาก Spring MVC (ทั้งนี้ API จริงภายใต้ `/api/v1/**` ยังคงตรวจสิทธิ์ที่ Backend ทุกคำขอ)
 
 ---
 
