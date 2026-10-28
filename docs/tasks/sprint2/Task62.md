@@ -26,6 +26,7 @@
 
 **ขอบเขตงานที่ต้องทำ (Actionable Scope)**
 1. **Search & Filter Endpoint:** พัฒนา `GET /api/v1/clubs` รองรับการค้นหาตามชื่อชมรม, หมวดหมู่ชมรม, และสถานะการเปิดรับสมัคร
+   > **หมายเหตุจาก Task75 (`openapi.yaml` Canonical Path):** ให้ใช้ Canonical Path `GET /api/v1/public/clubs` (พร้อม `GET /api/v1/public/club-categories` และ `GET /api/v1/public/interest-tags`) ตาม [`docs/api/openapi.yaml`](../../api/openapi.yaml) และ [`docs/architecture/task75-sprint2-design.md`](../../architecture/task75-sprint2-design.md) เพื่อให้ตรงกับ `PublicRoutes.java` โดยไม่ต้องเปิด Path Alias ซ้ำซ้อน
 2. **Pagination & Sorting:** รองรับการแบ่งหน้า (page, size) และการเรียงลำดับ
 3. **Performance Optimization:** เขียน Query ที่มีประสิทธิภาพ และใส่ Index ที่จำเป็น
 4. **Automated Tests:** เขียน Unit Test และ Integration Test ตรวจสอบเงื่อนไขการค้นหาและกรอง

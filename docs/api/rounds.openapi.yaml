@@ -41,7 +41,7 @@ info:
       T74-D02: no-interview-mvp-optional-explicit-review-direct-decision-after-close
       T74-D03: separate-decision-and-publication-contracts-specified-in-openapi-yaml
       T74-D05: same-final-action-replay-without-writes-opposite-action-409
-      T74-D06: fresh-action-server-time-after-lock-recheck-automatic-expiry-60s-worker
+      T74-D06: fresh-action-server-time-after-lock-recheck-automatic-expiry-60s-worker-proposal-pending-po-review
       T74-D07: same-application-replay-no-writes-all-prior-membership-rows-reject-fresh-confirmation-no-reactivation
 servers:
   - url: http://localhost:8080
