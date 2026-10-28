@@ -2,18 +2,18 @@
 
 TU-ClubHub is a web platform in development for Thammasat University students to discover clubs, apply for membership, and track results. Club committees manage profiles and recruitment; central staff reporting is planned.
 
-> **Status reviewed: 2026-10-27.** Authentication, public club APIs, club profile updates, recruitment round writes, and per-question management APIs have implementations. The main frontend routes login, club detail, club editing, and question management; the round form and application form still need integration. The status below describes repository contents, not a deployment or test result. The [Sprint 2 Task74 analysis and review packet](docs/architecture/task74-sprint2-analysis.md) records user decisions and remains Draft / Pending Team Review; it does not establish team approval or a completed workflow.
+> **Status reviewed: 2026-10-29.** Authentication, public club APIs, club profile updates, recruitment round writes, per-question management, and application submission APIs have implementations. The main frontend routes login, club detail, club editing, and question management; the round form and application form still need integration. The status below describes repository contents, not a deployment or test result. The [Sprint 2 Task74 analysis and review packet](docs/architecture/task74-sprint2-analysis.md) records user decisions and remains Draft / Pending Team Review; it does not establish team approval or a completed workflow.
 
 ## Current implementation
 
 | Area | Present in the repository | Remaining work |
 |---|---|---|
 | Authentication | TU real/mock adapters; session login/logout/me, CSRF, 30-minute idle and 8-hour absolute expiry; every authenticated request rechecks the account and a suspended account loses its session (`403 ACCOUNT_NOT_ALLOWED`); login creates/updates `student_profiles` from documented TU status values (unknown → `UNKNOWN`); public routes are one method + path list; connected login UI | Verify with real TU access (student-profile sync has passed automated tests only) and read the current global role from the database |
-| Public clubs (US-02) | Public profile and paginated currently open rounds APIs backed by the database; `/clubs/:clubId` shows their data | Club listing/search is absent; applying is disabled until the submission API exists |
+| Public clubs (US-02) | Public profile and paginated currently open rounds APIs backed by the database; `/clubs/:clubId` shows their data | Club listing/search is absent; the apply buttons stay disabled until the application form is integrated |
 | Club profile (US-06) | `PUT /api/v1/clubs/{clubId}` with committee guard, rechecked inside the service transaction; `/clubs/:clubId/edit` prefills from the public profile and saves | `GET /api/v1/clubs/{clubId}` is contract-only; category/tag writes |
 | Recruitment (US-07) | Create, replace, publish, and close APIs with version checks and the self-review restriction; responses follow the `Round` schema, including questions; form component | Committee list/detail `GET`, `CANCEL` (effective `PRESIDENT`), and frontend integration of the round form |
 | Questions (US-08) | Questions saved with round `POST`/`PUT`, plus list/create/update/delete/reorder under `/api/v1/rounds/{roundId}/questions` with the self-review restriction and Problem error bodies; `/clubs/:clubId/rounds/:roundId/questions` uses them | Specific conflict codes such as `QUESTION_HAS_ANSWERS` (409 currently returns `RESOURCE_CONFLICT`) |
-| Applications (US-03) | Submission contract, database tables, and a form prototype | Submission API/client and real question data; the prototype does not persist applications |
+| Applications (US-03) | `POST /api/v1/rounds/{roundId}/applications` saves the application, answers, links, and initial history in one transaction, with session/CSRF checks and Problem errors; database tables; a form prototype | `GET .../application-form`, a submission client, and real question data; the prototype does not persist applications |
 | Later workflows | Schema and design for review, results, membership, notifications, and reporting | Application history, decisions, confirmation/decline, Admin APIs, and dashboards |
 | Runtime | Flyway migrations, health endpoint, Docker/Compose, and CI workflow | Deployment and verification of the selected release |
 
@@ -39,7 +39,7 @@ Dependency versions are recorded in [frontend/package.json](frontend/package.jso
 |---|---|
 | [Commit rules](COMMIT_RULES.md) | Conventional Commit format and project commit guidance |
 | [API v1 contract](docs/api/API_v1.md) | Shared endpoint, session, CSRF, response, and error conventions |
-| [Main OpenAPI specification](docs/api/openapi.yaml) | Authentication, clubs, health, and the pending application-form/submission contracts |
+| [Main OpenAPI specification](docs/api/openapi.yaml) | Authentication, clubs, health, and application submission, plus the pending application-form and Sprint 2 contracts |
 | [Recruitment OpenAPI specification](docs/api/rounds.openapi.yaml) | Round/question writes plus pending committee reads and cancellation |
 | [System architecture](docs/architecture/system-architecture.md) | System boundaries, modules, security, workflows, and deployment target |
 | [Sprint 2 Task74 artefacts](docs/architecture/task74-sprint2-analysis.md) | Draft review packet linking the business flow, state machine, permissions, rule index, decisions, Story/AC traceability, QA scenarios, and approval checklist |
