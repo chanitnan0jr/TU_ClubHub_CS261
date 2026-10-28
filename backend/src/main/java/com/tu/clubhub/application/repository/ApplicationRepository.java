@@ -28,12 +28,6 @@ public class ApplicationRepository {
         jdbc.queryForObject("SELECT set_config('lock_timeout', ?, true)", String.class, timeout);
     }
 
-    /** HTTP preflight only; the write transaction must still recheck under lock. */
-    public Optional<String> findAccountStatus(long userId) {
-        return jdbc.query("SELECT account_status FROM users WHERE id = ?",
-                (rs, row) -> rs.getString("account_status"), userId).stream().findFirst();
-    }
-
     public Optional<String> lockAccount(long userId) {
         return jdbc.query("SELECT account_status FROM users WHERE id = ? FOR UPDATE",
                 (rs, row) -> rs.getString("account_status"), userId).stream().findFirst();

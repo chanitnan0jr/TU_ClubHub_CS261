@@ -42,11 +42,6 @@ public class ApplicationService {
         this.lockTimeout = properties.databaseLockTimeout();
     }
 
-    /** Pre-body HTTP check; MVCC read avoids taking a write lock while the body is decoded. */
-    public void requireActiveAccountForRequest() {
-        requireActiveAccount(repository.findAccountStatus(currentUserId()));
-    }
-
     /**
      * Public proxy entry point. Lock order: applicant, profile, round, club,
      * questions, memberships; all locks last until commit/rollback.

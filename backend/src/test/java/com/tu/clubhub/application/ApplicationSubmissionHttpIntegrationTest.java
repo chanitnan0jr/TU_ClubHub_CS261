@@ -499,7 +499,7 @@ class ApplicationSubmissionHttpIntegrationTest {
                 await(proceed);
             }, "account-changed-after-preflight", client));
             try {
-                await(began); // Pre-body Active account read has completed; write transaction has begun.
+                await(began); // ActiveAccountFilter's Active read has completed; write transaction has begun.
                 assertEquals(1, jdbc.update("UPDATE users SET account_status = 'SUSPENDED' WHERE id = ?", userId));
                 proceed.countDown();
                 assertProblem(request.get(15, TimeUnit.SECONDS), 403, "ACCOUNT_NOT_ALLOWED", null);
