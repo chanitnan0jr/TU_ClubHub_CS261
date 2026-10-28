@@ -173,7 +173,7 @@ paths:
     get:
       tags: [Authentication]
       operationId: getCurrentUser
-      x-implementation-status: partially-implemented
+      x-implementation-status: partial
       x-sprint2-extensions-status: pending-task79
       summary: Get the authenticated user's real-time account identity and effective committee assignments
       description: >-
@@ -428,7 +428,7 @@ paths:
     get:
       tags: [Public Clubs]
       operationId: getPublicClubProfile
-      x-implementation-status: partially-implemented
+      x-implementation-status: partial
       x-sprint2-extensions-status: pending-task81
       summary: Get an active club's public profile
       description: >-
@@ -3142,7 +3142,8 @@ components:
       description: >-
         Applicant identity projected from users (display_name, email) and
         student_profiles (student_code, faculty_name, department_name,
-        program_name, study_year) in V1__init_schema.sql.
+        program_name, study_year) in V1__init_schema.sql. email is null when
+        the TU login did not provide one.
       properties:
         userId:
           type: string
@@ -3154,18 +3155,18 @@ components:
           type: string
           maxLength: 200
         email:
-          type: string
+          type: [string, 'null']
           format: email
           maxLength: 254
         facultyName:
           type: [string, 'null']
-          maxLength: 150
+          maxLength: 200
         departmentName:
           type: [string, 'null']
-          maxLength: 150
+          maxLength: 200
         programName:
           type: [string, 'null']
-          maxLength: 150
+          maxLength: 200
         studyYear:
           type: [integer, 'null']
           minimum: 1
@@ -3616,10 +3617,16 @@ components:
       type: object
       additionalProperties: false
       description: >-
-        Applicant-safe status timeline entry. Pre-publication internal review
-        transitions (UNDER_REVIEW, ACCEPTED, REJECTED) are hidden until
-        round.results_published_at is set, and actor_id / internal committee
-        reasons are never exposed (T74-D04).
+        Applicant-safe status timeline entry (T74-D04, US-04.BR-04). The server
+        builds this timeline instead of copying internal status history, and
+        returns entries oldest first. SUBMITTED is dated submitted_at. After
+        round.results_published_at is set, one entry carries the published
+        result (ACCEPTED_PENDING_CONFIRMATION or REJECTED) dated
+        results_published_at. CONFIRMED and DECLINED are dated responded_at,
+        EXPIRED is dated round.confirmation_deadline, and WITHDRAWN is dated
+        when the withdrawal was recorded. UNDER_REVIEW entries, decisions
+        changed before publication, decision times, actor_id, and internal
+        reasons are never returned.
       required: [status, displayStatusLabel, occurredAt]
       properties:
         status:
