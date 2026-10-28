@@ -1013,9 +1013,9 @@ paths:
       summary: Submit the current student's application with answers and document links
       x-implementation-status: implemented
       description: >-
-        Contract defined in API_v1.md section 11; implemented by ApplicationController
-        and ApplicationService. The HTTP boundary checks the current account before
-        decoding the request body, and the write transaction rechecks it under lock.
+        Contract defined in API_v1.md section 11. A suspended account receives
+        403 ACCOUNT_NOT_ALLOWED even when the request body is missing or malformed,
+        and the account is checked again inside the submission.
         Task42 replaces the earlier contract-only club-nested submission path;
         it does not define a second submission endpoint or a compatibility alias.
         Requires an ACTIVE account, verified ACTIVE student profile, and ACTIVE
