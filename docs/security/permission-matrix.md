@@ -6,6 +6,8 @@
 
 การกำหนดสิทธิ์เป็นข้อกำหนดสำหรับ Backend และ QA ไม่ได้หมายความว่าทุก endpoint หรือ workflow พัฒนาแล้ว ส่วนที่ 9 ระบุความต่างจากโค้ด ณ วันที่จัดทำ เอกสารนี้ไม่เพิ่ม API หรือเปลี่ยน schema โดยตัวมันเอง
 
+**ทบทวนเอกสาร Task74: 27 ตุลาคม 2026 — Draft / Pending Team Review.** บันทึกข้อสรุปเพิ่มเติมจากคำสั่งผู้ใช้วันที่ 27 ตุลาคม 2026 ตาม [Decision Log](../architecture/system-architecture.md#s2-decision-log): D01/D02/D05/D07 มี Decision recorded; D03 ผู้ใช้ยืนยันสอง Draft Stories และ Scope Owner ชนิตว์นันท์ — PO/SA โดย FE/BE ยังรอมอบหมาย; D06 ตัดสินช่วงเวลา/จุดตรวจและงานหมดเวลาแล้วแต่ความถี่/ระยะหน่วงยังเปิด ข้อสรุปล่าสุดแก้ baseline วันที่ 19 ตุลาคมเฉพาะจุดที่ระบุ ไม่ใช่ formal PO sign-off, ความเห็นชอบร่วม FE/BE/QA หรือหลักฐาน Implementation ดู [Sprint 2 review packet](../architecture/task74-sprint2-analysis.md) สำหรับหลักฐาน Review ที่ยัง Pending
+
 ## 1. บทบาทและแหล่งข้อมูลที่ใช้ตัดสินสิทธิ์
 
 | บทบาท | เงื่อนไข | ขอบเขต |
@@ -60,18 +62,23 @@
 
 ตัวอย่าง: วาระ 1 สิงหาคม 2569 ถึงสิ้นวันที่ 31 กรกฎาคม 2570 ตามเวลาไทย เก็บ `starts_at = 2026-07-31T17:00:00Z` และ `ends_at = 2027-07-31T17:00:00Z` ที่เวลาไทย 1 สิงหาคม 2570 00:00:00 สิทธิ์จากวาระนี้หมดทันที
 
+<a id="s2-permission-matrix"></a>
+
 ## 3. Permission Matrix
 
 ทุก action ที่ไม่ระบุอนุญาตให้ปฏิเสธเป็นค่าเริ่มต้น คอลัมน์แต่ละบทบาทแสดงสิทธิ์ที่บทบาทนั้นให้ได้ การเข้าถึงข้อมูลของตนเองยังต้องตรวจ ownership แม้ผู้ใช้เป็นกรรมการหรือ Admin
+
+แถวที่เป็น protected operations ใช้ session/account/CSRF ตามส่วนที่ 2.1 และผลปฏิเสธตามส่วนที่ 7; Public reads ไม่บังคับ Login งานกรรมการต้องตรวจชมรมเจ้าของทรัพยากรจริงและส่วนที่ 2.2; งานที่ผูกกับรอบใช้ข้อห้าม self-review ส่วนที่ 4 ไม่ขยายข้อห้ามของรอบเป็นการห้ามแก้โปรไฟล์ทั้งชมรมโดยอัตโนมัติ `position_name` เป็นชื่อตำแหน่ง ไม่ใช้แทน `permission_role` เพื่อให้สิทธิ์ PRESIDENT
 
 | Action | Student | Club Committee | Admin | เงื่อนไขเพิ่มเติม |
 |---|---|---|---|---|
 | ค้นหา/อ่านโปรไฟล์ชมรมและรอบรับสมัครสาธารณะ | ได้ | ได้ | ได้ | Anonymous ใช้ได้; ชมรม Active; รอบต้องเผยแพร่และผ่านเงื่อนไข public endpoint |
 | อ่าน `/auth/me` และ logout | ของตนเอง | ของตนเอง | ของตนเอง | ใช้กฎ session/account ในส่วนที่ 2.1 |
+| เปิดแบบฟอร์มสมัคร — Task42 **Draft / Pending Review** | ของตนเองตาม Contract ที่รอ Review | ใช้สิทธิ์ Student | ใช้สิทธิ์ Student | [API §12](../api/API_v1.md#12-round-application-form-task42) ระบุบัญชี/นักศึกษา Active, ชมรม Active และรอบเผยแพร่ที่กำลังเปิด; ไม่เปลี่ยนสถานะ/จองสิทธิ์; duplicate/member/quota ยังตรวจที่ POST เว้นแต่ T74-D09 ตัดสินเปลี่ยน |
 | ส่งใบสมัคร | ของตนเอง | ใช้สิทธิ์ Student | ใช้สิทธิ์ Student | นักศึกษา Active, ชมรม Active, รอบ `PUBLISHED`, `opens_at <= now < closes_at`, `closed_at IS NULL`; ผ่าน eligibility/duplicate/quota ของการรับสมัคร |
 | อ่านใบสมัคร สถานะ และประวัติส่วนตัว | ของตนเอง | ของตนเอง | ของตนเอง | บัญชี Active; อ่านได้แม้สถานะนักศึกษาหรือชมรมไม่ Active; ซ่อนผลที่ยังไม่ประกาศและบันทึกภายใน |
-| ยืนยันเข้าร่วมชมรม | ของตนเอง | ใช้สิทธิ์ Student | ใช้สิทธิ์ Student | นักศึกษาและชมรม Active; ผล `ACCEPTED` ประกาศแล้ว; รอบไม่ยกเลิก; `now < confirmation_deadline` |
-| สละสิทธิ์จากผลที่ได้รับ | ของตนเอง | ของตนเอง | ของตนเอง | บัญชี Active และเป็นเจ้าของ; ผล `ACCEPTED` ประกาศแล้ว; รอบไม่ยกเลิก; ก่อน deadline; ไม่บังคับ student/club Active เพื่อให้คืนสิทธิ์ได้ |
+| ยืนยันเข้าร่วมชมรม | ของตนเอง | ใช้สิทธิ์ Student | ใช้สิทธิ์ Student | การตัดสินใหม่: นักศึกษาและชมรม Active; `ACCEPTED` ยังไม่ตอบรับ รอบไม่ยกเลิก; `results_published_at <= now < confirmation_deadline` ที่จุดตัดสินใน Transaction หลังได้สิทธิ์เขียน; ต้องไม่มีแถวสมาชิกเดิมของคู่คน/ชมรมไม่ว่าสถานะใดตาม T74-D07; exact Retry ของใบสมัครเดิมคืนผลเดิม ไม่เขียนสมาชิก/history |
+| สละสิทธิ์จากผลที่ได้รับ | ของตนเอง | ของตนเอง | ของตนเอง | การตัดสินใหม่: บัญชีเจ้าของ Active, `ACCEPTED` ยังไม่ตอบรับ รอบไม่ยกเลิก; `results_published_at <= now < confirmation_deadline` ที่จุดตัดสินใน Transaction หลังได้สิทธิ์เขียน; ไม่บังคับ student/club Active; Retry ผลเดิมตาม T74-D05 |
 | อ่านสมาชิกภาพ/notification ส่วนตัว และทำเครื่องหมายอ่านแล้ว | ของตนเอง | ของตนเอง | ของตนเอง | บัญชี Active; ตรวจเจ้าของและสิทธิ์ของข้อมูลที่ notification อ้างถึง |
 | แก้โปรไฟล์ชมรม | ไม่ได้ | ชมรมที่ได้รับสิทธิ์ | ต้องมีสิทธิ์กรรมการเพิ่ม | ผ่านส่วนที่ 2.2; writable fields เป็นไปตาม API contract |
 | อ่านรอบ draft และหน้าจัดการรอบ | ไม่ได้ | ชมรมที่ได้รับสิทธิ์ | ต้องมีสิทธิ์กรรมการเพิ่ม | ตรวจ resource scope และข้อขัดกันทางผลประโยชน์ในส่วนที่ 4 |
@@ -79,7 +86,8 @@
 | เผยแพร่ประกาศรับสมัคร/ปิดรับสมัครก่อนกำหนด | ไม่ได้ | ชมรมที่ได้รับสิทธิ์ | ต้องมีสิทธิ์กรรมการเพิ่ม | COMMITTEE หรือ PRESIDENT; ผ่าน state/time/version ของรอบ |
 | ยกเลิกรอบรับสมัคร | ไม่ได้ | PRESIDENT เท่านั้น | ต้องมี PRESIDENT เพิ่ม | เฉพาะ draft หรือ published ที่ยังไม่ประกาศผล; บันทึกเหตุผลและรักษาใบสมัคร/คำตอบ/ประวัติ |
 | อ่านใบสมัคร คำตอบ และลิงก์เอกสารของผู้สมัคร | ไม่ได้ | รอบในชมรมที่ได้รับสิทธิ์ | ต้องมีสิทธิ์กรรมการเพิ่ม | ใช้ส่วนที่ 4; อ่านข้อมูลเท่าที่จำเป็นต่อการคัดเลือก |
-| บันทึก/แก้ผลคัดเลือกภายใน | ไม่ได้ | รอบในชมรมที่ได้รับสิทธิ์ | ต้องมีสิทธิ์กรรมการเพิ่ม | รอบ published ปิดรับแล้วและยังไม่ประกาศผล; ใช้ส่วนที่ 4; ไม่แก้คำตอบแทนผู้สมัคร |
+| เริ่มพิจารณาอย่างชัดแจ้ง (`UNDER_REVIEW`) | ไม่ได้ | รอบในชมรมที่ได้รับสิทธิ์ | ต้องมีสิทธิ์กรรมการเพิ่ม | ขั้น optional ตาม T74-D02; รอบ published ไม่ cancelled และไม่มี self-review; เป็น Action เขียนแยก ไม่เกิดจาก GET/US-09; เงื่อนไขเวลาของ Action ต้องลง Story/Design ตาม T74-D03 |
+| บันทึก/แก้ผลคัดเลือกภายใน | ไม่ได้ | รอบในชมรมที่ได้รับสิทธิ์ | ต้องมีสิทธิ์กรรมการเพิ่ม | รอบ published ปิดรับแล้วและยังไม่ประกาศผล; ไม่บังคับผ่าน UNDER_REVIEW; ใช้ส่วนที่ 4; ไม่แก้คำตอบแทนผู้สมัคร |
 | ประกาศผลคัดเลือก | ไม่ได้ | PRESIDENT เท่านั้น | ต้องมี PRESIDENT เพิ่ม | ใช้ส่วนที่ 4; ผลครบและก่อน deadline; ทำ transaction เดียว |
 | แก้ผลหลังประกาศ/ยืนยันหรือสละสิทธิ์แทนผู้อื่น | ไม่ได้ | ไม่ได้ | ไม่ได้ | ไม่มี administrative override ในขอบเขตนี้ |
 | อ่านรายชื่อสมาชิกชมรม | อ่านสมาชิกภาพตนเอง | ชมรมที่ได้รับสิทธิ์ | เฉพาะข้อมูลจำเป็นต่อการแต่งตั้ง | จำกัด field ตามส่วนที่ 5 |
@@ -91,6 +99,8 @@
 
 ความสามารถที่อนุญาตแต่ยังไม่มี endpoint ต้องพัฒนา contract และ workflow ก่อนใช้งาน เช่น cancellation, decisions, publication และ assignment management; สิทธิ์ตามตารางไม่ได้ทำให้ API ที่ยังไม่รองรับตอบ success ได้
 
+**ขอบเขต Sprint 2 — Recorded User Instruction / Pending Team Review:** [US-09](../stories/sprint2/US-09.md) ครอบคลุมการอ่าน ไม่รวมการเริ่มพิจารณา/ตัดสิน/ประกาศผล ผู้ใช้ยืนยัน [สอง Draft Stories ของงานบันทึก/ประกาศผล](../stories/sprint2/selection-results-draft.md) แยกจาก US-09 และ Scope Owner ชนิตว์นันท์ — PO/SA ตาม [T74-D03](../architecture/system-architecture.md#t74-d03); FE/BE ยังรอมอบหมาย และ formal Team Review/Approval ยัง Pending การแต่งตั้ง/ถอน/ต่อวาระและ bootstrap เป็น Dependency เมื่อไม่มีผู้มีสิทธิ์ ไม่เพิ่มเป็นฟีเจอร์ Sprint 2 จาก Task74/US-10 ส่วน state/transition และดัชนีกฎอยู่ใน [Architecture](../architecture/system-architecture.md#s2-application-state-machine)
+
 ## 4. การพิจารณาใบสมัครและประกาศผล
 
 1. ตรวจ `application.round_id` และ `application.club_id` จากข้อมูลจริงให้ตรงกับรอบและชมรม ห้ามอาศัย `clubId` ที่ผู้เรียกส่งมาเพียงอย่างเดียว
@@ -100,6 +110,10 @@
 5. การประกาศผลต้องมี PRESIDENT ที่มีผลของชมรมนั้น ณ เวลาประกาศ รอบต้องปิดรับแล้ว ทุกใบสมัครที่ยังอยู่ในการคัดเลือกต้องตัดสินเป็น `ACCEPTED` หรือ `REJECTED` และ `now < confirmation_deadline` บันทึก `results_published_at`, history และ notification ใน transaction เดียว
 6. ไม่เปิดการแก้ผลที่ประกาศแล้ว และไม่ให้ Admin ข้าม self-review, Term Date, Active, deadline หรือ ownership ถ้าผู้มีสิทธิ์หมดวาระหรือทุกคนมีผลประโยชน์ขัดกัน Admin ต้องแต่งตั้งผู้มีคุณสมบัติคนอื่นตามกระบวนการปกติก่อน
 7. ก่อนประกาศผล applicant API ต้องซ่อนทั้งผลภายในและ history/notification ที่เปิดเผยผล ใช้สถานะแสดงผลก่อนประกาศที่กำหนดใน DTO; review notes ภายในไม่เปิดเผยแก่ผู้สมัครแม้ประกาศผลแล้ว
+8. ตามข้อสรุป T74-D02: MVP ไม่มี INTERVIEW; UNDER_REVIEW เป็นขั้น optional ที่เกิดจาก Action ชัดแจ้งเท่านั้น การอ่าน US-09 ไม่เปลี่ยนสถานะ การบันทึกผลหลังปิดรับสามารถเริ่มจาก SUBMITTED โดยไม่ต้องผ่าน UNDER_REVIEW; Story ของงานเขียนยังแยกจาก US-09
+9. ตาม T74-D05/06: การตอบรับใหม่ตรวจ `results_published_at <= now < confirmation_deadline` ด้วยเวลา Server ณ จุดตัดสินใน Transaction หลังได้สิทธิ์เขียน ไม่ใช้เวลาเปิดฟอร์ม; Retry ยืนยัน/สละ Action เดิมคืนผลตัดสินเดิมโดยไม่เพิ่มสมาชิก/history คำขอสวนทางหลังจบรายการใช้ `409 RESOURCE_CONFLICT` ไม่มีเปลี่ยนใจใน MVP; payload/HTTP รายละเอียดของ Retry อยู่ใน Design
+10. งานหมดเวลาทำงานอัตโนมัติได้โดยไม่มีผู้เปิดหน้า เปลี่ยนเฉพาะ published ACCEPTED ที่ยังไม่ตอบรับเป็น EXPIRED เมื่อถึง deadline เก็บความต่างจาก DECLINED และ UI แสดง “สละสิทธิ์ (หมดเวลาตอบรับ)”; ความถี่/ระยะหน่วงงานยังเปิดใน T74-D06
+11. **T74-D07 — Decision recorded from user instruction / Pending Team Review:** ปฏิเสธการยืนยันใหม่ด้วย `409 RESOURCE_CONFLICT` ทุกกรณีที่คู่ผู้สมัคร/ชมรมมีแถวสมาชิกเดิม ไม่ว่าจะ ACTIVE/INACTIVE/LEFT/REMOVED ไม่เปลี่ยนสถานะสมาชิก ผลตอบรับ ประวัติ หรือ source เดิม และไม่เปิด reactivation ใน MVP ข้อยกเว้นมีเพียง exact Retry Action เดิมของใบสมัครที่ตัดสินสำเร็จแล้ว ให้คืนผลตัดสินเดิมโดยไม่เขียนข้อมูล แม้สถานะสมาชิกปัจจุบันเปลี่ยนไปก็ไม่สร้างหรือคืนสถานะสมาชิก; ผลเดิมคือผลตอบรับของใบสมัคร ไม่ใช่การยืนยันว่าสมาชิกปัจจุบันกลับมา Active คำอธิบายความปลอดภัยเมื่อสมาชิกเปลี่ยนสถานะในส่วนที่ 2.3 ไม่ได้เปิด Flow คืนสถานะสมาชิกใน MVP นี้
 
 ## 5. ขอบเขต Admin และข้อมูลที่แต่ละบทบาทมองเห็น
 
@@ -132,12 +146,15 @@
 | ตรวจพบ account ถูกระงับใน request ที่ยังยืนยันตัวตนอยู่ | `403 ACCOUNT_NOT_ALLOWED` และ invalidate session; request ถัดไปที่ไม่มี session ใช้ `401` |
 | ขาด Student Active, membership/assignment ไม่ Active, ยังไม่เริ่ม/หมดวาระ, ขาด PRESIDENT, ชมรมไม่ Active สำหรับงานกรรมการ หรือ self-review | `403 ACCESS_DENIED` |
 | CSRF ไม่ผ่านใน unsafe request | `403 CSRF_INVALID`; CSRF filter อาจปฏิเสธก่อนตรวจ session/authorization |
-| อ่านข้อมูลส่วนตัวของคนอื่นผ่าน applicant API หรือ round/application ไม่อยู่ใต้ parent ที่อ้าง | `404 RESOURCE_NOT_FOUND` โดยไม่บอกว่ามีข้อมูลอยู่จริง |
+| ใบสมัคร/private resource มีอยู่จริง แต่ผู้เรียกไม่มีสิทธิ์ใน US-04/US-09 รวมของผู้อื่น/ขอบเขต parent ที่ไม่มีสิทธิ์ | `403 ACCESS_DENIED` โดยไม่คืนเนื้อหา ตาม T74-D01 |
+| ไม่พบใบสมัคร/private resource ที่อ้างจริง | `404 RESOURCE_NOT_FOUND` ตาม T74-D01; ไม่ใช้ 404 ซ่อนกรณีทรัพยากรมีอยู่แต่ไม่มีสิทธิ์ใน US-04/US-09 |
 | Public club ไม่มีหรือไม่ Active | `404 CLUB_NOT_FOUND` |
 | ผู้ใช้ไม่มีสิทธิ์กรรมการของ parent club | `403 ACCESS_DENIED` ก่อนเปิดเผย child resource |
 | ผ่าน authorization แต่ state/deadline/version ไม่อนุญาต หรือวาระแต่งตั้งซ้อนกัน | `409 RESOURCE_CONFLICT` |
 
 รหัส `ACCESS_DENIED` ใช้กับการปฏิเสธสิทธิ์ให้ตรงกับ SecurityConfiguration ปัจจุบัน การหมดวาระไม่ใช่ session expiry จึงใช้ `403` เมื่อ session ยังใช้ได้
+
+**T74-D01 — Decision recorded from user instruction 27 ตุลาคม 2026 / Pending Team Review:** [US-04.AC-02/BR-02](../stories/sprint2/US-04.md) และ US-09 ใช้ `403 ACCESS_DENIED` เมื่อใบสมัคร/private resource มีอยู่แต่ไม่มีสิทธิ์ และใช้ `404 RESOURCE_NOT_FOUND` เมื่อไม่พบจริง แทนนโยบายเดิมที่ซ่อนใบสมัครผู้อื่นด้วย 404; ดู [หลักฐานการตัดสิน](../architecture/system-architecture.md#t74-d01) การบันทึกข้อสรุปนี้ไม่ใช่ formal PO sign-off หรือผล Review/Tests ผ่าน
 
 ## 8. ตัวอย่างผลการตัดสินสิทธิ์
 
@@ -158,20 +175,23 @@
 | PRESIDENT มีใบสมัครในรอบที่จะประกาศผล | ปฏิเสธ แม้ใบสมัครนั้นถูกถอนแล้ว |
 | PRESIDENT หมดวาระแต่ COMMITTEE อีก assignment ยังมีผล | ทำงานกรรมการทั่วไปได้ แต่ประกาศผล/ยกเลิกรอบไม่ได้ |
 | Admin แต่งตั้งตนเองเป็น PRESIDENT | ปฏิเสธ |
-| ผู้ใช้ผ่านสิทธิ์แต่ยืนยันเมื่อ `now = confirmation_deadline` | ปฏิเสธด้วย conflict |
+| ผู้ใช้ผ่านสิทธิ์แต่ตัดสินยืนยันใหม่เมื่อ `now = confirmation_deadline` | ปฏิเสธด้วย conflict; exact Retry ผลเดิมแยกตาม T74-D05/07 |
+| ยืนยันใหม่เมื่อมีแถวสมาชิกเดิม ACTIVE/INACTIVE/LEFT/REMOVED ของคู่คน/ชมรม | 409 RESOURCE_CONFLICT ไม่แก้ข้อมูลเดิมและไม่ reactivate ใน MVP |
+| exact Retry ยืนยันใบสมัครเดิมที่สำเร็จแล้ว แม้สมาชิกปัจจุบันเป็น INACTIVE/LEFT/REMOVED | คืนผลตัดสินเดิมหลังตรวจ Session/account/ownership โดยไม่เขียนข้อมูลหรือคืนสมาชิกเป็น Active |
 
 ## 9. สถานะ implementation และงานที่ต้องตามนโยบาย
 
-ตรวจจาก source ณ วันที่ 19 ตุลาคม 2026; รายการนี้ไม่ใช่ผลรันทดสอบ:
+ทบทวน source/เอกสารสำหรับ Task74 ณ วันที่ 27 ตุลาคม 2026 โดยรักษาประวัติผลรายงานเดิมไว้; รายการนี้ไม่ใช่การรันทดสอบใหม่หรือหลักฐานว่า Workflow Sprint 2 ผ่านแล้ว:
 
 | ส่วน | สิ่งที่พบ | งานที่ยังต้องทำ |
 |---|---|---|
-| Committee guard | [Assignment repository](../../backend/src/main/java/com/tu/clubhub/committee/repository/ClubCommitteeAssignmentRepository.java) ตรวจ account, membership, assignment, revoked_at และ `[starts_at, ends_at)` แล้ว | เพิ่ม student Active, club Active และ joined_at; แยก guard สำหรับ PRESIDENT |
-| Session/account | [Login service](../../backend/src/main/java/com/tu/clubhub/auth/service/LoginService.java) ตรวจ account ตอน login และ committee query ตรวจ account เมื่อใช้สิทธิ์กรรมการ | ตรวจ account ทุก protected request, invalidate เมื่อระงับ และใช้ global role ล่าสุด |
-| Student status | Schema มี student_profiles แต่ [UserAccountService](../../backend/src/main/java/com/tu/clubhub/user/service/UserAccountService.java) provision เฉพาะบัญชี | เพิ่มการยืนยัน/normalize student status จากข้อมูลที่เชื่อถือได้; ไม่ตั้ง ACTIVE อัตโนมัติจาก login |
-| Club profile | มี PUT และตรวจกรรมการ; category/tags ยังไม่ใช่ writable fields ของ contract | ใช้ guard ตามนโยบายใหม่; การขยาย field ของ US-06 ต้องแก้ contract/DTO แยก |
-| Recruitment | มี create/update/publish/close และตรวจ version | เพิ่มข้อห้ามจัดการรอบที่ตนสมัคร; GET สำหรับกรรมการและ CANCEL ยังไม่มี implementation; CANCEL ต้องตรวจ PRESIDENT และมีเหตุผลใน contract |
-| Application/ผลคัดเลือก | มีตารางรองรับ | ยังต้องมี applicant/committee APIs, ownership, self-review, internal-result filtering และ publication workflow; US-09 เดิมเป็นงานอ่าน จึงต้องเพิ่มงานบันทึก/ประกาศผลแยก |
+| Committee guard | [Assignment repository](../../backend/src/main/java/com/tu/clubhub/committee/repository/ClubCommitteeAssignmentRepository.java) ตรวจ account, student Active, club Active, membership (`joined_at <= now`, `ended_at IS NULL`), assignment, revoked_at และ `[starts_at, ends_at)` แล้ว; การตรวจใน write transaction ล็อกแถว assignment ที่ให้สิทธิ์จนจบ transaction ตามส่วนที่ 6 ข้อ 4 (f17cdd4, ทดสอบสอง transaction บน PostgreSQL) — รับประกันเฉพาะการเปลี่ยนแถว assignment; สถานะ account, student, membership และ club อ่านค่าที่ commit แล้ว ณ เวลาตรวจ ไม่ถูกเรียงลำดับ | แยก guard สำหรับ PRESIDENT; Admin revocation ในอนาคตต้องเปลี่ยนแถว assignment เดียวกันจึงจะขัดกับ lock นี้ |
+| Session/account | [Login service](../../backend/src/main/java/com/tu/clubhub/auth/service/LoginService.java) ตรวจ account ตอน login; [ActiveAccountFilter](../../backend/src/main/java/com/tu/clubhub/config/ActiveAccountFilter.java) ตรวจ account ทุก request ที่มี session และ invalidate เมื่อระงับ (protected API ได้ `403 ACCOUNT_NOT_ALLOWED`, public endpoint และ logout ใช้ต่อได้) | ใช้ global role ล่าสุดจากฐานข้อมูลแทนค่าที่เก็บใน session |
+| Student status | [UserAccountService](../../backend/src/main/java/com/tu/clubhub/user/service/UserAccountService.java) สร้าง/อัปเดต student_profiles ของบัญชี `type=student` ใน Transaction เดียวกับบัญชี (efa2fda); map เฉพาะ `tu_status` ที่ระบุใน [TU API](../api/TU_API.md) ค่าว่าง/ไม่รู้จัก/ขัดกับ `statusid` เป็น `UNKNOWN`; บัญชีประเภทอื่นไม่สร้าง profile และ profile เดิมเป็น `UNKNOWN`; login ไม่สร้างสมาชิกภาพ assignment หรือ role | **ผ่าน Automated Tests — รอตรวจ TU จริง** (หลักฐาน Real Integration ของ Task57 ยังไม่ปิด); ยืนยันรายการ `statusid` ทั้งหมดจาก TU |
+| Club profile | มี Public GET APIs และ PUT ที่ตรวจกรรมการ; Service ตรวจสิทธิ์กรรมการซ้ำใน Transaction ก่อนแก้ข้อมูล (01760ff, 265 tests ผ่านตามรายงาน; ปิดเฉพาะการตรวจซ้ำ); category/tags ยังไม่ใช่ writable fields ของ contract | GET `/api/v1/clubs/{clubId}` ที่ editor เรียกยังไม่มี handler; ใช้ guard ตามนโยบายใหม่และเชื่อม Frontend; การขยาย field ของ US-06 ต้องแก้ contract/DTO แยก |
+| Public routes | [PublicRoutes](../../backend/src/main/java/com/tu/clubhub/config/PublicRoutes.java) เป็นรายการเดียว (method + path) ที่ Security chain และ session filters ใช้ร่วมกัน; `GET /api/v1/clubs/**` ไม่เป็น public แล้ว (1f5d43e) | เปิด GET ที่ต้องเป็นสาธารณะเฉพาะใน card ของฟีเจอร์นั้นพร้อม tests |
+| Recruitment | มี create/update/publish/close และ API คำถามรายข้อ ตรวจ version และข้อห้ามจัดการรอบที่ตนสมัครแล้ว | GET สำหรับกรรมการและ CANCEL ยังไม่มี implementation; CANCEL ต้องตรวจ PRESIDENT และมีเหตุผลใน contract |
+| Application/ผลคัดเลือก/ตอบรับ | มีตารางรองรับและ [Submission Contract §11](../api/API_v1.md#11-application-submission) แล้ว; Frontend เป็นฟอร์มต้นแบบ ยังไม่มี Submission/อ่านใบสมัคร/ตัดสิน/ประกาศ/ตอบรับ/งานหมดเวลา implementation | Implement Submission พร้อม student Active/ownership; กำหนด Contract ของ applicant reads, committee review, internal-result filtering, publication และ US-05; US-09 คงเป็นงานอ่าน งานบันทึก/ประกาศผลมีสอง Draft Stories และ Scope Owner ตาม T74-D03 แล้ว แต่ยัง Pending Team Review; นำข้อสรุป Retry/deadline/สมาชิกเดิม T74-D05/06/07 ไปออกแบบ โดยไม่มี MVP reactivation; publication audit ต้องไม่สร้าง status history ที่ from=to |
 | Admin/assignment/dashboard | Schema รองรับ assignment และ history บางส่วน | ยังต้องมี service/API สำหรับการแต่งตั้ง/ถอน/bootstrap/สถิติ, การถอน assignment เมื่อสมาชิก LEFT/REMOVED และ audit ของเหตุผลแต่งตั้ง; เพิ่ม migration ใหม่หากต้องเก็บ field เพิ่ม |
 
 เอกสาร OpenAPI อธิบายนโยบายเป้าหมายเดียวกัน แต่ยังต้องตรวจการบังคับใช้จริงก่อนส่งมอบแต่ละ workflow ห้ามอ้างว่าการอัปเดตเอกสารนี้ทำให้ช่องว่างข้างต้นถูกแก้แล้ว

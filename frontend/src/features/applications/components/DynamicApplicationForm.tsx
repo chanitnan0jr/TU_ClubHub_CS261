@@ -5,6 +5,7 @@ import type {
   ApplicationFormError,
   ApplicationStep,
 } from '../types/applicationForm';
+import { submitApplicationAPI } from '../services/applicationService';
 
 const mockQuestions: ScreeningQuestion[] = [
   {
@@ -34,6 +35,7 @@ export const DynamicApplicationForm: React.FC = () => {
   });
   const [errors, setErrors] = useState<ApplicationFormError>({});
   const [hasConfirmed, setHasConfirmed] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const studentInfo = {
     name: 'พิมพ์ชนก ใจดี',
@@ -85,6 +87,34 @@ export const DynamicApplicationForm: React.FC = () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleSubmitApplication = async () => {
+    if (!hasConfirmed || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        roundId: 'ROUND-1234',
+        reason: formData.reason,
+        answers: Object.entries(formData.answers).map(([qId, ans]) => ({
+          questionId: qId,
+          answerText: ans,
+        })),
+        documentTitle: formData.documentTitle,
+        documentUrl: formData.documentUrl,
+      };
+
+      const res = await submitApplicationAPI(payload);
+      if (res.success) {
+        setStep('success');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch {
+      alert('เกิดข้อผิดพลาดในการส่งใบสมัคร กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -222,10 +252,10 @@ export const DynamicApplicationForm: React.FC = () => {
             </div>
 
             <div className="flex flex-col gap-3 pt-2">
-              <button className="w-full h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-sm font-bold shadow-md">
+              <button className="w-full h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-sm font-bold shadow-md transition-colors">
                 ดูประวัติการสมัครของคุณ
               </button>
-              <button className="w-full h-11 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50">
+              <button className="w-full h-11 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors">
                 กลับหน้าแรก
               </button>
             </div>
@@ -258,10 +288,10 @@ export const DynamicApplicationForm: React.FC = () => {
             </div>
 
             <div className="flex flex-col gap-3 pt-2">
-              <button className="w-full h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-sm font-bold shadow-md">
+              <button className="w-full h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-sm font-bold shadow-md transition-colors">
                 ดูประวัติการสมัครของคุณ
               </button>
-              <button className="w-full h-11 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50">
+              <button className="w-full h-11 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors">
                 กลับไปหน้าชมรม
               </button>
             </div>
@@ -294,10 +324,10 @@ export const DynamicApplicationForm: React.FC = () => {
             </div>
 
             <div className="flex flex-col gap-3 pt-2">
-              <button className="w-full h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-sm font-bold shadow-md">
+              <button className="w-full h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-sm font-bold shadow-md transition-colors">
                 กลับไปค้นหาชมรม
               </button>
-              <button className="w-full h-11 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50">
+              <button className="w-full h-11 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors">
                 กลับไปหน้าชมรม
               </button>
             </div>
@@ -633,14 +663,18 @@ export const DynamicApplicationForm: React.FC = () => {
               ) : (
                 <button
                   type="button"
-                  disabled={!hasConfirmed}
-                  onClick={() => {
-                    setStep('success');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="w-full sm:w-auto px-8 h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-xs font-bold shadow-md transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                  disabled={!hasConfirmed || isSubmitting}
+                  onClick={handleSubmitApplication}
+                  className="w-full sm:w-auto px-8 h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-xs font-bold shadow-md transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  ยืนยันการส่งใบสมัคร
+                  {isSubmitting ? (
+                    <>
+                      <span className="animate-spin text-sm">⏳</span>
+                      <span>กำลังส่งใบสมัคร...</span>
+                    </>
+                  ) : (
+                    <span>ยืนยันการส่งใบสมัคร</span>
+                  )}
                 </button>
               )}
             </div>

@@ -3,6 +3,7 @@ package com.tu.clubhub.recruitment.service;
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import com.tu.clubhub.committee.security.ClubSecurity;
 import com.tu.clubhub.recruitment.domain.RecruitmentRound;
+import com.tu.clubhub.recruitment.dto.RoundResponse;
 import com.tu.clubhub.recruitment.dto.RoundWriteRequest;
 import com.tu.clubhub.recruitment.repository.RecruitmentRoundRepository;
 import jakarta.validation.ConstraintViolationException;
@@ -46,7 +47,7 @@ public class RecruitmentRoundService {
     }
 
     @Transactional
-    public RecruitmentRound createRound(
+    public RoundResponse createRound(
             Long clubId,
             RoundWriteRequest request) {
 
@@ -63,11 +64,11 @@ public class RecruitmentRoundService {
 
         repository.insertQuestions(roundId, request.questions());
 
-        return findRound(clubId, roundId);
+        return describe(clubId, roundId);
     }
 
     @Transactional
-    public RecruitmentRound updateRound(
+    public RoundResponse updateRound(
             Long clubId,
             Long roundId,
             RoundWriteRequest request) {
@@ -77,6 +78,8 @@ public class RecruitmentRoundService {
         validateRequest(request, RoundWriteRequest.Replace.class);
 
         RecruitmentRound round = findRound(clubId, roundId);
+
+        requireNotApplicant(roundId);
 
         requireVersion(round, request.version());
 
@@ -104,11 +107,11 @@ public class RecruitmentRoundService {
         repository.deleteQuestions(roundId);
         repository.insertQuestions(roundId, request.questions());
 
-        return findRound(clubId, roundId);
+        return describe(clubId, roundId);
     }
 
     @Transactional
-    public RecruitmentRound publishRound(
+    public RoundResponse publishRound(
             Long clubId,
             Long roundId,
             Long expectedVersion) {
@@ -118,6 +121,8 @@ public class RecruitmentRoundService {
         requireExpectedVersion(expectedVersion);
 
         RecruitmentRound round = findRound(clubId, roundId);
+
+        requireNotApplicant(roundId);
 
         requireVersion(round, expectedVersion);
 
@@ -150,11 +155,11 @@ public class RecruitmentRoundService {
                     "Round could not be published; reload and retry");
         }
 
-        return findRound(clubId, roundId);
+        return describe(clubId, roundId);
     }
 
     @Transactional
-    public RecruitmentRound closeRound(
+    public RoundResponse closeRound(
             Long clubId,
             Long roundId,
             Long expectedVersion) {
@@ -164,6 +169,8 @@ public class RecruitmentRoundService {
         requireExpectedVersion(expectedVersion);
 
         RecruitmentRound round = findRound(clubId, roundId);
+
+        requireNotApplicant(roundId);
 
         requireVersion(round, expectedVersion);
 
@@ -197,7 +204,7 @@ public class RecruitmentRoundService {
                     "Round could not be closed; reload and retry");
         }
 
-        return findRound(clubId, roundId);
+        return describe(clubId, roundId);
     }
 
     private void validateRequest(
@@ -257,6 +264,19 @@ public class RecruitmentRoundService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Recruitment round not found in this club"));
+    }
+
+    private RoundResponse describe(Long clubId, Long roundId) {
+        return RoundResponse.from(
+                findRound(clubId, roundId),
+                repository.findQuestions(roundId));
+    }
+
+    private void requireNotApplicant(Long roundId) {
+        if (repository.hasApplicationByApplicant(roundId, currentUserId())) {
+            throw new AccessDeniedException(
+                    "Committee members cannot manage rounds they applied to");
+        }
     }
 
     private Long currentUserId() {

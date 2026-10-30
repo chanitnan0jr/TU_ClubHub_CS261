@@ -1,8 +1,8 @@
 package com.tu.clubhub.recruitment.controller;
 
 import com.tu.clubhub.committee.security.RequireClubCommittee;
-import com.tu.clubhub.recruitment.domain.RecruitmentRound;
 import com.tu.clubhub.recruitment.dto.RoundPatchRequest;
+import com.tu.clubhub.recruitment.dto.RoundResponse;
 import com.tu.clubhub.recruitment.dto.RoundWriteRequest;
 import com.tu.clubhub.recruitment.service.RecruitmentRoundService;
 import jakarta.validation.Valid;
@@ -29,13 +29,13 @@ public class RecruitmentRoundController {
 
     @PostMapping
     @RequireClubCommittee
-    public ResponseEntity<RecruitmentRound> createRound(
+    public ResponseEntity<RoundResponse> createRound(
             @PathVariable("clubId") @Positive Long clubId,
             @RequestBody
             @Validated(RoundWriteRequest.Create.class)
             RoundWriteRequest request) {
 
-        RecruitmentRound round =
+        RoundResponse round =
                 service.createRound(clubId, request);
 
         URI location = ServletUriComponentsBuilder
@@ -49,7 +49,7 @@ public class RecruitmentRoundController {
 
     @PutMapping("/{roundId}")
     @RequireClubCommittee
-    public RecruitmentRound updateRound(
+    public RoundResponse updateRound(
             @PathVariable("clubId") @Positive Long clubId,
             @PathVariable("roundId") @Positive Long roundId,
             @RequestBody
@@ -61,7 +61,7 @@ public class RecruitmentRoundController {
 
     @PatchMapping("/{roundId}")
     @RequireClubCommittee
-    public RecruitmentRound changeRoundStatus(
+    public RoundResponse changeRoundStatus(
             @PathVariable("clubId") @Positive Long clubId,
             @PathVariable("roundId") @Positive Long roundId,
             @Valid @RequestBody RoundPatchRequest request) {

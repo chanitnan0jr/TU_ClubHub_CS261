@@ -2,6 +2,7 @@ package com.tu.clubhub.config;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -46,5 +47,15 @@ class SpaRoutingIntegrationTest {
 	void apiEndpointsDoNotForwardToIndexHtml() throws Exception {
 		mockMvc.perform(get("/api/v1/non-existent-route"))
 				.andExpect(status().is4xxClientError());
+	}
+
+	// Only PublicRoutes are anonymous: routes under /api/v1/clubs/ or added later need a session.
+	@Test
+	void undeclaredApiRoutesRequireAuthentication() throws Exception {
+		for (String path : new String[] {"/api/v1/clubs/1", "/api/v1/clubs/1/rounds", "/api/v1/auth/login"}) {
+			mockMvc.perform(get(path))
+					.andExpect(status().isUnauthorized())
+					.andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+		}
 	}
 }

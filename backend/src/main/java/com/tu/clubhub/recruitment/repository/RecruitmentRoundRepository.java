@@ -2,6 +2,7 @@ package com.tu.clubhub.recruitment.repository;
 
 import com.tu.clubhub.recruitment.domain.RecruitmentRound;
 import com.tu.clubhub.recruitment.dto.QuestionInput;
+import com.tu.clubhub.recruitment.dto.RoundResponse;
 import com.tu.clubhub.recruitment.dto.RoundWriteRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -153,6 +154,34 @@ public class RecruitmentRoundRepository {
                 roundId);
 
         return count != null && count > 0;
+    }
+
+    /** Includes withdrawn/rejected applications for the self-review restriction. */
+    public boolean hasApplicationByApplicant(Long roundId, Long applicantId) {
+        Boolean exists = jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM applications
+                    WHERE round_id = ? AND applicant_id = ?
+                )
+                """, Boolean.class, roundId, applicantId);
+
+        return Boolean.TRUE.equals(exists);
+    }
+
+    public List<RoundResponse.Question> findQuestions(Long roundId) {
+        return jdbcTemplate.query("""
+                SELECT id, prompt, is_required, display_order, max_length
+                FROM application_questions
+                WHERE round_id = ?
+                ORDER BY display_order, id
+                """,
+                (rs, rowNum) -> new RoundResponse.Question(
+                        rs.getString("id"),
+                        rs.getString("prompt"),
+                        rs.getBoolean("is_required"),
+                        rs.getInt("display_order"),
+                        rs.getInt("max_length")),
+                roundId);
     }
 
     public void deleteQuestions(Long roundId) {

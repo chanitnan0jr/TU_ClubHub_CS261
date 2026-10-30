@@ -17,6 +17,17 @@ server:
         same-site: lax
         path: /
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: false
+
 tu:
   auth:
     mode: ${TU_AUTH_MODE:real}
@@ -24,3 +35,8 @@ tu:
     application-key: ${TU_AUTH_APPLICATION_KEY:}
     connect-timeout: ${TU_AUTH_CONNECT_TIMEOUT:3s}
     read-timeout: ${TU_AUTH_READ_TIMEOUT:5s}
+
+clubhub:
+  application:
+    submission:
+      lock-timeout: ${APPLICATION_SUBMISSION_LOCK_TIMEOUT:2s}

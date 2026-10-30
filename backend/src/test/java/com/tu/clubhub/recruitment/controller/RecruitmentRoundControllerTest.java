@@ -2,6 +2,7 @@ package com.tu.clubhub.recruitment.controller;
 
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import com.tu.clubhub.committee.security.ClubSecurity;
+import com.tu.clubhub.recruitment.dto.RoundResponse;
 import com.tu.clubhub.recruitment.service.RecruitmentRoundService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,9 +14,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.*;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -155,6 +157,33 @@ class RecruitmentRoundControllerTest {
                 .andExpect(status().isOk());
 
         verify(service).publishRound(1L, 10L, 0L);
+    }
+
+    @Test
+    void roundResponseMatchesContractShape() throws Exception {
+        when(clubSecurity.isCommittee(1L)).thenReturn(true);
+        Instant opens = Instant.parse("2026-10-19T08:00:00Z");
+        when(service.publishRound(1L, 10L, 0L)).thenReturn(new RoundResponse(
+                "10", "1", "Test round", 2569, 1, "Description", null,
+                opens, opens.plusSeconds(86400), opens.plusSeconds(172800), null,
+                "PUBLISHED", null, opens, null, opens, opens, 1L,
+                List.of(new RoundResponse.Question("40", "Why join?", true, 1, 2000))));
+
+        mockMvc.perform(patch("/api/v1/clubs/1/rounds/10")
+                        .with(authentication(login()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"version":0,"action":"PUBLISH"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("10"))
+                .andExpect(jsonPath("$.clubId").value("1"))
+                .andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.questions[0].id").value("40"))
+                .andExpect(jsonPath("$.questions[0].maxLength").value(2000))
+                .andExpect(jsonPath("$.eligibilityText").value(nullValue()))
+                .andExpect(jsonPath("$.createdBy").doesNotExist());
     }
 
     @Test

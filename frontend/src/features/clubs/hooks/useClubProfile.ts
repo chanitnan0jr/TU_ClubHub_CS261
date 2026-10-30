@@ -8,24 +8,41 @@ export const useClubProfile = (clubId: string) => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [requestedClubId, setRequestedClubId] = useState(clubId);
+  const [reloadCount, setReloadCount] = useState(0);
 
-  const fetchProfile = useCallback(async () => {
+  // Reset during render, not in the effect, when the route switches to another club.
+  if (clubId !== requestedClubId) {
+    setRequestedClubId(clubId);
+    setIsLoading(true);
+    setErrorMessage(null);
+  }
+
+  // State changes only in the request callbacks; a superseded request is ignored.
+  useEffect(() => {
+    if (!clubId) return;
+    let current = true;
+    getClubProfile(clubId)
+      .then((profile) => {
+        if (current) setData(profile);
+      })
+      .catch((err: any) => {
+        if (current) setErrorMessage(err.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+      })
+      .finally(() => {
+        if (current) setIsLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [clubId, reloadCount]);
+
+  const fetchProfile = useCallback(() => {
     if (!clubId) return;
     setIsLoading(true);
     setErrorMessage(null);
-    try {
-      const profile = await getClubProfile(clubId);
-      setData(profile);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
-    } finally {
-      setIsLoading(false);
-    }
+    setReloadCount((count) => count + 1);
   }, [clubId]);
-
-  useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
 
   const handleUpdate = async (updateData: ClubUpdateRequestDto) => {
     setIsSubmitting(true);

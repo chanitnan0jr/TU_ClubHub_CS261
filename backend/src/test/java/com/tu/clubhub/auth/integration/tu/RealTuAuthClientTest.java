@@ -40,7 +40,8 @@ class RealTuAuthClientTest {
 				.andRespond(withSuccess("""
 						{"status":true,"message":"Success","displayname_th":"ชื่อ นามสกุล",
 						"displayname_en":"Student Example","email":"student@dome.tu.ac.th",
-						"type":"student","department":"Computer Science","faculty":"Science"}
+						"type":"student","department":"Computer Science","faculty":"Science",
+						"tu_status":"ปกติ","statusid":"01"}
 						""", MediaType.APPLICATION_JSON));
 
 		RealTuAuthClient client = new RealTuAuthClient(builder.build(), ENDPOINT, APPLICATION_KEY);
@@ -51,6 +52,8 @@ class RealTuAuthClientTest {
 		assertEquals("student@dome.tu.ac.th", result.orElseThrow().email());
 		assertEquals("student", result.orElseThrow().accountType());
 		assertEquals("Science", result.orElseThrow().faculty());
+		assertEquals("ปกติ", result.orElseThrow().tuStatus());
+		assertEquals("01", result.orElseThrow().statusId(), "statusid stays a string with its leading zero");
 		server.verify();
 	}
 

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
-  title: TU ClubHub Recruitment Rounds API — proposed contract
-  version: 1.0.0
+  title: TU ClubHub Recruitment Rounds API
+  version: 1.1.0
   description: >-
     US-07/US-08. Committee-only management API, separate from existing public
     recruitment-rounds API. No physical DELETE; CLOSE/CANCEL retain applications.
@@ -17,9 +17,32 @@ info:
     that round as committee; exclude such rounds before listing/pagination/counts.
     COMMITTEE or PRESIDENT can create, edit, publish, and close rounds; CANCEL
     requires an effective PRESIDENT, an unpublished result, and an audited reason.
-    Selection-result publication is a separate future workflow, not PUBLISH here.
-    GET operations and CANCEL are not implemented yet; CANCEL also needs its reason
-    field specified before implementation. The matrix lists remaining guard work.
+    Selection-result publication is specified on POST /api/v1/rounds/{roundId}/publish-results
+    in openapi.yaml (Task75), not PUBLISH here.
+    Task75 finalizes the Sprint 2 design contract (docs/architecture/task75-sprint2-design.md),
+    including 409 RESOURCE_CONFLICT with reason QUESTION_HAS_ANSWERS when attempting
+    to edit or delete a screening question that already has submitted answers (Task51),
+    and 403 ACCESS_DENIED for an existing private resource outside the caller's
+    authorization versus 404 RESOURCE_NOT_FOUND for a nonexistent resource (T74-D01).
+  x-sprint2-design-handoff:
+    status: specified-in-task75
+    prepared-at: '2026-10-28'
+    analysis-artefact: ../architecture/task74-sprint2-analysis.md
+    design-artefact: ../architecture/task75-sprint2-design.md
+    permission-matrix: ../security/permission-matrix.md#s2-permission-matrix
+    state-machine: ../architecture/system-architecture.md#s2-application-state-machine
+    business-rules: ../architecture/system-architecture.md#s2-business-rules
+    decision-log: ../architecture/system-architecture.md#s2-decision-log
+    selection-results-draft: ../stories/sprint2/selection-results-draft.md
+    decision-source: explicit-user-instruction-2026-10-27-and-task75-design
+    decision-review-status: ready-for-team-review
+    recorded-decisions:
+      T74-D01: existing-unauthorized-private-resource-403-nonexistent-404
+      T74-D02: no-interview-mvp-optional-explicit-review-direct-decision-after-close
+      T74-D03: separate-decision-and-publication-contracts-specified-in-openapi-yaml
+      T74-D05: same-final-action-replay-without-writes-opposite-action-409
+      T74-D06: fresh-action-server-time-after-lock-recheck-automatic-expiry-60s-worker-proposal-pending-po-review
+      T74-D07: same-application-replay-no-writes-all-prior-membership-rows-reject-fresh-confirmation-no-reactivation
 servers:
   - url: http://localhost:8080
 security:
@@ -36,6 +59,7 @@ paths:
           pattern: ^[1-9][0-9]{0,18}$
     get:
       operationId: listRounds
+      x-implementation-status: pending
       tags:
         - Recruitment rounds
       summary: listRounds
@@ -53,13 +77,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -103,6 +127,7 @@ paths:
         existing club: 200 with empty items."
     post:
       operationId: createRound
+      x-implementation-status: implemented
       tags:
         - Recruitment rounds
       summary: createRound
@@ -120,13 +145,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -188,6 +213,7 @@ paths:
           pattern: ^[1-9][0-9]{0,18}$
     get:
       operationId: getRound
+      x-implementation-status: pending
       tags:
         - Recruitment rounds
       summary: getRound
@@ -205,13 +231,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -230,6 +256,7 @@ paths:
                 $ref: "#/components/schemas/Round"
     put:
       operationId: replaceRound
+      x-implementation-status: implemented
       tags:
         - Recruitment rounds
       summary: replaceRound
@@ -247,13 +274,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -298,6 +325,7 @@ paths:
         checked atomically.
     patch:
       operationId: transitionRound
+      x-implementation-status: partial
       tags:
         - Recruitment rounds
       summary: transitionRound
@@ -315,13 +343,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "403":
-          description: Active/term/committee/PRESIDENT/self-review failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
+          description: Active/term/committee/PRESIDENT/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
         "404":
-          description: Club or round belonging to that club not found
+          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
           content:
             application/problem+json:
               schema:
@@ -369,6 +397,368 @@ paths:
         must be specified before implementation. Other transitions: 409. Server
         assigns timestamps. Version checked atomically. PUBLISH publishes recruitment,
         not selection results. All actions enforce the matrix self-review restriction."
+  /api/v1/rounds/{roundId}/questions:
+    parameters:
+    - name: roundId
+      in: path
+      required: true
+      description: Positive PostgreSQL BIGINT decimal ID; maximum 9223372036854775807
+      schema:
+        type: string
+        pattern: ^[1-9][0-9]{0,18}$
+    get:
+      tags:
+      - Application questions
+      operationId: listApplicationQuestions
+      summary: List application questions for one recruitment round
+      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
+        an application to this round cannot read or manage its questions. Check authorization against the actual
+        round owner, including within write transactions. Ordered by displayOrder ASC, id ASC. An empty round
+        returns {"items":[]}.
+      responses:
+        '200':
+          description: Questions in display order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationQuestionList'
+        '400':
+          description: Invalid round/question ID, JSON body, or validation (including blank questionText or invalid
+            order)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: No valid session (CSRF failure may take precedence)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    post:
+      tags:
+      - Application questions
+      operationId: createApplicationQuestion
+      summary: Append one application question to a recruitment round
+      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
+        an application to this round cannot read or manage its questions. Check authorization against the actual
+        round owner, including within write transactions. The server assigns the next 1-based displayOrder atomically;
+        use the order endpoint to reorder. Creation is subject to round edit-state policy.
+      parameters:
+      - name: X-CSRF-TOKEN
+        in: header
+        required: true
+        description: Obtain current token from GET /api/v1/auth/csrf; renew after login.
+        schema:
+          type: string
+          minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationQuestionWrite'
+      responses:
+        '201':
+          description: Question created
+          headers:
+            Location:
+              description: URI of the created question
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationQuestion'
+        '400':
+          description: Invalid round/question ID, JSON body, or validation (including blank questionText or invalid
+            order)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: No valid session (CSRF failure may take precedence)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Round state/edit-policy conflict or concurrent modification
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/rounds/{roundId}/questions/{questionId}:
+    parameters:
+    - name: roundId
+      in: path
+      required: true
+      description: Positive PostgreSQL BIGINT decimal ID; maximum 9223372036854775807
+      schema:
+        type: string
+        pattern: ^[1-9][0-9]{0,18}$
+    - name: questionId
+      in: path
+      required: true
+      description: ID of a question belonging to the specified recruitment round
+      schema:
+        type: string
+        pattern: ^[1-9][0-9]{0,18}$
+    put:
+      tags:
+      - Application questions
+      operationId: replaceApplicationQuestion
+      summary: Replace editable fields of one application question
+      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
+        an application to this round cannot read or manage its questions. Check authorization against the actual
+        round owner, including within write transactions. PUT requires both fields; it does not change displayOrder.
+        Use PUT /order for ordering. The question must belong to roundId. Modification is rejected with 409
+        RESOURCE_CONFLICT (reason QUESTION_HAS_ANSWERS) if one or more answers in application_answers reference
+        this question (Task51).
+      parameters:
+      - name: X-CSRF-TOKEN
+        in: header
+        required: true
+        description: Obtain current token from GET /api/v1/auth/csrf; renew after login.
+        schema:
+          type: string
+          minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationQuestionWrite'
+      responses:
+        '200':
+          description: Question updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationQuestion'
+        '400':
+          description: Invalid round/question ID, JSON body, or validation (including blank questionText or invalid
+            order)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: No valid session (CSRF failure may take precedence)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Question already has submitted answers (reason QUESTION_HAS_ANSWERS), round state/edit-policy conflict, or concurrent modification
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-conflict
+                title: Question cannot be modified
+                status: 409
+                detail: Cannot modify a screening question that already has submitted answers.
+                instance: /api/v1/rounds/70001/questions/81001
+                code: RESOURCE_CONFLICT
+                reason: QUESTION_HAS_ANSWERS
+                fieldErrors: []
+                traceId: 01J9EXAMPLE7K4D5
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    delete:
+      tags:
+      - Application questions
+      operationId: deleteApplicationQuestion
+      summary: Delete one application question only if it has no answers
+      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
+        an application to this round cannot read or manage its questions. Check authorization against the actual
+        round owner, including within write transactions. Deletion is rejected when one or more answers reference
+        this question (409 RESOURCE_CONFLICT with reason QUESTION_HAS_ANSWERS). Other edit-state policy conflicts also return 409. Never cascade-delete
+        answers. Recompact remaining displayOrder values transactionally.
+      parameters:
+      - name: X-CSRF-TOKEN
+        in: header
+        required: true
+        description: Obtain current token from GET /api/v1/auth/csrf; renew after login.
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '204':
+          description: Question deleted (no response body)
+        '400':
+          description: Invalid round/question ID, JSON body, or validation (including blank questionText or invalid
+            order)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: No valid session (CSRF failure may take precedence)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Question already has submitted answers (reason QUESTION_HAS_ANSWERS), round state/edit-policy conflict, or concurrent modification
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-conflict
+                title: Question cannot be deleted
+                status: 409
+                detail: Cannot delete a screening question that already has submitted answers.
+                instance: /api/v1/rounds/70001/questions/81001
+                code: RESOURCE_CONFLICT
+                reason: QUESTION_HAS_ANSWERS
+                fieldErrors: []
+                traceId: 01J9EXAMPLE7K4D5
+  /api/v1/rounds/{roundId}/questions/order:
+    parameters:
+    - name: roundId
+      in: path
+      required: true
+      description: Positive PostgreSQL BIGINT decimal ID; maximum 9223372036854775807
+      schema:
+        type: string
+        pattern: ^[1-9][0-9]{0,18}$
+    put:
+      tags:
+      - Application questions
+      operationId: reorderApplicationQuestions
+      summary: Set the full application-question order for one round
+      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
+        an application to this round cannot read or manage its questions. Check authorization against the actual
+        round owner, including within write transactions. questionIds must contain every currently existing question
+        ID in the round exactly once, including no foreign IDs; [] is valid only when no questions exist. Reorder
+        is atomic and assigns displayOrder = 1..n. Missing, duplicate or foreign IDs return 400. A stale set
+        changed concurrently returns 409. Editing remains subject to round state policy.
+      parameters:
+      - name: X-CSRF-TOKEN
+        in: header
+        required: true
+        description: Obtain current token from GET /api/v1/auth/csrf; renew after login.
+        schema:
+          type: string
+          minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationQuestionOrderRequest'
+      responses:
+        '200':
+          description: Questions in the updated order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationQuestionList'
+        '400':
+          description: Invalid round/question ID, JSON body, or validation (including blank questionText or invalid
+            order)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: No valid session (CSRF failure may take precedence)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Existing private resource outside the caller's authorized round/club, ineffective committee rights, self-review restriction (ACCESS_DENIED), or CSRF_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Round not found, or question not found under the authorized round; an existing private resource without permission uses 403 ACCESS_DENIED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Round state/edit-policy conflict or concurrent modification
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '415':
+          description: Unsupported media type
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 components:
   securitySchemes:
     sessionAuth:
@@ -464,6 +854,13 @@ components:
             - PUBLISH
             - CLOSE
             - CANCEL
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          pattern: \S
+          nullable: true
+          description: Required non-blank cancellation reason when action is CANCEL; omitted or null for PUBLISH and CLOSE.
       required:
         - version
         - action
@@ -686,6 +1083,10 @@ components:
           type: string
         code:
           type: string
+        reason:
+          type: string
+          nullable: true
+          description: Machine-readable conflict reason for 409 RESOURCE_CONFLICT (e.g. QUESTION_HAS_ANSWERS, ROUND_NOT_EDITABLE, VERSION_MISMATCH, RESULTS_ALREADY_PUBLISHED).
         traceId:
           type: string
         fieldErrors:
@@ -713,3 +1114,70 @@ components:
         - code
         - traceId
         - fieldErrors
+    ApplicationQuestionWrite:
+      type: object
+      additionalProperties: false
+      properties:
+        questionText:
+          type: string
+          minLength: 1
+          pattern: \S
+          description: Cannot be empty, null, or whitespace-only
+        isRequired:
+          type: boolean
+      required:
+      - questionText
+      - isRequired
+    ApplicationQuestion:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+          description: Positive decimal PostgreSQL BIGINT ID, represented as string to avoid JS precision loss
+        roundId:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+          description: Positive decimal PostgreSQL BIGINT ID, represented as string to avoid JS precision loss
+        questionText:
+          type: string
+          minLength: 1
+          pattern: \S
+        isRequired:
+          type: boolean
+        displayOrder:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+      required:
+      - id
+      - roundId
+      - questionText
+      - isRequired
+      - displayOrder
+    ApplicationQuestionList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicationQuestion'
+      required:
+      - items
+    ApplicationQuestionOrderRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        questionIds:
+          type: array
+          uniqueItems: true
+          minItems: 0
+          items:
+            type: string
+            pattern: ^[1-9][0-9]{0,18}$
+            description: Positive decimal PostgreSQL BIGINT ID, represented as string to avoid JS precision loss
+          description: Exact ordered list of all question IDs belonging to this round
+      required:
+      - questionIds

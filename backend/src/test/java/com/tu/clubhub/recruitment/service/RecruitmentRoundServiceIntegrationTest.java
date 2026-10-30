@@ -189,16 +189,23 @@ class RecruitmentRoundServiceIntegrationTest {
         var created = service.createRound(clubId, createRequest);
 
         assertNotNull(created.id());
+        Long roundId = Long.valueOf(created.id());
+        assertEquals(clubId.toString(), created.clubId());
         assertEquals("DRAFT", created.publicationStatus());
         assertEquals(0L, created.version().longValue());
-        assertEquals(fixture.userId(), created.createdBy());
+        assertEquals(1, created.questions().size());
+        assertEquals("Original question", created.questions().get(0).prompt());
+        assertEquals(500, created.questions().get(0).maxLength());
+        assertEquals(fixture.userId(), jdbc.queryForObject("""
+                SELECT created_by FROM recruitment_rounds WHERE id = ?
+                """, Long.class, roundId));
 
         assertEquals(
                 "Original question",
                 jdbc.queryForObject("""
                         SELECT prompt FROM application_questions
                         WHERE round_id = ?
-                        """, String.class, created.id()));
+                        """, String.class, roundId));
 
         var updateRequest = new RoundWriteRequest(
                 "Updated title",
@@ -215,15 +222,17 @@ class RecruitmentRoundServiceIntegrationTest {
                 created.version());
 
         var updated = service.updateRound(
-                clubId, created.id(), updateRequest);
+                clubId, roundId, updateRequest);
 
         assertEquals("Updated title", updated.title());
         assertEquals(1L, updated.version().longValue());
+        assertEquals(List.of("Updated question"), updated.questions().stream()
+                .map(question -> question.prompt()).toList());
 
         Long questionCount = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM application_questions
                 WHERE round_id = ?
-                """, Long.class, created.id());
+                """, Long.class, roundId);
 
         assertNotNull(questionCount);
         assertEquals(1L, questionCount.longValue());
@@ -233,10 +242,10 @@ class RecruitmentRoundServiceIntegrationTest {
                 jdbc.queryForObject("""
                         SELECT prompt FROM application_questions
                         WHERE round_id = ?
-                        """, String.class, created.id()));
+                        """, String.class, roundId));
 
         var published = service.publishRound(
-                clubId, created.id(), updated.version());
+                clubId, roundId, updated.version());
 
         assertEquals("PUBLISHED", published.publicationStatus());
         assertNotNull(published.publishedAt());
@@ -248,7 +257,7 @@ class RecruitmentRoundServiceIntegrationTest {
                         SELECT publication_status
                         FROM recruitment_rounds
                         WHERE id = ?
-                        """, String.class, created.id()));
+                        """, String.class, roundId));
 
         var forbiddenUpdate = new RoundWriteRequest(
                 "Forbidden edit",
@@ -266,7 +275,7 @@ class RecruitmentRoundServiceIntegrationTest {
         var error = assertThrows(
                 ResponseStatusException.class,
                 () -> service.updateRound(
-                        clubId, created.id(), forbiddenUpdate));
+                        clubId, roundId, forbiddenUpdate));
 
         assertEquals(409, error.getStatusCode().value());
 
@@ -275,7 +284,7 @@ class RecruitmentRoundServiceIntegrationTest {
                 jdbc.queryForObject("""
                         SELECT title FROM recruitment_rounds
                         WHERE id = ?
-                        """, String.class, created.id()));
+                        """, String.class, roundId));
     }
 
     private TestClub createClubWithCommittee() {
@@ -292,10 +301,10 @@ class RecruitmentRoundServiceIntegrationTest {
                 """, Long.class, username);
 
         jdbc.update("""
-                INSERT INTO student_profiles (user_id, student_code)
-                VALUES (?, ?)
-                """, userId, studentCode());
-
+        INSERT INTO student_profiles
+            (user_id, student_code, student_status)
+        VALUES (?, ?, 'ACTIVE')
+        """, userId, studentCode());
         Long categoryId = jdbc.queryForObject("""
                 INSERT INTO club_categories (name)
                 VALUES (?)

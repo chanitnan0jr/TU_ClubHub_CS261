@@ -1,6 +1,6 @@
 # TU API — Reference & Integration Guide
 
-โครงการ: TU-Circle / TU-ClubHub
+โครงการ: TU-ClubHub
 ตำแหน่งใน Repository: `docs/api/TU_API.md`
 วันที่จัดทำ: 12 ตุลาคม 2026
 สถานะ: เรียบเรียงจากเอกสาร API ที่ผู้ใช้ส่งมา ยังไม่ได้ทดสอบกับบริการจริง
@@ -9,7 +9,7 @@
 
 เอกสารนี้รวบรวม TU API สำหรับ Authentication, Authentication Logs, Student Profile, Department และ Faculty เพื่อให้ Backend/Full-Stack ใช้เป็น Reference และสร้าง Mock สำหรับทดสอบ
 
-ส่วนที่ 2–7 เป็น Contract ตามข้อมูลต้นทาง ส่วนที่ 8–10 เป็นแนวทาง Integration ที่เสนอสำหรับ TU-Circle ไม่ใช่ข้อกำหนดเพิ่มเติมจากผู้ให้บริการ
+ส่วนที่ 2–7 เป็นข้อมูลอ้างอิง Contract ของต้นทาง ณ วันที่จัดทำ ส่วนที่ 8–10 เป็นแนวทาง Integration และสถานะงานฝั่ง TU-ClubHub ไม่ใช่ข้อกำหนดเพิ่มเติมจากผู้ให้บริการ
 
 - Authentication documentation: <https://restapi.tu.ac.th/tuapi/docs/GettingAuth>
 - Application-Key: <https://restapi.tu.ac.th/tuapi/Authkey>
@@ -189,7 +189,7 @@ curl --request POST \
 
 ## 4. Authentication Logs
 
-เป็น API อ่านบันทึกของผู้ให้บริการ ไม่ใช่ Endpoint สำหรับทำ Login หรืออ่านประวัติใบสมัคร TU-Circle
+เป็น API อ่านบันทึกของผู้ให้บริการ ไม่ใช่ Endpoint สำหรับทำ Login หรืออ่านประวัติใบสมัคร TU-ClubHub
 
 ### 4.1 Requests and parameters
 
@@ -457,9 +457,9 @@ curl --request GET 'https://restapi.tu.ac.th/api/v2/std/fac/all' \
   --header "Application-Key: ${TU_APPLICATION_KEY}"
 ```
 
-## 8. แนวทางเชื่อมต่อ TU-Circle
+## 8. การเชื่อมต่อ TU-ClubHub
 
-ส่วนนี้เป็นข้อเสนอของทีมระบบ ไม่ใช่ TU API Contract
+ส่วนนี้เป็นการออกแบบฝั่ง TU-ClubHub ไม่ใช่ TU API Contract ปรับปรุงสถานะ 19 ต.ค. 2026: มี Real/Mock authentication adapters และ Session endpoints แล้ว แต่การเข้าถึง TU จริงและการ Sync student profile/status ยังต้องทำตาม [API Contract](API_v1.md) และ [Permission Matrix](../security/permission-matrix.md)
 
 ### 8.1 API ที่ใช้ใน MVP
 
@@ -487,7 +487,7 @@ sequenceDiagram
   B->>T: POST /api/v1/auth/Ad/verify + Application-Key
   T-->>B: Authentication response
   alt Verified identity and local access policy permits
-    B->>D: Upsert account/profile without changing assigned roles
+    B->>D: Upsert account without changing assigned roles
     B->>D: Persist authenticated JDBC session
     B-->>W: User DTO + rotated HttpOnly session cookie + fresh CSRF token
   else Invalid identity / denied policy / upstream failure
@@ -495,13 +495,13 @@ sequenceDiagram
   end
 ```
 
-TU-Circle อาจรับ `{username,password}` จาก Frontend แต่ TU adapter ต้องแปลงเป็น `{UserName,PassWord}` อย่าเปลี่ยน Contract ภายในทั้งระบบให้ตามตัวพิมพ์ของผู้ให้บริการ
+TU-ClubHub รับ `{username,password}` จาก Frontend และ TU adapter แปลงเป็น `{UserName,PassWord}` ตาม Contract ของต้นทาง
 
-Authentication response ไม่มี Token สำหรับใช้เป็น Session ของ TU-Circle; Application-Key เป็น Credential ของระบบเราในการเรียก TU ไม่ใช่ Token ของนักศึกษา ระบบสร้าง Session ของตนเองผ่าน Spring Security/JDBC
+Authentication response ไม่มี Token สำหรับใช้เป็น Session ของ TU-ClubHub; Application-Key เป็น Credential ของระบบเราในการเรียก TU ไม่ใช่ Token ของนักศึกษา ระบบสร้าง Session ของตนเองผ่าน Spring Security/JDBC
 
 ### 8.3 Data mapping
 
-| TU field | TU-Circle target | กติกา |
+| TU field | TU-ClubHub target | กติกา |
 |---|---|---|
 | Auth `username` | `users.tu_username` | ใช้ identity จาก Response ที่ผ่านการตรวจ ไม่ใช้ email เป็น primary identity |
 | Auth `displayname_th` | `users.display_name` | Fallback เป็นชื่ออังกฤษ/username เมื่อไม่มีชื่อไทย |
@@ -516,27 +516,31 @@ Authentication response ไม่มี Token สำหรับใช้เป�
 
 ข้อมูลที่ยังไม่มีในตัวอย่าง: หลักสูตรที่ยืนยันแยกจากสาขา, ชั้นปี, สิทธิ์กรรมการชมรม, Global ADMIN และตารางรหัสสถานะนักศึกษาทั้งหมด ห้ามอนุมานหรือสร้างข้อมูลเติมเอง
 
+ปัจจุบัน `UserAccountService` บันทึกเฉพาะ `users` แถว mapping ของ `student_profiles` ด้านบนยังเป็นเป้าหมาย ต้องยืนยันสถานะเป็น ACTIVE ก่อนใช้สิทธิ์นักศึกษาตาม Matrix; Login สำเร็จไม่ได้เติม student profile อัตโนมัติ
+
 ตัวอย่าง `statusid="40"` จับคู่กับ `tu_status="สำเร็จการศึกษา"` ได้เฉพาะตามตัวอย่างที่มี แต่ยังไม่ใช่ Status Code Catalog ฉบับเต็ม
 
 การ Login สำเร็จของบุคลากร/ผู้สำเร็จการศึกษาอาจแยกจากสิทธิ์สมัครชมรมได้ ต้องตกลงว่ากลุ่มใดเข้า Portal ได้และเห็นอะไร อย่าเพิ่มสิทธิ์สมัครหรือ Admin จาก `type`/โดเมนอีเมลเพียงอย่างเดียว และอย่า Reset Role ที่มอบหมายไว้เมื่อ Sync Profile
 
-### 8.4 Backend adapter design
+### 8.4 Backend adapters ปัจจุบันและส่วนที่ยังไม่มี
 
-| ส่วนที่เสนอ | หน้าที่ |
+| ส่วน | สถานะ / หน้าที่ |
 |---|---|
-| `auth/integration/tu/TuAuthClient` | เรียก verify และแปลง upstream failures |
-| `auth/integration/tu/dto/` | Request/Response DTO ของ TU แยกจาก API DTO ของเรา |
-| `user/integration/tu/TuStudentProfileClient` | Optional student profile adapter |
-| `user/integration/tu/TuCatalogClient` | Optional faculty/department reference data |
-| `auth/service/` | ประเมิน local account policy แล้วจัดการ Authentication/session |
+| `auth/integration/tu/TuAuthClient`, `RealTuAuthClient`, `MockTuAuthClient` | มีแล้ว; เรียก authentication และแปลง upstream failures หรือใช้บัญชี demo ใน dev/test |
+| `auth/integration/tu/TuAuthUser` | มีแล้ว; identity ที่ส่งเข้า LoginService แยกจาก API DTO ของเรา |
+| `auth/service/`, `auth/controller/` | มีแล้ว; ประเมิน local account policy และสร้าง Authentication/session |
+| Student profile adapter | ยังไม่มี; ต้องกำหนดและยืนยัน mapping/status ก่อน Sync |
+| Faculty/department adapter | ยังไม่มี; เพิ่มเมื่อ workflow ต้องใช้ reference data จริง |
 
 ใช้ JSON mapping แบบ explicit เช่น `@JsonProperty("UserName")`, `@JsonProperty("PassWord")`, `@JsonProperty("StatusWork")` เมื่อชื่อ Java field เป็น camelCase และแยก DTO ของ Authentication/Profile/Log ไม่รวมทุก Endpoint เป็น DTO เดียว
 
 Response DTO ควรรับ unknown fields ได้ แต่ตรวจ required identity fields และ `status` ก่อนใช้ ห้ามให้ Response ที่ผิดรูปแบบหรือขาด Field สำคัญกลายเป็น Login สำเร็จ
 
-### 8.5 Error mapping ที่เสนอสำหรับ API ของ TU-ClubHub
+### 8.5 Error mapping สำหรับ API ของ TU-ClubHub
 
-| TU / Network condition | ผลใน TU-ClubHub ที่เสนอ | Retry |
+รหัสข้อผิดพลาดภายในยึด [Authentication errors ใน API Contract](API_v1.md#authentication-errors); พฤติกรรมต้นทางที่ยังไม่มีข้อมูลยืนยันต้องตรวจเมื่อเชื่อมบริการจริง
+
+| TU / Network condition | ผลใน TU-ClubHub | Retry |
 |---|---|---|
 | 200 + true + identity ถูกต้อง | ประเมิน local policy แล้วสร้าง Session | ไม่ต้อง |
 | 400 + invalid credentials ที่ระบุได้ | 401 + `AUTHENTICATION_FAILED` | ไม่ retry อัตโนมัติ |
@@ -606,7 +610,7 @@ Optional APIs ที่ยังไม่ได้เปิดใช้ไม่
 | Logs HTTP 200 กับตาราง FALSE | รูปแบบต้นทางไม่สอดคล้องกับ Array example |
 | Search exact/partial และหลาย filters | ไม่ได้ระบุไว้ |
 | Rate limit scope/reset/response headers | ป้องกันคำนวณโควตาต่อ Endpoint ผิด |
-| Policy การเข้าระบบของ Alumni/Employees | Authentication สำเร็จไม่ใช่ Authorization ของ TU-Circle |
+| Policy การเข้าระบบของ Alumni/Employees | ยึด Permission Matrix ของ TU-ClubHub; Authentication สำเร็จไม่ทำให้ได้สิทธิ์นักศึกษาหรือ Admin |
 | Refresh status และ conflict ระหว่าง Auth/Profile | ต้องกำหนดแหล่งข้อมูลที่ใช้ตัดสิน eligibility |
 
 ข้อมูลชุดนี้ทำให้เริ่มเขียน TU adapter และ Mock จาก Contract ที่มีหลักฐานได้แล้ว ส่วนพฤติกรรมในตารางนี้ยังต้องยืนยันเพิ่ม เอกสารนี้ไม่ใช่ผลตรวจรับการเชื่อมต่อจริง

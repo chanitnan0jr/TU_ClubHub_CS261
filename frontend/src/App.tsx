@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useAuth } from "./features/auth/AuthContext";
 import Login from "./features/auth/Login";
-import { MyApplicationsPage } from "./features/applications/pages/MyApplicationsPage";
+import MyApplicationsPage from "./features/applications/pages/MyApplicationsPage";
 
 export default function App() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
-  // กำหนด State เลือกหน้าปัจจุบัน (Default เป็น 'my-applications' เพื่อให้ตรวจงาน Task 64 ได้ หรือปรับเป็น 'search' ได้)
+  // กำหนด State เลือกหน้าปัจจุบัน (Default เป็น 'my-applications' เพื่อให้ตรวจงาน Task 64 ได้)
   const [activeTab, setActiveTab] = useState<'search' | 'my-applications' | 'my-clubs'>('my-applications');
 
   if (isLoading) {

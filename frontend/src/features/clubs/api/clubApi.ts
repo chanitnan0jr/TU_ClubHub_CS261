@@ -12,13 +12,18 @@ export const getCsrfToken = async (): Promise<{ headerName: string; token: strin
 };
 
 // GET: ดึงข้อมูลเดิมของชมรมมาแสดงในฟอร์ม
+// Backend ยังไม่มี GET /api/v1/clubs/{clubId} สำหรับกรรมการ จึงโหลดจากโปรไฟล์สาธารณะ
+// ซึ่งมีครบทุกฟิลด์ที่ PUT แก้ไขได้ (ชมรมที่ไม่ ACTIVE จะตอบ 404)
 export const getClubProfile = async (clubId: string): Promise<ClubResponseDto> => {
-  const response = await fetch(`/api/v1/clubs/${clubId}`, {
+  const response = await fetch(`/api/v1/public/clubs/${encodeURIComponent(clubId)}`, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { Accept: 'application/json' },
   });
 
   if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('ไม่พบชมรมนี้ หรือชมรมยังไม่เปิดใช้งาน');
+    }
     const errorData: ApiProblemResponse = await response.json().catch(() => ({}) as ApiProblemResponse);
     throw new Error(errorData.detail || 'ไม่สามารถโหลดข้อมูลชมรมได้');
   }
@@ -44,7 +49,11 @@ export const updateClubProfile = async (
 
   if (!response.ok) {
     const errorData: ApiProblemResponse = await response.json().catch(() => ({}) as ApiProblemResponse);
-    
+
+    if (response.status === 401) {
+      throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง');
+    }
+
     if (response.status === 403) {
       if (errorData.code === 'CSRF_INVALID') {
         throw new Error('CSRF Token ไม่ถูกต้องหรือหมดอายุ');

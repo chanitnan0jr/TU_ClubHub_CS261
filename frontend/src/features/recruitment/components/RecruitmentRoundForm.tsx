@@ -35,6 +35,11 @@ const defaultFormInput: RecruitmentRoundFormInput = {
   ],
 };
 
+const withQuestionOrder = (
+  questions: ScreeningQuestionInput[],
+): ScreeningQuestionInput[] =>
+  questions.map((question, orderIndex) => ({ ...question, orderIndex }));
+
 export const RecruitmentRoundForm = ({
   clubName = 'ชมรมอาสาพัฒนา',
   initialValues,
@@ -45,6 +50,9 @@ export const RecruitmentRoundForm = ({
   const [formData, setFormData] = useState<RecruitmentRoundFormInput>({
     ...defaultFormInput,
     ...initialValues,
+    questions: withQuestionOrder(
+      initialValues?.questions ?? defaultFormInput.questions,
+    ),
   });
 
   const [errors, setErrors] = useState<FormValidationError>({});
@@ -79,7 +87,18 @@ export const RecruitmentRoundForm = ({
 
   const handleRemoveQuestion = (index: number) => {
     const updated = formData.questions.filter((_, i) => i !== index);
-    updateField('questions', updated);
+    updateField('questions', withQuestionOrder(updated));
+  };
+
+  const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= formData.questions.length) return;
+
+    const updated = [...formData.questions];
+    const movedQuestion = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = movedQuestion;
+    updateField('questions', withQuestionOrder(updated));
   };
 
   const handleSubmit = async (isDraft: boolean) => {
@@ -363,12 +382,15 @@ export const RecruitmentRoundForm = ({
               <div className="flex flex-col gap-3">
                 {formData.questions.map((q, idx) => (
                   <QuestionInputRow
-                    key={idx}
+                    key={q.id ?? idx}
                     index={idx}
                     question={q}
                     onChangeText={handleQuestionTextChange}
                     onToggleRequired={handleToggleQuestionRequired}
+                    onMove={handleMoveQuestion}
                     onRemove={handleRemoveQuestion}
+                    isFirst={idx === 0}
+                    isLast={idx === formData.questions.length - 1}
                     disabled={isLoading}
                   />
                 ))}
