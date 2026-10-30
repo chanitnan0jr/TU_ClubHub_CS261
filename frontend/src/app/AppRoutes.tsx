@@ -1,4 +1,5 @@
 import { Route, Routes } from "react-router";
+import ApplicationRoutePage from "../pages/ApplicationRoutePage";
 import ClubDetailRoutePage from "../pages/ClubDetailRoutePage";
 import ClubEditRoutePage from "../pages/ClubEditRoutePage";
 import HomePage from "../pages/HomePage";
@@ -15,6 +16,14 @@ export default function AppRoutes() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/clubs/:clubId" element={<ClubDetailRoutePage />} />
+      <Route
+        path="/clubs/:clubId/rounds/:roundId/apply"
+        element={
+          <RequireAuth>
+            <ApplicationRoutePage />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/clubs/:clubId/edit"
         element={

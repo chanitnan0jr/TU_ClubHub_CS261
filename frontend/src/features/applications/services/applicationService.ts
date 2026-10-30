@@ -1,31 +1,57 @@
+import { apiRequest } from '../../../lib/api.ts';
+
+export interface ApplicationFormQuestion {
+  id: string;
+  type: 'TEXT';
+  questionText: string;
+  isRequired: boolean;
+  displayOrder: number;
+  maxLength: number;
+}
+
+export interface RoundApplicationForm {
+  round: {
+    id: string;
+    clubId: string;
+    title: string;
+    description: string;
+    eligibilityText: string | null;
+    opensAt: string;
+    closesAt: string;
+  };
+  questions: ApplicationFormQuestion[];
+}
+
 export interface SubmitApplicationPayload {
-  roundId: string;
-  reason: string;
+  motivation: string;
   answers: {
     questionId: string;
     answerText: string;
   }[];
-  documentTitle?: string;
-  documentUrl?: string;
+  links: {
+    label: string;
+    url: string;
+  }[];
 }
 
 export interface SubmitApplicationResponse {
-  success: boolean;
-  message: string;
-  applicationId?: string;
+  id: string;
+  clubId: string;
+  roundId: string;
+  status: string;
+  submittedAt: string;
 }
 
-export const submitApplicationAPI = async (
-  payload: SubmitApplicationPayload
-): Promise<SubmitApplicationResponse> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      console.log('Submitting application payload:', payload);
-      resolve({
-        success: true,
-        message: 'ส่งใบสมัครสำเร็จเรียบร้อยแล้ว',
-        applicationId: 'APP-' + Math.floor(100000 + Math.random() * 900000),
-      });
-    }, 1500);
-  });
-};
+export const fetchApplicationForm = (roundId: string) =>
+  apiRequest<RoundApplicationForm>(
+    `/api/v1/rounds/${encodeURIComponent(roundId)}/application-form`,
+  );
+
+export const submitApplicationAPI = (
+  roundId: string,
+  payload: SubmitApplicationPayload,
+) =>
+  apiRequest<SubmitApplicationResponse>(
+    `/api/v1/rounds/${encodeURIComponent(roundId)}/applications`,
+    { method: 'POST', body: payload },
+  );
