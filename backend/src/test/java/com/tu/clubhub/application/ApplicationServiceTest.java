@@ -1,10 +1,10 @@
 package com.tu.clubhub.application;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -12,6 +12,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
 class ApplicationServiceTest {
 
     @Mock
@@ -19,11 +20,6 @@ class ApplicationServiceTest {
 
     @InjectMocks
     private ApplicationService applicationService;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
 
     @Test
     void getApplicationsByUserId_ShouldReturnUserApplicationsOnly() {
@@ -39,6 +35,7 @@ class ApplicationServiceTest {
 
         List<ApplicationResponseDto> result = applicationService.getApplicationsByUserId(userId);
 
+        assertNotNull(result);
         assertEquals(1, result.size());
         assertEquals("TU Coding Club", result.get(0).getClubName());
         verify(applicationRepository, times(1)).findByUserIdOrderBySubmittedAtDesc(userId);
