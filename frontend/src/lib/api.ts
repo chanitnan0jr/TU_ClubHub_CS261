@@ -22,7 +22,6 @@ export interface ProblemFieldError {
   message: string
 }
 
-/** A non-2xx response, parsed from the API's application/problem+json body. */
 export class ApiError extends Error {
   readonly status: number
   readonly code?: string
@@ -71,7 +70,6 @@ async function readProblem(response: Response): Promise<ApiError> {
   return new ApiError(response.status, detail, code, fieldErrors)
 }
 
-/** Fetches the session's CSRF header, which every write request must send. */
 export async function getCsrfHeaders(): Promise<Record<string, string>> {
   const response = await fetch('/api/v1/auth/csrf', {
     credentials: 'same-origin',
@@ -82,10 +80,6 @@ export async function getCsrfHeaders(): Promise<Record<string, string>> {
   return { [csrf.headerName]: csrf.token }
 }
 
-/**
- * Sends a JSON request to the API with the session cookie. Writes add the CSRF
- * header. Resolves to `undefined` for 204 and throws ApiError for other errors.
- */
 export async function apiRequest<T>(
   url: string,
   { method = 'GET', body }: RequestOptions = {},
@@ -107,7 +101,6 @@ export async function apiRequest<T>(
   return (await response.json()) as T
 }
 
-/** A Thai message for the user; the API's English detail is kept for 400/409. */
 export function describeApiError(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     switch (error.status) {

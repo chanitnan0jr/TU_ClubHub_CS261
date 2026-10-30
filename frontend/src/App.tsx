@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "./features/auth/AuthContext";
 import Login from "./features/auth/Login";
-import MyApplicationsPage from "./features/applications/pages/MyApplicationsPage";
+import { MyApplicationsPage } from "./features/applications/pages/MyApplicationsPage";
 
 export default function App() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
