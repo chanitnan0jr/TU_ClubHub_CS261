@@ -88,6 +88,7 @@ class StudentProfileLoginIntegrationTest {
 		login(student("0612345678", null, null));
 		assertEquals("UNKNOWN", statusOf("0612345678"), "a missing tu_status is never treated as ACTIVE");
 
+		assertEquals(1, userAccountRepository.count());
 		assertEquals(1, profileRepository.count());
 	}
 
@@ -112,8 +113,21 @@ class StudentProfileLoginIntegrationTest {
 		assertThrows(Exception.class, () -> mockMvc.perform(loginRequest(username, anonymous)));
 
 		assertTrue(userAccountRepository.findByTuUsername(username).isEmpty(), "the account insert is rolled back");
+		assertEquals(0, userAccountRepository.count());
+		assertEquals(0, profileRepository.count());
 		mockMvc.perform(get("/api/v1/auth/me").cookie(anonymous.cookie()))
 				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void employeeWithStudentLikeUsernameDoesNotCreateProfile() throws Exception {
+		String username = "0661234567";
+
+		login(employee(username));
+
+		UserAccount account = userAccountRepository.findByTuUsername(username).orElseThrow();
+		assertTrue(profileRepository.findById(account.getId()).isEmpty());
+		assertEquals(0, profileRepository.count());
 	}
 
 	private void login(TuAuthUser identity) throws Exception {
