@@ -9,8 +9,7 @@ interface ClubDetailPageProps {
   isLoggedIn?: boolean;
   // Sends the visitor to the login page. Needed to sign in from this page.
   onRequestLogin?: () => void;
-  // The application form is not available yet, so the apply buttons stay
-  // disabled until a caller provides this.
+  // Routes an authenticated student to the selected round's application form.
   onNavigateToApplication?: (roundId: string) => void;
 }
 

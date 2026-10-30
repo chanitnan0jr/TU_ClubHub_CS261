@@ -1,686 +1,680 @@
-import React, { useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Link } from 'react-router';
+import { apiRequest, describeApiError } from '../../../lib/api.ts';
+import { formatThaiDateTime } from '../../../lib/format';
+import type { PublicClubProfile } from '../../clubs/types/club.ts';
+import {
+  fetchApplicationForm,
+  submitApplicationAPI,
+  type RoundApplicationForm,
+  type SubmitApplicationResponse,
+} from '../services/applicationService.ts';
 import type {
-  ScreeningQuestion,
   ApplicationFormData,
-  ApplicationFormError,
-  ApplicationStep,
-} from '../types/applicationForm';
-import { submitApplicationAPI } from '../services/applicationService';
+  ApplicationFormErrors,
+  ApplicationLinkDraft,
+} from '../types/applicationForm.ts';
+import {
+  toApplicationSubmissionPayload,
+  validateApplicationForm,
+} from '../utils/applicationValidation.ts';
 
-const mockQuestions: ScreeningQuestion[] = [
-  {
-    id: 'q1',
-    questionText:
-      'หากต้องเล่าเรื่องชีวิตในรั้วธรรมศาสตร์ผ่านภาพ 1 ภาพ คุณจะถ่ายอะไร เพราะเหตุใด?',
-    isRequired: true,
-    orderIndex: 1,
-  },
-  {
-    id: 'q2',
-    questionText: 'คุณเคยใช้กล้องหรือโปรแกรมแต่งภาพอะไรบ้าง?',
-    isRequired: false,
-    orderIndex: 2,
-  },
-];
+interface DynamicApplicationFormProps {
+  clubId: string;
+  roundId: string;
+}
 
-export const DynamicApplicationForm: React.FC = () => {
-  const [step, setStep] = useState<ApplicationStep>('form');
+interface LoadedApplication {
+  club: PublicClubProfile;
+  form: RoundApplicationForm;
+}
+
+interface LoadFailure {
+  key: string;
+  message: string;
+}
+
+type FormStep = 'form' | 'review' | 'success';
+
+const cardClass =
+  'rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6';
+const inputClass =
+  'w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-rose-400 focus:ring-2 focus:ring-rose-100';
+const primaryButtonClass =
+  'inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#C81E3D] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#A01830] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none';
+
+export function DynamicApplicationForm({
+  clubId,
+  roundId,
+}: DynamicApplicationFormProps) {
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    application: LoadedApplication;
+  } | null>(null);
+  const [loadFailure, setLoadFailure] = useState<LoadFailure | null>(null);
+  const [step, setStep] = useState<FormStep>('form');
   const [formData, setFormData] = useState<ApplicationFormData>({
-    reason: '',
-    answers: {
-      q2: 'ใช้กล้องมือถือและ Lightroom Mobile ในระดับพื้นฐาน',
-    },
-    documentTitle: 'พอร์ตโฟลิโอแนะนำตัว / ผลงานที่เคยทำ',
-    documentUrl: '',
+    motivation: '',
+    answers: {},
+    links: [],
   });
-  const [errors, setErrors] = useState<ApplicationFormError>({});
-  const [hasConfirmed, setHasConfirmed] = useState<boolean>(false);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [errors, setErrors] = useState<ApplicationFormErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<SubmitApplicationResponse | null>(null);
+  const [hasConfirmed, setHasConfirmed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const nextLinkId = useRef(0);
+  const requestKey = `${clubId}:${roundId}`;
 
-  const studentInfo = {
-    name: 'พิมพ์ชนก ใจดี',
-    studentId: '6809617xxx',
-    email: 'student@tu.ac.th',
-    faculty: 'คณะวิทยาศาสตร์และเทคโนโลยี',
+  useEffect(() => {
+    let ignore = false;
+    Promise.all([
+      fetchApplicationForm(roundId),
+      apiRequest<PublicClubProfile>(
+        `/api/v1/public/clubs/${encodeURIComponent(clubId)}`,
+      ),
+    ])
+      .then(([form, club]) => {
+        if (form.round.clubId !== club.id || form.round.id !== roundId) {
+          throw new Error('ข้อมูลชมรมหรือรอบรับสมัครไม่ตรงกัน');
+        }
+        if (!ignore) setLoaded({ key: requestKey, application: { form, club } });
+      })
+      .catch((error: unknown) => {
+        if (!ignore) {
+          setLoadFailure({
+            key: requestKey,
+            message: describeApiError(
+              error,
+              'ไม่สามารถโหลดแบบฟอร์มสมัครได้ กรุณาลองใหม่อีกครั้ง',
+            ),
+          });
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [clubId, roundId, requestKey]);
+
+  const current =
+    loaded?.key === requestKey ? loaded.application : null;
+  const loadError =
+    loadFailure?.key === requestKey ? loadFailure.message : null;
+
+  const updateFormData = (update: (data: ApplicationFormData) => ApplicationFormData) => {
+    setFormData(update);
+    setSubmitError(null);
   };
 
   const handleAnswerChange = (questionId: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      answers: { ...prev.answers, [questionId]: value },
+    updateFormData((previous) => ({
+      ...previous,
+      answers: { ...previous.answers, [questionId]: value },
+    }));
+    setErrors((previous) => {
+      const answers = { ...previous.answers };
+      delete answers[questionId];
+      const next: ApplicationFormErrors = { ...previous, answers };
+      if (Object.keys(answers).length === 0) delete next.answers;
+      return next;
+    });
+  };
+
+  const handleNext = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!current) return;
+    const nextErrors = validateApplicationForm(formData, current.form.questions);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      document.getElementById('application-form-errors')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+      return;
+    }
+    setStep('review');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const addLink = () => {
+    const newLink: ApplicationLinkDraft = {
+      id: `link-${nextLinkId.current++}`,
+      label: '',
+      url: '',
+    };
+    updateFormData((previous) => ({
+      ...previous,
+      links: [...previous.links, newLink],
     }));
   };
 
-  const validateForm = (): boolean => {
-    const newErrors: ApplicationFormError = {};
-    const answerErrors: Record<string, string> = {};
-
-    if (!formData.reason.trim()) {
-      newErrors.reason = 'กรุณาระบุเหตุผลที่สนใจเข้าร่วมชมรมนี้';
-    }
-
-    mockQuestions.forEach((q) => {
-      if (q.isRequired && (!formData.answers[q.id] || !formData.answers[q.id].trim())) {
-        answerErrors[q.id] = 'กรุณากรอกคำตอบสำหรับคำถามข้อนี้';
+  const updateLink = (
+    linkId: string,
+    field: 'label' | 'url',
+    value: string,
+  ) => {
+    updateFormData((previous) => ({
+      ...previous,
+      links: previous.links.map((link) =>
+        link.id === linkId ? { ...link, [field]: value } : link,
+      ),
+    }));
+    setErrors((previous) => {
+      const links = { ...previous.links };
+      if (links[linkId]) {
+        links[linkId] = { ...links[linkId], [field]: undefined };
+        if (!links[linkId].label && !links[linkId].url) delete links[linkId];
       }
+      const next: ApplicationFormErrors = { ...previous, links };
+      if (Object.keys(links).length === 0) delete next.links;
+      return next;
     });
-
-    if (Object.keys(answerErrors).length > 0) {
-      newErrors.answers = answerErrors;
-    }
-
-    if (
-      formData.documentUrl &&
-      !formData.documentUrl.startsWith('https://')
-    ) {
-      newErrors.documentUrl =
-        'รูปแบบ URL ไม่ถูกต้อง กรุณาระบุลิงก์ที่ขึ้นต้นด้วย https://';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
-  const handleNextToReview = () => {
-    if (validateForm()) {
-      setStep('review');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+  const removeLink = (linkId: string) => {
+    updateFormData((previous) => ({
+      ...previous,
+      links: previous.links.filter((link) => link.id !== linkId),
+    }));
+    setErrors((previous) => {
+      const links = { ...previous.links };
+      delete links[linkId];
+      const next: ApplicationFormErrors = { ...previous, links };
+      if (Object.keys(links).length === 0) delete next.links;
+      return next;
+    });
   };
 
-  const handleSubmitApplication = async () => {
-    if (!hasConfirmed || isSubmitting) return;
-
+  const handleSubmit = async () => {
+    if (!current || !hasConfirmed || isSubmitting) return;
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
-      const payload = {
-        roundId: 'ROUND-1234',
-        reason: formData.reason,
-        answers: Object.entries(formData.answers).map(([qId, ans]) => ({
-          questionId: qId,
-          answerText: ans,
-        })),
-        documentTitle: formData.documentTitle,
-        documentUrl: formData.documentUrl,
-      };
-
-      const res = await submitApplicationAPI(payload);
-      if (res.success) {
-        setStep('success');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    } catch {
-      alert('เกิดข้อผิดพลาดในการส่งใบสมัคร กรุณาลองใหม่อีกครั้ง');
+      const response = await submitApplicationAPI(
+        roundId,
+        toApplicationSubmissionPayload(formData, current.form.questions),
+      );
+      setReceipt(response);
+      setStep('success');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error: unknown) {
+      setSubmitError(
+        describeApiError(
+          error,
+          'ส่งใบสมัครไม่สำเร็จ กรุณาตรวจสอบข้อมูลแล้วลองใหม่อีกครั้ง',
+        ),
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const triggerValidationErrorDemo = () => {
-    setFormData({
-      reason: '',
-      answers: {
-        q2: 'ใช้กล้องมือถือและ Lightroom Mobile ในระดับพื้นฐาน',
-      },
-      documentTitle: 'พอร์ตโฟลิโอแนะนำตัว / ผลงานที่เคยทำ',
-      documentUrl: 'http://portfolio',
-    });
-    setErrors({
-      reason: 'กรุณาระบุเหตุผลที่สนใจเข้าร่วมชมรมนี้',
-      answers: {
-        q1: 'กรุณากรอกคำตอบสำหรับคำถามข้อนี้',
-      },
-      documentUrl:
-        'รูปแบบ URL ไม่ถูกต้อง กรุณาระบุลิงก์ที่ขึ้นต้นด้วย https://',
-    });
-    setStep('form');
-  };
+  if (!current && !loadError) {
+    return (
+      <PageShell>
+        <div className="flex min-h-60 items-center justify-center gap-3 text-sm text-slate-500">
+          <span className="animate-spin text-xl" aria-hidden="true">⏳</span>
+          <span>กำลังโหลดแบบฟอร์มสมัคร...</span>
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (loadError || !current) {
+    return (
+      <PageShell>
+        <section className={`${cardClass} text-center`} role="alert">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-xl text-rose-600">
+            !
+          </div>
+          <h1 className="text-lg font-extrabold text-slate-900">
+            ไม่สามารถเปิดแบบฟอร์มได้
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">{loadError}</p>
+          <Link
+            to={`/clubs/${encodeURIComponent(clubId)}`}
+            className={`${primaryButtonClass} mt-5`}
+          >
+            กลับไปหน้าชมรม
+          </Link>
+        </section>
+      </PageShell>
+    );
+  }
+
+  const { club, form } = current;
+  const title = club.name;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 px-4 sm:px-8 py-3 shadow-sm">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-xl bg-[#C81E3D] flex items-center justify-center text-white font-black text-xs">
-              TU
+    <PageShell>
+      <nav aria-label="เส้นทางนำทาง" className="text-xs text-slate-400">
+        <Link className="transition hover:text-rose-700" to="/">
+          ค้นหาชมรม
+        </Link>
+        <span className="mx-2">&gt;</span>
+        <Link
+          className="transition hover:text-rose-700"
+          to={`/clubs/${encodeURIComponent(clubId)}`}
+        >
+          {title}
+        </Link>
+        <span className="mx-2">&gt;</span>
+        <span className="font-medium text-slate-700">ส่งใบสมัคร</span>
+      </nav>
+
+      {step === 'success' ? (
+        <section className="flex flex-col gap-5">
+          <h1 className="text-2xl font-extrabold text-slate-900">ส่งใบสมัครสำเร็จ</h1>
+          <div className={`${cardClass} flex flex-col items-center gap-4 py-10 text-center`}>
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl font-bold text-emerald-600">
+              ✓
             </div>
-            <span className="font-extrabold text-slate-900 text-base tracking-tight">
-              ClubHub
-            </span>
-          </div>
-          <div className="flex items-center gap-4 sm:gap-6 text-xs font-semibold text-slate-600">
-            <span className="hover:text-rose-600 cursor-pointer hidden sm:inline">ค้นหาชมรม</span>
-            <span className="hover:text-rose-600 cursor-pointer hidden sm:inline">ประวัติการสมัคร</span>
-            <span className="font-bold text-slate-900">{studentInfo.name}</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Controller สำหรับทดสอบสลับหน้าจอ UI ต่างๆ */}
-      <div className="bg-slate-900 text-white text-xs py-2 px-4 flex flex-wrap items-center justify-between gap-2">
-        <span className="font-mono text-slate-300">ทดสอบเปลี่ยนสเตตัส UI:</span>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            onClick={() => {
-              setErrors({});
-              setStep('form');
-            }}
-            className={`px-2.5 py-1 rounded text-[11px] font-bold ${
-              step === 'form' && Object.keys(errors).length === 0
-                ? 'bg-rose-600'
-                : 'bg-slate-800 text-slate-300'
-            }`}
-          >
-            1. กรอกข้อมูล
-          </button>
-          <button
-            onClick={triggerValidationErrorDemo}
-            className={`px-2.5 py-1 rounded text-[11px] font-bold ${
-              Object.keys(errors).length > 0 ? 'bg-rose-600' : 'bg-slate-800 text-slate-300'
-            }`}
-          >
-            ⚠️ แสดงข้อผิดพลาด
-          </button>
-          <button
-            onClick={() => setStep('review')}
-            className={`px-2.5 py-1 rounded text-[11px] font-bold ${
-              step === 'review' ? 'bg-rose-600' : 'bg-slate-800 text-slate-300'
-            }`}
-          >
-            2. ตรวจสอบข้อมูล
-          </button>
-          <button
-            onClick={() => setStep('success')}
-            className={`px-2.5 py-1 rounded text-[11px] font-bold ${
-              step === 'success' ? 'bg-rose-600' : 'bg-slate-800 text-slate-300'
-            }`}
-          >
-            ส่งสำเร็จ
-          </button>
-          <button
-            onClick={() => setStep('already_applied')}
-            className={`px-2.5 py-1 rounded text-[11px] font-bold ${
-              step === 'already_applied' ? 'bg-rose-600' : 'bg-slate-800 text-slate-300'
-            }`}
-          >
-            สมัครแล้ว
-          </button>
-          <button
-            onClick={() => setStep('closed')}
-            className={`px-2.5 py-1 rounded text-[11px] font-bold ${
-              step === 'closed' ? 'bg-rose-600' : 'bg-slate-800 text-slate-300'
-            }`}
-          >
-            ปิดรับสมัคร
-          </button>
-        </div>
-      </div>
-
-      <div className="max-w-3xl mx-auto px-4 pt-6 flex flex-col gap-6">
-        {/* Breadcrumb */}
-        <div className="text-xs text-slate-400">
-          ค้นหาชมรม &gt; ชมรมถ่ายภาพธรรมศาสตร์ &gt;{' '}
-          <span className="text-slate-700 font-medium">ส่งใบสมัคร</span>
-        </div>
-
-        {/* ==================== 1. STATE: SUCCESS (ส่งสำเร็จ) ==================== */}
-        {step === 'success' && (
-          <div className="flex flex-col gap-6">
-            <h1 className="text-2xl font-bold text-slate-900">ผลการส่งใบสมัคร</h1>
-            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center text-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl font-bold">
-                ✓
-              </div>
-              <h2 className="text-xl font-bold text-slate-900">
-                ส่งใบสมัครสำเร็จเรียบร้อยแล้ว!
-              </h2>
-              <span className="px-4 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
-                สถานะ: รอพิจารณา (Pending)
-              </span>
-              <p className="text-xs sm:text-sm text-slate-500 max-w-md">
-                ระบบได้รับใบสมัครของคุณแล้ว กรุณารอการพิจารณาจากกรรมการชมรม
+            <h2 className="text-xl font-extrabold text-slate-900">
+              ระบบได้รับใบสมัครของคุณแล้ว
+            </h2>
+            <p className="max-w-lg text-sm leading-6 text-slate-500">
+              กรุณารอการพิจารณาจากกรรมการชมรม คุณสามารถกลับมาตรวจสอบสถานะได้ภายหลัง
+            </p>
+            {receipt && (
+              <p className="rounded-full bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600">
+                เลขที่ใบสมัคร {receipt.id} · {receipt.status}
               </p>
-            </div>
-
-            <div className="bg-slate-100/70 p-5 rounded-2xl border border-slate-200 flex flex-col gap-1 text-xs text-slate-600">
-              <span className="font-bold text-slate-800">ชมรมถ่ายภาพธรรมศาสตร์</span>
-              <span>รอบรับสมัครสมาชิกใหม่ 1/2567</span>
-              <span className="text-slate-400">วันปิดรับสมัคร: 31 สิงหาคม 2567 เวลา 23:59 น.</span>
-            </div>
-
-            <div className="flex flex-col gap-3 pt-2">
-              <button className="w-full h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-sm font-bold shadow-md transition-colors">
-                ดูประวัติการสมัครของคุณ
-              </button>
-              <button className="w-full h-11 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors">
-                กลับหน้าแรก
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ==================== 2. STATE: ALREADY APPLIED (สมัครแล้ว) ==================== */}
-        {step === 'already_applied' && (
-          <div className="flex flex-col gap-6">
-            <h1 className="text-2xl font-bold text-slate-900">การสมัครเข้าร่วมชมรม</h1>
-            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center text-center gap-3">
-              <div className="h-14 w-14 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-2xl">
-                📄
-              </div>
-              <h2 className="text-xl font-bold text-slate-900">
-                คุณได้สมัครรอบนี้แล้ว
-              </h2>
-              <p className="text-xs sm:text-sm text-rose-600 font-medium">
-                คุณได้ยื่นใบสมัครในรอบรับสมัครนี้ไปแล้ว ไม่สามารถส่งซ้ำได้
-              </p>
-              <span className="text-xs text-slate-400 pt-1">
-                สถานะใบสมัครเดิม: รอพิจารณา (Pending)
-              </span>
-            </div>
-
-            <div className="bg-slate-100/70 p-5 rounded-2xl border border-slate-200 flex flex-col gap-1 text-xs text-slate-600">
-              <span className="font-bold text-slate-800">ชมรมถ่ายภาพธรรมศาสตร์</span>
-              <span>รอบรับสมัครสมาชิกใหม่ 1/2567</span>
-              <span className="text-slate-400">วันปิดรับสมัคร: 31 สิงหาคม 2567 เวลา 23:59 น.</span>
-            </div>
-
-            <div className="flex flex-col gap-3 pt-2">
-              <button className="w-full h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-sm font-bold shadow-md transition-colors">
-                ดูประวัติการสมัครของคุณ
-              </button>
-              <button className="w-full h-11 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors">
-                กลับไปหน้าชมรม
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ==================== 3. STATE: CLOSED (ปิดรับสมัคร) ==================== */}
-        {step === 'closed' && (
-          <div className="flex flex-col gap-6">
-            <h1 className="text-2xl font-bold text-slate-900">การสมัครเข้าร่วมชมรม</h1>
-            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center text-center gap-3">
-              <div className="h-14 w-14 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-2xl">
-                📅
-              </div>
-              <h2 className="text-xl font-bold text-slate-900">
-                รอบรับสมัครปิดแล้ว
-              </h2>
-              <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-bold">
-                ปิดรับสมัครแล้ว
-              </span>
-              <p className="text-xs sm:text-sm text-rose-600 font-medium pt-1">
-                รอบรับสมัครนี้ปิดรับสมัครแล้ว ไม่สามารถส่งใบสมัครได้
-              </p>
-            </div>
-
-            <div className="bg-slate-100/70 p-5 rounded-2xl border border-slate-200 flex flex-col gap-1 text-xs text-slate-600">
-              <span className="font-bold text-slate-800">ชมรมถ่ายภาพธรรมศาสตร์</span>
-              <span>รอบรับสมัครสมาชิกใหม่ 1/2567</span>
-              <span className="text-slate-400">วันปิดรับสมัคร: 31 สิงหาคม 2567 เวลา 23:59 น.</span>
-            </div>
-
-            <div className="flex flex-col gap-3 pt-2">
-              <button className="w-full h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-sm font-bold shadow-md transition-colors">
-                กลับไปค้นหาชมรม
-              </button>
-              <button className="w-full h-11 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors">
-                กลับไปหน้าชมรม
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ==================== 4. STATE: FORM & REVIEW ==================== */}
-        {(step === 'form' || step === 'review') && (
-          <>
-            <div>
-              <h1 className="text-2xl font-extrabold text-slate-900">
-                {step === 'form' ? 'แบบฟอร์มสมัครเข้าร่วมชมรม' : 'ตรวจสอบข้อมูลใบสมัคร'}
-              </h1>
-              <p className="text-xs text-slate-500 mt-1">
-                {step === 'form'
-                  ? 'บอกเล่าความสนใจ แล้วมาเป็นส่วนหนึ่งของชมรม'
-                  : 'ตรวจสอบข้อมูลให้ครบถ้วนก่อนยืนยันการส่งใบสมัคร'}
-              </p>
-            </div>
-
-            {/* Banner ชมรม */}
-            <div className="bg-slate-100/80 p-4 rounded-2xl border border-slate-200 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-white p-2 border border-slate-200 flex items-center justify-center text-rose-600 text-xl font-bold shrink-0">
-                📷
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">ชมรมถ่ายภาพธรรมศาสตร์</h2>
-                <p className="text-xs font-medium text-slate-600">
-                  รอบรับสมัครสมาชิกใหม่ 1/2567
-                </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  วันปิดรับสมัคร: 31 สิงหาคม 2567 เวลา 23:59 น.
-                </p>
-              </div>
-            </div>
-
-            {/* Stepper (1 -> 2) */}
-            <div className="flex items-center gap-3 text-xs font-bold py-1">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`h-6 w-6 rounded-full flex items-center justify-center text-xs ${
-                    step === 'form'
-                      ? 'bg-[#C81E3D] text-white'
-                      : 'bg-emerald-500 text-white'
-                  }`}
-                >
-                  {step === 'review' ? '✓' : '1'}
-                </span>
-                <span className={step === 'form' ? 'text-rose-700' : 'text-slate-600'}>
-                  กรอกข้อมูล
-                </span>
-              </div>
-              <span className="text-slate-300">━━━━</span>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`h-6 w-6 rounded-full flex items-center justify-center text-xs ${
-                    step === 'review'
-                      ? 'bg-[#C81E3D] text-white'
-                      : 'bg-slate-200 text-slate-500'
-                  }`}
-                >
-                  2
-                </span>
-                <span className={step === 'review' ? 'text-rose-700' : 'text-slate-400'}>
-                  ตรวจสอบข้อมูล
-                </span>
-              </div>
-            </div>
-
-            {/* Banner เตือน Error (ถ้ามี) */}
-            {Object.keys(errors).length > 0 && step === 'form' && (
-              <div className="rounded-2xl bg-rose-50 p-4 border border-rose-200 text-rose-800 text-xs flex flex-col gap-1">
-                <div className="flex items-center gap-2 font-bold text-rose-700">
-                  <span className="text-base">⚠️</span>
-                  <span>ยังส่งใบสมัครไม่ได้ พบข้อผิดพลาด กรุณาตรวจสอบข้อมูลช่องที่มีสีแดง</span>
-                </div>
-                <div className="text-[11px] text-rose-600 pl-6">
-                  ไปยังช่องที่ต้องแก้ไข: เหตุผลในการสมัคร • คำถามข้อ 1 • URL
-                </div>
-              </div>
             )}
+          </div>
+          <ClubRoundSummary clubName={title} form={form} />
+          <Link
+            to={`/clubs/${encodeURIComponent(clubId)}`}
+            className={`${primaryButtonClass} w-full`}
+          >
+            กลับไปหน้าชมรม
+          </Link>
+        </section>
+      ) : (
+        <>
+          <div>
+            <h1 className="text-2xl font-extrabold text-slate-900">
+              {step === 'form' ? 'แบบฟอร์มสมัครเข้าร่วมชมรม' : 'ตรวจสอบข้อมูลใบสมัคร'}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {step === 'form'
+                ? 'บอกเล่าความสนใจ แล้วมาเป็นส่วนหนึ่งของชมรม'
+                : 'ตรวจสอบข้อมูลให้ครบถ้วนก่อนยืนยันการส่งใบสมัคร'}
+            </p>
+          </div>
 
-            {/* SECTION 1: ข้อมูลผู้สมัคร (Read-only) */}
-            <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold text-slate-900">ข้อมูลผู้สมัคร</h3>
-                <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200 flex items-center gap-1">
-                  <span>✓</span> ยืนยันตัวตนผ่าน TU Auth แล้ว
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 -mt-2">
-                ข้อมูลจากระบบ TU Auth • ไม่สามารถแก้ไขได้
-              </p>
+          <ClubRoundSummary clubName={title} form={form} />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
-                <div>
-                  <span className="text-slate-400 block mb-0.5">ชื่อ-นามสกุล</span>
-                  <span className="font-bold text-slate-800">{studentInfo.name}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block mb-0.5">รหัสนักศึกษา</span>
-                  <span className="font-bold text-slate-800">{studentInfo.studentId}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block mb-0.5">อีเมลมหาลัย</span>
-                  <span className="font-bold text-slate-800">{studentInfo.email}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block mb-0.5">คณะ</span>
-                  <span className="font-bold text-slate-800">{studentInfo.faculty}</span>
-                </div>
-              </div>
-            </section>
+          <ol className="flex items-center gap-3 text-xs font-bold" aria-label="ขั้นตอนการสมัคร">
+            <li className="flex items-center gap-2">
+              <span className={`flex h-7 w-7 items-center justify-center rounded-full ${
+                step === 'form' ? 'bg-[#C81E3D] text-white' : 'bg-emerald-500 text-white'
+              }`}>
+                {step === 'form' ? '1' : '✓'}
+              </span>
+              <span className={step === 'form' ? 'text-rose-700' : 'text-slate-600'}>
+                กรอกข้อมูล
+              </span>
+            </li>
+            <li aria-hidden="true" className="text-slate-300">━━━━</li>
+            <li className="flex items-center gap-2">
+              <span className={`flex h-7 w-7 items-center justify-center rounded-full ${
+                step === 'review' ? 'bg-[#C81E3D] text-white' : 'bg-slate-200 text-slate-500'
+              }`}>
+                2
+              </span>
+              <span className={step === 'review' ? 'text-rose-700' : 'text-slate-400'}>
+                ตรวจสอบข้อมูล
+              </span>
+            </li>
+          </ol>
 
-            {/* SECTION 2: ความสนใจและแรงบันดาลใจ */}
-            <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-3">
-              <h3 className="text-base font-bold text-slate-900">ความสนใจและแรงบันดาลใจ</h3>
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  เหตุผลที่สนใจเข้าร่วมชมรมนี้ <span className="text-rose-600">*</span>
-                </label>
+          {submitError && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">
+              {submitError}
+            </div>
+          )}
 
-                {step === 'form' ? (
-                  <>
-                    <textarea
-                      rows={4}
-                      value={formData.reason}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, reason: e.target.value }))
-                      }
-                      placeholder="อธิบายเหตุผล ความคาดหวัง หรือสิ่งที่อยากเรียนรู้จากการเข้าร่วมกิจกรรมของชมรม..."
-                      className={`w-full rounded-2xl border p-3.5 text-xs focus:outline-none transition-all ${
-                        errors.reason
-                          ? 'border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
-                          : 'border-slate-200 focus:border-rose-400'
-                      }`}
-                    />
-                    {errors.reason && (
-                      <span className="text-[11px] text-rose-600 font-medium block mt-1">
-                        {errors.reason}
-                      </span>
-                    )}
-                    <div className="text-right text-[11px] text-slate-400 mt-1">
-                      {formData.reason.length} / 500 ตัวอักษร
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 leading-relaxed">
-                    {formData.reason || 'อยากเรียนรู้การถ่ายภาพและการเล่าเรื่องผ่านภาพถ่ายจากเพื่อน ๆ ในชมรม พร้อมพัฒนาทักษะการจัดองค์ประกอบภาพ และร่วมบันทึกกิจกรรมของมหาวิทยาลัย'}
-                  </p>
-                )}
-              </div>
-            </section>
-
-            {/* SECTION 3: คำถามคัดเลือกจากทางชมรม (Dynamic Questions) */}
-            <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">คำถามคัดเลือกจากทางชมรม</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  คำตอบของคุณจะช่วยให้ชมรมรู้จักคุณมากขึ้น
-                </p>
-              </div>
-
-              {mockQuestions.map((q) => (
-                <div key={q.id} className="flex flex-col gap-1.5 pt-1">
-                  <label className="text-xs font-bold text-slate-800 leading-relaxed">
-                    {q.orderIndex}. {q.questionText}{' '}
-                    {q.isRequired ? (
-                      <span className="text-rose-600 font-bold">* (จำเป็นต้องตอบ)</span>
-                    ) : (
-                      <span className="text-slate-400 font-normal">(ไม่บังคับ)</span>
-                    )}
-                  </label>
-
-                  {step === 'form' ? (
-                    <>
-                      <textarea
-                        rows={3}
-                        value={formData.answers[q.id] || ''}
-                        onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                        placeholder="เขียนคำตอบของคุณ..."
-                        className={`w-full rounded-2xl border p-3.5 text-xs focus:outline-none transition-all ${
-                          errors.answers && errors.answers[q.id]
-                            ? 'border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
-                            : 'border-slate-200 focus:border-rose-400'
-                        }`}
-                      />
-                      {errors.answers && errors.answers[q.id] && (
-                        <span className="text-[11px] text-rose-600 font-medium">
-                          {errors.answers[q.id]}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 leading-relaxed">
-                      {formData.answers[q.id] || 'ไม่ได้กรอกข้อมูล'}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </section>
-
-            {/* SECTION 4: เอกสารประกอบ / พอร์ตโฟลิโอ (ถ้ามี) */}
-            <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  เอกสารประกอบ / พอร์ตโฟลิโอ (ถ้ามี)
-                </h3>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-start gap-2.5">
-                <span className="text-slate-400 text-sm">ℹ️</span>
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-bold text-slate-800">
-                    ลิงก์เท่านั้น • ไม่รองรับการอัปโหลดไฟล์
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    กรุณาแนบลิงก์เอกสาร เช่น Google Drive, Canva, หรือ PDF Online พร้อมเปิดสิทธิ์เข้าถึง (Access Permission) ให้กรรมการชมรมสามารถเปิดดูได้
-                  </span>
-                </div>
-              </div>
-
-              {step === 'form' ? (
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      ชื่อ/คำอธิบายเอกสาร
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.documentTitle}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, documentTitle: e.target.value }))
-                      }
-                      placeholder="พอร์ตโฟลิโอแนะนำตัว / ผลงานที่เคยทำ"
-                      className="w-full h-11 rounded-2xl border border-slate-200 px-3.5 text-xs focus:outline-none focus:border-rose-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      URL ลิงก์เอกสาร
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={formData.documentUrl}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, documentUrl: e.target.value }))
-                        }
-                        placeholder="https://example.com/pimchanok/portfolio"
-                        className={`w-full h-11 rounded-2xl border px-9 text-xs focus:outline-none transition-all ${
-                          errors.documentUrl
-                            ? 'border-rose-500 ring-2 ring-rose-100 bg-rose-50/20'
-                            : 'border-slate-200 focus:border-rose-400'
-                        }`}
-                      />
-                      <span className="absolute left-3 top-3 text-slate-400 text-xs">🔗</span>
-                    </div>
-                    {errors.documentUrl && (
-                      <span className="text-[11px] text-rose-600 font-medium block mt-1">
-                        {errors.documentUrl}
-                      </span>
-                    )}
-                    <span className="text-[11px] text-slate-400 block mt-1">
-                      ใช้ลิงก์ HTTPS และเปิดสิทธิ์ให้ผู้ที่มีลิงก์เข้าดูได้
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <span className="text-xs font-bold text-slate-800">
-                    {formData.documentTitle || 'พอร์ตโฟลิโอแนะนำตัว / ผลงานที่เคยทำ'}
-                  </span>
-                  <a
-                    href={formData.documentUrl || 'https://example.com/pimchanok/portfolio'}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-rose-600 font-medium underline break-all"
-                  >
-                    {formData.documentUrl || 'https://example.com/pimchanok/portfolio'}
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => window.open(formData.documentUrl || 'https://example.com/pimchanok/portfolio', '_blank')}
-                    className="w-full h-10 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold border border-rose-100 hover:bg-rose-100 transition-colors flex items-center justify-center gap-1.5 mt-1"
-                  >
-                    <span>↗</span>
-                    <span>ทดสอบเปิดลิงก์ในแท็บใหม่</span>
-                  </button>
-                  <span className="text-[11px] text-slate-400 text-center mt-0.5">
-                    ตรวจสอบว่ากรรมการชมรมสามารถเปิดดูเอกสารได้ก่อนส่ง
-                  </span>
+          {step === 'form' ? (
+            <form className="flex flex-col gap-5" onSubmit={handleNext}>
+              {Object.keys(errors).length > 0 && (
+                <div
+                  id="application-form-errors"
+                  className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"
+                  role="alert"
+                  aria-live="polite"
+                >
+                  <p className="font-bold">ยังส่งใบสมัครไม่ได้ กรุณาตรวจสอบข้อมูล</p>
+                  <p className="mt-1 text-xs">แก้ไขช่องที่มีข้อความแจ้งเตือนสีแดง</p>
                 </div>
               )}
-            </section>
 
-            {/* Checkbox ยืนยันในหน้า ตรวจสอบข้อมูล */}
-            {step === 'review' && (
-              <label className="flex items-start gap-3 p-4 rounded-2xl border border-slate-200 bg-white cursor-pointer shadow-sm">
+              <section className={cardClass}>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-base font-extrabold text-slate-900">ข้อมูลผู้สมัคร</h2>
+                    <p className="mt-1 text-xs text-slate-500">
+                      ระบบใช้บัญชีนักศึกษาที่เข้าสู่ระบบเพื่อระบุตัวผู้สมัคร
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
+                    ✓ ยืนยันตัวตนแล้ว
+                  </span>
+                </div>
+              </section>
+
+              <section className={cardClass}>
+                <h2 className="mb-3 text-base font-extrabold text-slate-900">
+                  ความสนใจและแรงบันดาลใจ
+                </h2>
+                <label htmlFor="application-motivation" className="mb-1.5 block text-sm font-bold text-slate-800">
+                  เหตุผลที่สนใจเข้าร่วมชมรมนี้ <span className="text-rose-600">*</span>
+                </label>
+                <textarea
+                  id="application-motivation"
+                  rows={5}
+                  value={formData.motivation}
+                  onChange={(event) => {
+                    updateFormData((previous) => ({
+                      ...previous,
+                      motivation: event.target.value,
+                    }));
+                    setErrors((previous) => {
+                      const next = { ...previous };
+                      delete next.motivation;
+                      return next;
+                    });
+                  }}
+                  placeholder="อธิบายเหตุผล ความคาดหวัง หรือสิ่งที่อยากเรียนรู้จากการเข้าร่วมกิจกรรมของชมรม..."
+                  aria-invalid={Boolean(errors.motivation)}
+                  aria-describedby={errors.motivation ? 'motivation-error' : 'motivation-count'}
+                  className={`${inputClass} resize-y ${errors.motivation ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500 focus:ring-rose-100' : ''}`}
+                />
+                {errors.motivation ? (
+                  <p id="motivation-error" className="mt-1.5 text-xs font-medium text-rose-600">
+                    {errors.motivation}
+                  </p>
+                ) : (
+                  <p id="motivation-count" className="mt-1.5 text-right text-xs text-slate-400">
+                    {Array.from(formData.motivation).length.toLocaleString('th-TH')} / 2,000 ตัวอักษร
+                  </p>
+                )}
+              </section>
+
+              <section className={cardClass}>
+                <div className="mb-4">
+                  <h2 className="text-base font-extrabold text-slate-900">
+                    คำถามคัดเลือกจากทางชมรม
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    คำตอบของคุณจะช่วยให้ชมรมรู้จักคุณมากขึ้น
+                  </p>
+                </div>
+                {form.questions.length === 0 ? (
+                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+                    รอบนี้ไม่มีคำถามเพิ่มเติม กรุณาระบุเหตุผลในการสมัครให้ครบถ้วน
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-5">
+                    {form.questions.map((question) => {
+                      const answerId = `application-answer-${question.id}`;
+                      const errorId = `${answerId}-error`;
+                      const answer = formData.answers[question.id] ?? '';
+                      const questionError = errors.answers?.[question.id];
+                      return (
+                        <div key={question.id}>
+                          <label htmlFor={answerId} className="mb-1.5 block text-sm font-bold leading-relaxed text-slate-800">
+                            {question.displayOrder}. {question.questionText}{' '}
+                            {question.isRequired ? (
+                              <span className="text-rose-600">* (จำเป็นต้องตอบ)</span>
+                            ) : (
+                              <span className="font-normal text-slate-400">(ไม่บังคับ)</span>
+                            )}
+                          </label>
+                          <textarea
+                            id={answerId}
+                            rows={4}
+                            value={answer}
+                            onChange={(event) => handleAnswerChange(question.id, event.target.value)}
+                            placeholder="เขียนคำตอบของคุณ..."
+                            aria-invalid={Boolean(questionError)}
+                            aria-describedby={questionError ? errorId : undefined}
+                            className={`${inputClass} resize-y ${questionError ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500 focus:ring-rose-100' : ''}`}
+                          />
+                          {questionError ? (
+                            <p id={errorId} className="mt-1.5 text-xs font-medium text-rose-600">
+                              {questionError}
+                            </p>
+                          ) : (
+                            <p className="mt-1.5 text-right text-xs text-slate-400">
+                              {Array.from(answer).length.toLocaleString('th-TH')} / {question.maxLength.toLocaleString('th-TH')} ตัวอักษร
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className={cardClass}>
+                <div className="mb-4">
+                  <h2 className="text-base font-extrabold text-slate-900">
+                    เอกสารประกอบ / พอร์ตโฟลิโอ <span className="font-normal text-slate-400">(ถ้ามี)</span>
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    แนบลิงก์ HTTPS ที่กรรมการสามารถเข้าถึงได้ ไม่รองรับการอัปโหลดไฟล์ (สูงสุด 5 รายการ)
+                  </p>
+                </div>
+                <div className="flex flex-col gap-4">
+                  {formData.links.map((link, index) => {
+                    const linkErrors = errors.links?.[link.id];
+                    return (
+                      <fieldset
+                        key={link.id}
+                        className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+                      >
+                        <legend className="px-1 text-xs font-bold text-slate-600">
+                          เอกสารรายการที่ {index + 1}
+                        </legend>
+                        <div className="flex flex-col gap-3">
+                          <div>
+                            <label htmlFor={`${link.id}-label`} className="mb-1 block text-xs font-bold text-slate-700">
+                              ชื่อ/คำอธิบายเอกสาร
+                            </label>
+                            <input
+                              id={`${link.id}-label`}
+                              value={link.label}
+                              onChange={(event) => updateLink(link.id, 'label', event.target.value)}
+                              placeholder="พอร์ตโฟลิโอ หรือผลงานที่เคยทำ"
+                              aria-invalid={Boolean(linkErrors?.label)}
+                              className={`${inputClass} ${linkErrors?.label ? 'border-rose-500' : ''}`}
+                            />
+                            {linkErrors?.label && (
+                              <p className="mt-1 text-xs text-rose-600">{linkErrors.label}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label htmlFor={`${link.id}-url`} className="mb-1 block text-xs font-bold text-slate-700">
+                              URL ลิงก์เอกสาร
+                            </label>
+                            <input
+                              id={`${link.id}-url`}
+                              type="url"
+                              inputMode="url"
+                              value={link.url}
+                              onChange={(event) => updateLink(link.id, 'url', event.target.value)}
+                              placeholder="https://example.com/portfolio"
+                              aria-invalid={Boolean(linkErrors?.url)}
+                              className={`${inputClass} ${linkErrors?.url ? 'border-rose-500' : ''}`}
+                            />
+                            {linkErrors?.url && (
+                              <p className="mt-1 text-xs text-rose-600">{linkErrors.url}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeLink(link.id)}
+                            className="self-end rounded-xl px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-50"
+                          >
+                            ลบเอกสารรายการนี้
+                          </button>
+                        </div>
+                      </fieldset>
+                    );
+                  })}
+                  {formData.links.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={addLink}
+                      className="self-start rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                    >
+                      + เพิ่มลิงก์เอกสาร
+                    </button>
+                  )}
+                </div>
+              </section>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+                <Link
+                  to={`/clubs/${encodeURIComponent(clubId)}`}
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  ยกเลิก
+                </Link>
+                <button type="submit" className={primaryButtonClass}>
+                  ตรวจสอบข้อมูลใบสมัคร <span className="ml-2" aria-hidden="true">→</span>
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="flex flex-col gap-5">
+              <section className={cardClass}>
+                <h2 className="text-base font-extrabold text-slate-900">ความสนใจและแรงบันดาลใจ</h2>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                  {formData.motivation}
+                </p>
+              </section>
+              {form.questions.length > 0 && (
+                <section className={`${cardClass} flex flex-col gap-5`}>
+                  <h2 className="text-base font-extrabold text-slate-900">คำตอบคำถามคัดเลือก</h2>
+                  {form.questions.map((question) => (
+                    <div key={question.id}>
+                      <h3 className="text-sm font-bold leading-relaxed text-slate-800">
+                        {question.displayOrder}. {question.questionText}
+                      </h3>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                        {formData.answers[question.id]?.trim() || 'ไม่ได้กรอกข้อมูล'}
+                      </p>
+                    </div>
+                  ))}
+                </section>
+              )}
+              <section className={cardClass}>
+                <h2 className="text-base font-extrabold text-slate-900">เอกสารประกอบ</h2>
+                {formData.links.filter((link) => link.label.trim() && link.url.trim()).length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-500">ไม่ได้แนบเอกสาร</p>
+                ) : (
+                  <ul className="mt-3 flex flex-col gap-3">
+                    {formData.links
+                      .filter((link) => link.label.trim() && link.url.trim())
+                      .map((link) => (
+                        <li key={link.id}>
+                          <p className="text-sm font-bold text-slate-800">{link.label.trim()}</p>
+                          <a
+                            href={link.url.trim()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 block break-all text-sm text-rose-700 underline"
+                          >
+                            {link.url.trim()}
+                          </a>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </section>
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
                 <input
                   type="checkbox"
                   checked={hasConfirmed}
-                  onChange={(e) => setHasConfirmed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                  onChange={(event) => setHasConfirmed(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#C81E3D]"
                 />
-                <span className="text-xs text-slate-700 font-medium leading-relaxed">
-                  ข้าพเจ้าขอรับรองว่าข้อมูลและลิงก์เอกสารดังกล่าวเป็นความจริง และได้เปิดสิทธิ์การเข้าถึงเอกสารเรียบร้อยแล้ว
-                </span>
+                <span>ฉันตรวจสอบข้อมูลและยืนยันว่าข้อมูลในใบสมัครถูกต้อง</span>
               </label>
-            )}
-
-            {/* Action Bottom Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  if (step === 'review') setStep('form');
-                }}
-                className="w-full sm:w-auto px-8 h-12 rounded-2xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
-              >
-                {step === 'form' ? 'ยกเลิก' : 'ย้อนกลับไปแก้ไข'}
-              </button>
-
-              {step === 'form' ? (
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
                 <button
                   type="button"
-                  onClick={handleNextToReview}
-                  className="w-full sm:w-auto px-8 h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-xs font-bold shadow-md transition-colors"
+                  onClick={() => {
+                    setStep('form');
+                    setHasConfirmed(false);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  disabled={isSubmitting}
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                 >
-                  ถัดไป: ตรวจสอบข้อมูล ➔
+                  กลับไปแก้ไข
                 </button>
-              ) : (
                 <button
                   type="button"
+                  onClick={handleSubmit}
                   disabled={!hasConfirmed || isSubmitting}
-                  onClick={handleSubmitApplication}
-                  className="w-full sm:w-auto px-8 h-12 rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-xs font-bold shadow-md transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className={primaryButtonClass}
                 >
-                  {isSubmitting ? (
-                    <>
-                      <span className="animate-spin text-sm">⏳</span>
-                      <span>กำลังส่งใบสมัคร...</span>
-                    </>
-                  ) : (
-                    <span>ยืนยันการส่งใบสมัคร</span>
-                  )}
+                  {isSubmitting ? 'กำลังส่งใบสมัคร...' : 'ยืนยันและส่งใบสมัคร'}
                 </button>
-              )}
+              </div>
             </div>
-          </>
-        )}
-      </div>
+          )}
+        </>
+      )}
+    </PageShell>
+  );
+}
+
+function PageShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] pb-16 font-sans text-slate-800">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-8">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
+          <Link to="/" className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#C81E3D] text-xs font-black text-white shadow-sm">
+              TU
+            </span>
+            <span className="text-base font-extrabold tracking-tight text-slate-900">
+              ClubHub
+            </span>
+          </Link>
+          <span className="text-xs font-semibold text-slate-500">แบบฟอร์มสมัครชมรม</span>
+        </div>
+      </header>
+      <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 pt-6 sm:pt-8">
+        {children}
+      </main>
     </div>
   );
-};
+}
+
+function ClubRoundSummary({
+  clubName,
+  form,
+}: {
+  clubName: string;
+  form: RoundApplicationForm;
+}) {
+  return (
+    <section className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-100/80 p-4">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-xl font-bold text-rose-700">
+        TU
+      </div>
+      <div className="min-w-0">
+        <h2 className="truncate text-sm font-extrabold text-slate-900">{clubName}</h2>
+        <p className="mt-0.5 text-xs font-medium text-slate-600">{form.round.title}</p>
+        <p className="mt-1 text-[11px] text-slate-400">
+          ปิดรับสมัคร {formatThaiDateTime(form.round.closesAt)}
+        </p>
+      </div>
+    </section>
+  );
+}

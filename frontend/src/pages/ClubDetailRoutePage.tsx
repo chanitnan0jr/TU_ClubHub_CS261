@@ -19,6 +19,9 @@ export default function ClubDetailRoutePage() {
       onRequestLogin={() =>
         navigate(`/login?next=${encodeURIComponent(`/clubs/${clubId}`)}`)
       }
+      onNavigateToApplication={(roundId) =>
+        navigate(`/clubs/${clubId}/rounds/${roundId}/apply`)
+      }
     />
   );
 }

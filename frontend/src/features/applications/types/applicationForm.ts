@@ -1,21 +1,21 @@
-export interface ScreeningQuestion {
+import type { ApplicationFormQuestion } from '../services/applicationService.ts';
+
+export interface ApplicationLinkDraft {
   id: string;
-  questionText: string;
-  isRequired: boolean;
-  orderIndex: number;
+  label: string;
+  url: string;
 }
 
 export interface ApplicationFormData {
-  reason: string;
+  motivation: string;
   answers: Record<string, string>;
-  documentTitle: string;
-  documentUrl: string;
+  links: ApplicationLinkDraft[];
 }
 
-export interface ApplicationFormError {
-  reason?: string;
+export interface ApplicationFormErrors {
+  motivation?: string;
   answers?: Record<string, string>;
-  documentUrl?: string;
+  links?: Record<string, { label?: string; url?: string }>;
 }
 
-export type ApplicationStep = 'form' | 'review' | 'success' | 'already_applied' | 'closed';
+export type { ApplicationFormQuestion };
