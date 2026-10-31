@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { apiRequest, describeApiError } from '../../../lib/api.ts';
 import { formatThaiDateTime } from '../../../lib/format';
 import type { PublicClubProfile } from '../../clubs/types/club.ts';
@@ -24,32 +24,28 @@ interface DynamicApplicationFormProps {
   roundId: string;
 }
 
-interface LoadedApplication {
-  club: PublicClubProfile;
-  form: RoundApplicationForm;
-}
-
 interface LoadFailure {
   key: string;
   message: string;
 }
 
-type FormStep = 'form' | 'review' | 'success';
+type FormStep = 'form' | 'review';
 
 const cardClass =
   'rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6';
 const inputClass =
   'w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-rose-400 focus:ring-2 focus:ring-rose-100';
 const primaryButtonClass =
-  'inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#C81E3D] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#A01830] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none';
+  'inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#C81E3D] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#A01830] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C81E3D] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none';
 
 export function DynamicApplicationForm({
   clubId,
   roundId,
 }: DynamicApplicationFormProps) {
+  const navigate = useNavigate();
   const [loaded, setLoaded] = useState<{
     key: string;
-    application: LoadedApplication;
+    application: { club: PublicClubProfile; form: RoundApplicationForm };
   } | null>(null);
   const [loadFailure, setLoadFailure] = useState<LoadFailure | null>(null);
   const [step, setStep] = useState<FormStep>('form');
@@ -63,6 +59,8 @@ export function DynamicApplicationForm({
   const [receipt, setReceipt] = useState<SubmitApplicationResponse | null>(null);
   const [hasConfirmed, setHasConfirmed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const nextLinkId = useRef(0);
   const requestKey = `${clubId}:${roundId}`;
 
@@ -187,7 +185,7 @@ export function DynamicApplicationForm({
   };
 
   const handleSubmit = async () => {
-    if (!current || !hasConfirmed || isSubmitting) return;
+    if (!current || !hasConfirmed || isSubmitting || hasSubmitted) return;
     setIsSubmitting(true);
     setSubmitError(null);
     try {
@@ -196,7 +194,8 @@ export function DynamicApplicationForm({
         toApplicationSubmissionPayload(formData, current.form.questions),
       );
       setReceipt(response);
-      setStep('success');
+      setHasSubmitted(true);
+      setShowSuccessDialog(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: unknown) {
       setSubmitError(
@@ -263,35 +262,7 @@ export function DynamicApplicationForm({
         <span className="font-medium text-slate-700">ส่งใบสมัคร</span>
       </nav>
 
-      {step === 'success' ? (
-        <section className="flex flex-col gap-5">
-          <h1 className="text-2xl font-extrabold text-slate-900">ส่งใบสมัครสำเร็จ</h1>
-          <div className={`${cardClass} flex flex-col items-center gap-4 py-10 text-center`}>
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl font-bold text-emerald-600">
-              ✓
-            </div>
-            <h2 className="text-xl font-extrabold text-slate-900">
-              ระบบได้รับใบสมัครของคุณแล้ว
-            </h2>
-            <p className="max-w-lg text-sm leading-6 text-slate-500">
-              กรุณารอการพิจารณาจากกรรมการชมรม คุณสามารถกลับมาตรวจสอบสถานะได้ภายหลัง
-            </p>
-            {receipt && (
-              <p className="rounded-full bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600">
-                เลขที่ใบสมัคร {receipt.id} · {receipt.status}
-              </p>
-            )}
-          </div>
-          <ClubRoundSummary clubName={title} form={form} />
-          <Link
-            to={`/clubs/${encodeURIComponent(clubId)}`}
-            className={`${primaryButtonClass} w-full`}
-          >
-            กลับไปหน้าชมรม
-          </Link>
-        </section>
-      ) : (
-        <>
+      <>
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900">
               {step === 'form' ? 'แบบฟอร์มสมัครเข้าร่วมชมรม' : 'ตรวจสอบข้อมูลใบสมัคร'}
@@ -619,15 +590,34 @@ export function DynamicApplicationForm({
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={!hasConfirmed || isSubmitting}
+                  disabled={!hasConfirmed || isSubmitting || hasSubmitted}
                   className={primaryButtonClass}
+                  aria-live="polite"
                 >
-                  {isSubmitting ? 'กำลังส่งใบสมัคร...' : 'ยืนยันและส่งใบสมัคร'}
+                  {isSubmitting ? (
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                      />
+                      <span>กำลังส่งใบสมัคร...</span>
+                    </>
+                  ) : hasSubmitted ? (
+                    'ส่งใบสมัครแล้ว'
+                  ) : (
+                    'ยืนยันและส่งใบสมัคร'
+                  )}
                 </button>
               </div>
             </div>
           )}
-        </>
+      </>
+      {showSuccessDialog && (
+        <SuccessDialog
+          receipt={receipt}
+          onClose={() => setShowSuccessDialog(false)}
+          onViewApplications={() => navigate('/profile/applications')}
+        />
       )}
     </PageShell>
   );
@@ -652,6 +642,69 @@ function PageShell({ children }: { children: ReactNode }) {
       <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 pt-6 sm:pt-8">
         {children}
       </main>
+    </div>
+  );
+}
+
+function SuccessDialog({
+  receipt,
+  onClose,
+  onViewApplications,
+}: {
+  receipt: SubmitApplicationResponse | null;
+  onClose: () => void;
+  onViewApplications: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="application-success-title"
+        className="w-full max-w-md rounded-3xl bg-white p-7 text-center shadow-2xl"
+      >
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl font-bold text-emerald-600">
+          ✓
+        </div>
+        <h2
+          id="application-success-title"
+          className="mt-4 text-xl font-extrabold text-slate-900"
+        >
+          ส่งใบสมัครสำเร็จ
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          ระบบได้รับใบสมัครของคุณแล้ว สามารถไปตรวจสอบประวัติการสมัครได้
+        </p>
+        {receipt && (
+          <p className="mt-3 inline-flex rounded-full bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-600">
+            เลขที่ใบสมัคร {receipt.id} · {receipt.status}
+          </p>
+        )}
+        <div className="mt-6 flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={onViewApplications}
+            className={primaryButtonClass}
+          >
+            ไปยังประวัติการสมัคร
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C81E3D]"
+          >
+            ปิด
+          </button>
+        </div>
+        <p className="mt-4 text-xs leading-5 text-slate-400">
+          หน้ารายการประวัติยังรอการเชื่อมต่อ API ของ US-04
+        </p>
+      </section>
     </div>
   );
 }

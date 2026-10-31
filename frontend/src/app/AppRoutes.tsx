@@ -4,6 +4,7 @@ import ClubDetailRoutePage from "../pages/ClubDetailRoutePage";
 import ClubEditRoutePage from "../pages/ClubEditRoutePage";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
+import MyApplicationsPage from "../pages/MyApplicationsPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import QuestionManagementRoutePage from "../pages/QuestionManagementRoutePage";
 import RequireAuth from "./RequireAuth";
@@ -37,6 +38,14 @@ export default function AppRoutes() {
         element={
           <RequireAuth>
             <QuestionManagementRoutePage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/profile/applications"
+        element={
+          <RequireAuth>
+            <MyApplicationsPage />
           </RequireAuth>
         }
       />
