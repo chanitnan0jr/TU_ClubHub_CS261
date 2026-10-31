@@ -12,7 +12,9 @@ Routes live in `src/app/AppRoutes.tsx`, under the path prefixes the backend forw
 |---|---|---|
 | `/` | Public | Shows the login form without a session. After login it shows the account ID/role, logout, and a launcher where you enter a club ID (and round ID), because no API lists a user's clubs or rounds yet. |
 | `/login` | Public | Login form. After login it returns to the `next` path (same-site paths only), or `/`. |
-| `/clubs/:clubId` | Public | `ClubDetailPage` reads `GET /api/v1/public/clubs/{id}` and `/recruitment-rounds` and shows only the fields they return. An unknown club shows "not found"; a failed load shows a retry button instead of placeholder data. The apply button is disabled because the application endpoints do not exist yet. |
+| `/clubs/:clubId` | Public | `ClubDetailPage` reads `GET /api/v1/public/clubs/{id}` and `/recruitment-rounds` and shows only the fields they return. An unknown club shows "not found"; a failed load shows a retry button instead of placeholder data. The apply action opens the session-protected form when a round is available. |
+| `/clubs/:clubId/rounds/:roundId/apply` | Session | Loads the applicant form and questions from `GET /api/v1/rounds/{roundId}/application-form`, validates answers/HTTPS document links, reviews the submission, and posts to `POST /api/v1/rounds/{roundId}/applications`. The form-load endpoint is not implemented by the backend yet. |
+| `/profile/applications` | Session | Placeholder destination after successful submission. Application history is not connected because the US-04 API is not implemented. |
 | `/clubs/:clubId/edit` | Session | `ClubEditFormContainer` is prefilled from the public profile, because there is no committee `GET /api/v1/clubs/{clubId}`, and saves with `PUT`. Blank optional fields are sent as `null`. A non-committee user gets the backend's 403. A club that is not `ACTIVE` cannot be loaded. |
 | `/clubs/:clubId/rounds/new` | Session | `RoundCreateRoutePage` creates the round with its questions through `POST /api/v1/clubs/{clubId}/rounds` and, for **บันทึกและเผยแพร่**, publishes it with `PATCH … {action: PUBLISH, version}`. A draft opens the questions page; it cannot be published later from the UI until a round read API exists. The form has no capacity field, because rounds have no seat limit. |
 | `/clubs/:clubId/rounds/:roundId/questions` | Session | `QuestionManagementPage` lists, adds, edits, deletes and reorders questions through `/api/v1/rounds/{roundId}/questions`. The backend allows these writes only while the round is an open draft with no applications and answers 409 without a reason otherwise, which the page explains. Applicant counts are not shown because the API does not return them. |
@@ -23,7 +25,7 @@ Components without a route yet:
 |---|---|
 | Authentication | `AuthContext` calls the `csrf`, `login`, `me`, and `logout` endpoints under `/api/v1/auth`, sending cookies and CSRF for writes. |
 | Recruitment round form | `RecruitmentRoundForm` is routed at `/clubs/:clubId/rounds/new` (below). Editing an existing round is not wired, because the backend has no round list or get yet. |
-| Application form | `DynamicApplicationForm` is a prototype with sample student/questions and local form/review/success states. It has no route, and its `submitApplicationAPI` is a local stub that reports success without calling the backend. |
+| Application form | `DynamicApplicationForm` loads the form and questions from the application-form API, validates and submits to the real submission API, and shows a success dialog. The US-04 history route is currently a clear placeholder. No file uploads are supported by the API contract; document links are HTTPS URLs. |
 | Club profile form | `src/ClubProfileForm.tsx` is not used by any route. |
 
 `/dashboard/**` and `/profile` are forwarded by the backend but have no frontend screen.
@@ -50,7 +52,7 @@ For backend mock authentication, use the `dev` profile with `TU_AUTH_MODE=mock` 
 | `npm run dev` | Vite development server |
 | `npm run build` | `tsc -b` followed by Vite; writes `dist/` |
 | `npm run lint` | Oxlint |
-| `npm test` | Node test runner for every `tests/*.test.ts` file: validation, the API client, club-detail mapping, the club edit form, question API paths, and routing helpers. There are no component or browser tests. |
+| `npm test` | `tsx --test` runs every `tests/*.test.ts` file, including application-form component tests with jsdom as well as validation, API client, club, question, and routing tests. |
 | `npm run preview` | Preview built assets; this command does not start the backend |
 
 There are no `typecheck` or `test:run` scripts. CI runs lint, `npm test`, and build. Tailwind is loaded from `src/index.css` through the PostCSS plugin in `postcss.config.js`.
@@ -63,4 +65,4 @@ There are no `typecheck` or `test:run` scripts. CI runs lint, `npm test`, and bu
 
 Club profile updates use `ClubUpdateRequestDto`; category/tags are read-only, and blank optional values are sent as `null`. Public profile and open-round responses have their own DTOs; `ClubDetailData` is built from them in `clubService.ts`.
 
-Application submission uses `motivation`, `answers[]`, and `links[]` from API Contract §11. The prototype's `reason` and single `documentUrl` fields still need mapping, real question IDs, validation limits, and a client. The submission endpoint itself remains pending; a local success screen does not indicate database persistence.
+Application submission uses `motivation`, `answers[]`, and `links[]` from API Contract §11. The actual form route requires the backend application-form endpoint and posts to the implemented submission endpoint. The success dialog can navigate to `/profile/applications`, but the destination remains a placeholder until the US-04 history API and list UI are implemented.
