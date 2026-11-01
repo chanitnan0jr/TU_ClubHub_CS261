@@ -13,7 +13,7 @@ TU-ClubHub is a web platform in development for Thammasat University students to
 | Club profile (US-06) | `PUT /api/v1/clubs/{clubId}` with committee guard, rechecked inside the service transaction; `/clubs/:clubId/edit` prefills from the public profile and saves | `GET /api/v1/clubs/{clubId}` is contract-only; category/tag writes |
 | Recruitment (US-07) | Create, replace, publish, and close APIs with version checks and the self-review restriction; responses follow the `Round` schema, including questions; form component | Committee list/detail `GET`, `CANCEL` (effective `PRESIDENT`), and frontend integration of the round form |
 | Questions (US-08) | Questions saved with round `POST`/`PUT`, plus list/create/update/delete/reorder under `/api/v1/rounds/{roundId}/questions` with the self-review restriction and Problem error bodies; `/clubs/:clubId/rounds/:roundId/questions` uses them | Specific conflict codes such as `QUESTION_HAS_ANSWERS` (409 currently returns `RESOURCE_CONFLICT`) |
-| Applications (US-03) | `POST /api/v1/rounds/{roundId}/applications` saves the application, answers, links, and initial history in one transaction, with session/CSRF checks and Problem errors; database tables; a form prototype | `GET .../application-form`, a submission client, and real question data; the prototype does not persist applications |
+| Applications (US-03) | `GET /api/v1/rounds/{roundId}/application-form` returns an open round's questions; `POST /api/v1/rounds/{roundId}/applications` saves the application, answers, links, and initial history in one transaction, with session/CSRF checks and Problem errors; database tables; a form prototype | A submission client and real question data in the form; the prototype does not persist applications |
 | Later workflows | Schema and design for review, results, membership, notifications, and reporting | Application history, decisions, confirmation/decline, Admin APIs, and dashboards |
 | Runtime | Flyway migrations, health endpoint, Docker/Compose, and CI workflow | Deployment and verification of the selected release |
 
@@ -39,7 +39,7 @@ Dependency versions are recorded in [frontend/package.json](frontend/package.jso
 |---|---|
 | [Commit rules](COMMIT_RULES.md) | Conventional Commit format and project commit guidance |
 | [API v1 contract](docs/api/API_v1.md) | Shared endpoint, session, CSRF, response, and error conventions |
-| [Main OpenAPI specification](docs/api/openapi.yaml) | Authentication, clubs, health, and application submission, plus the pending application-form and Sprint 2 contracts |
+| [Main OpenAPI specification](docs/api/openapi.yaml) | Authentication, clubs, health, the application form and submission, plus the pending Sprint 2 contracts |
 | [Recruitment OpenAPI specification](docs/api/rounds.openapi.yaml) | Round/question writes plus pending committee reads and cancellation |
 | [System architecture](docs/architecture/system-architecture.md) | System boundaries, modules, security, workflows, and deployment target |
 | [Sprint 2 Task74 artefacts](docs/architecture/task74-sprint2-analysis.md) | Draft review packet linking the business flow, state machine, permissions, rule index, decisions, Story/AC traceability, QA scenarios, and approval checklist |
