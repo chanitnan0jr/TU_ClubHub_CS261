@@ -4,7 +4,7 @@
 |---|---|
 | Version | `v1` |
 | Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.2.0), `rounds.openapi.yaml` (v1.1.0), and `task75-sprint2-design.md` |
-| Last updated | 2026-10-28 |
+| Last updated | 2026-11-01 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
@@ -353,7 +353,13 @@ All `/api/v1` errors use `Content-Type: application/problem+json`. The response 
 }
 ```
 
-`fieldErrors` is omitted when an error is not associated with request fields. Endpoints may define a `reason` extension to distinguish conflicts under the shared `RESOURCE_CONFLICT` code. Clients should branch on `status`, `code`, and documented `reason` values, not on localized human-readable messages.
+The five standard members `type`, `title`, `status`, `detail`, and `instance`, plus `code` and `traceId`, are required. The HTTP status and body status always agree. `type` is a stable `urn:tuclubhub:problem:*` URI reference; validation uses `validation-error`. `title` is canonical for each code across controllers, security filters and servlet fallback errors. `instance` is the request path without query parameters. The implementation uses Spring `ProblemDetail` with flattened extension fields.
+
+`fieldErrors` is an empty array when an error is not associated with request fields. Endpoints may define a `reason` extension to distinguish conflicts under the shared `RESOURCE_CONFLICT` code. Clients should branch on HTTP status, `code`, and documented `reason` values, not on localized human-readable messages. Existing application-owned service messages are allowlisted; arbitrary exception messages, parser output and rejected values are never used as error detail. Unexpected failures use `The request could not be completed.` Logs correlate by trace ID and record exception type/location without raw exception messages, SQL, credentials or query strings.
+
+Missing and hidden public/availability resources use identical type/title/detail/code for their documented 404 class. Keep Task74–75 distinctions: existing unauthorized private resources use 403; missing private resources use 404 when the caller may inspect that resource scope. The parent-club permission guard still rejects unauthorized callers before revealing child resources. This task does not implement pending US-04/US-09 endpoints.
+
+MVC framework errors preserve their semantic headers, including `Allow` for 405, supported `Accept` types for 415, and the existing login limiter's `Retry-After` for 429. CSRF remains enabled: missing/invalid tokens return 403 `CSRF_INVALID`, independently of RBAC. Internal servlet ERROR dispatches can reach the fallback handler; ordinary requests do not gain new public access. API fallback responses remain Problem JSON even when `Accept: text/html` is sent. Non-API health and page responses retain their configured behavior.
 
 | Status | Typical code | Use |
 |---|---|---|
@@ -363,11 +369,18 @@ All `/api/v1` errors use `Content-Type: application/problem+json`. The response 
 | `404` | `RESOURCE_NOT_FOUND`, `CLUB_NOT_FOUND` | Resource does not exist; public/availability visibility exceptions remain explicitly documented per endpoint |
 | `405` | `METHOD_NOT_ALLOWED` | The path exists but does not support the request method |
 | `409` | `RESOURCE_CONFLICT` | Duplicate request or invalid current-state transition |
+| `415` | `HTTP_415` | Unsupported request content type; retains the existing generic framework-code convention |
 | `429` | `RATE_LIMITED` | Request rate limit exceeded; include `Retry-After` when known |
 | `500` | `INTERNAL_ERROR` | Unexpected server failure |
 | `503` | `SERVICE_UNAVAILABLE`, `AUTH_PROVIDER_UNAVAILABLE` | A required dependency such as the database or TU Authentication API is unavailable |
 
 The table is the shared error vocabulary. An endpoint's OpenAPI operation lists the errors relevant to it. Only `POST /api/v1/auth/login` is rate limited; its thresholds and retry policy are documented with that endpoint. Any other limiter must document its thresholds before release.
+
+### Frontend error integration (Task80)
+
+Use `frontend/src/lib/api.ts` as the HTTP/error boundary; the older club editor API delegates to it. The client uses the HTTP status as authoritative, retains `code`, `reason`, `traceId` and field paths, and converts server errors to UI-owned messages. It does not display arbitrary server `detail`, `title`, parser errors, HTML or SQL. Field error paths/codes remain available, with safe localized messages. Network failures have a separate message. Malformed responses use a generic safe fallback.
+
+`AuthProvider` subscribes to deduplicated authentication-failure notifications. A protected-resource 401 clears stale authentication and the existing `RequireAuth` navigation leads to `/login?next=...`; the Login page shows a session notice. Suspended-account 403 clears authentication and shows an account notice. Ordinary RBAC/CSRF 403 does not log out the user. Login credential rejection is handled on the Login form, not as a session-expired redirect. The client creates no Toast; components own their single Alert/Toast. No automatic write retry is added, including for CSRF/503 failures. See [Task80 verification and reviewer notes](../testing/task80-error-handling.md).
 
 ## 7. Authorization rules
 
