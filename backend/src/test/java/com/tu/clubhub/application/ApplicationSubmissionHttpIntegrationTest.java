@@ -450,6 +450,82 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertTargetEmpty();
     }
 
+    @Test
+    void applicationFormListsTextQuestionsInOrderWithoutCsrfOrWrites() throws Exception {
+        // A gap and reversed insertion order: displayOrder, not id, decides the order.
+        jdbc.update("UPDATE application_questions SET display_order = 4, max_length = 300, is_required = false WHERE id = ?",
+                firstQuestion);
+        var result = form(Long.toString(roundId));
+        assertEquals(200, result.getResponse().getStatus(), responseText(result));
+        assertTrue(result.getResponse().getHeader("Cache-Control").contains("no-store"));
+        JsonNode form = json(result);
+        assertEquals(Set.of("round", "questions"), form.propertyNames());
+        JsonNode round = form.path("round");
+        assertEquals(Set.of("id", "clubId", "title", "description", "eligibilityText", "opensAt", "closesAt"),
+                round.propertyNames());
+        assertEquals(Long.toString(roundId), round.path("id").asText());
+        assertEquals(Long.toString(clubId), round.path("clubId").asText());
+        assertEquals("Task45 round", round.path("title").asText());
+        assertEquals("Fictional details", round.path("description").asText());
+        assertTrue(round.path("eligibilityText").isNull());
+        assertEquals(NOW.minusSeconds(60), Instant.parse(round.path("opensAt").asText()));
+        assertEquals(NOW.plusSeconds(60), Instant.parse(round.path("closesAt").asText()));
+        JsonNode questions = form.path("questions");
+        assertEquals(2, questions.size());
+        assertEquals(Long.toString(secondQuestion), questions.get(0).path("id").asText());
+        JsonNode last = questions.get(1);
+        assertEquals(Set.of("id", "type", "questionText", "isRequired", "displayOrder", "maxLength"), last.propertyNames());
+        assertEquals(Long.toString(firstQuestion), last.path("id").asText());
+        assertEquals("TEXT", last.path("type").asText());
+        assertEquals("Fictional experience question", last.path("questionText").asText());
+        assertFalse(last.path("isRequired").asBoolean());
+        assertEquals(4, last.path("displayOrder").asInt());
+        assertEquals(300, last.path("maxLength").asInt());
+        assertTargetEmpty();
+    }
+
+    @Test
+    void applicationFormChecksSessionIdStudentAndVisibilityInOrder() throws Exception {
+        assertEquals(401, mvc.perform(get(formPath(Long.toString(roundId)))).andReturn().getResponse().getStatus());
+        assertProblem(form("abc"), 400, "INVALID_RESOURCE_ID", null);
+        assertProblem(form("9223372036854775808"), 400, "INVALID_RESOURCE_ID", null);
+        // The student check precedes the round lookup, so it applies even to a missing round.
+        jdbc.update("UPDATE student_profiles SET student_status = 'GRADUATED' WHERE user_id = ?", userId);
+        assertProblem(form(Long.toString(Long.MAX_VALUE)), 403, "ACCESS_DENIED", null);
+        jdbc.update("UPDATE student_profiles SET student_status = 'ACTIVE' WHERE user_id = ?", userId);
+        assertProblem(form(Long.toString(Long.MAX_VALUE)), 404, "RESOURCE_NOT_FOUND", null);
+        jdbc.update("UPDATE clubs SET status = 'INACTIVE' WHERE id = ?", clubId);
+        assertProblem(form(Long.toString(roundId)), 404, "RESOURCE_NOT_FOUND", null);
+        jdbc.update("UPDATE clubs SET status = 'ACTIVE' WHERE id = ?", clubId);
+        jdbc.update("UPDATE recruitment_rounds SET publication_status = 'DRAFT', published_at = NULL WHERE id = ?", roundId);
+        assertProblem(form(Long.toString(roundId)), 404, "RESOURCE_NOT_FOUND", null);
+        assertTargetEmpty();
+    }
+
+    @Test
+    void applicationFormReportsUnavailableRoundsWithSubmissionReasons() throws Exception {
+        clock.now.set(NOW.minusSeconds(61));
+        assertProblem(form(Long.toString(roundId)), 409, "RESOURCE_CONFLICT", "ROUND_NOT_OPEN");
+        clock.now.set(NOW.minusSeconds(60));
+        assertEquals(200, form(Long.toString(roundId)).getResponse().getStatus(), "Opening is inclusive");
+        clock.now.set(NOW.plusSeconds(60));
+        assertProblem(form(Long.toString(roundId)), 409, "RESOURCE_CONFLICT", "ROUND_CLOSED");
+        clock.now.set(NOW);
+        jdbc.update("UPDATE recruitment_rounds SET closed_at = ? WHERE id = ?", NOW.minusSeconds(1).atOffset(ZoneOffset.UTC), roundId);
+        assertProblem(form(Long.toString(roundId)), 409, "RESOURCE_CONFLICT", "ROUND_CLOSED");
+        jdbc.update("UPDATE recruitment_rounds SET closed_at = NULL, publication_status = 'CANCELLED' WHERE id = ?", roundId);
+        clock.now.set(NOW.minusSeconds(61));
+        assertProblem(form(Long.toString(roundId)), 409, "RESOURCE_CONFLICT", "ROUND_CANCELLED");
+        assertTargetEmpty();
+    }
+
+    @Test
+    void suspendedAccountCannotLoadTheApplicationForm() throws Exception {
+        jdbc.update("UPDATE users SET account_status = 'SUSPENDED' WHERE id = ?", userId);
+        assertProblem(form(Long.toString(roundId)), 403, "ACCOUNT_NOT_ALLOWED", null);
+        assertNull(sessions.findById(sessionId(client.cookie())));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"malformed", "unknown-field", "empty-body", "invalid-id"})
     void suspendedAccountPrecedesBodyAndIdValidationAndInvalidatesSession(String scenario) throws Exception {
@@ -759,6 +835,10 @@ class ApplicationSubmissionHttpIntegrationTest {
     }
 
     private String path() { return "/api/v1/rounds/" + roundId + "/applications"; }
+    private static String formPath(String rawRoundId) { return "/api/v1/rounds/" + rawRoundId + "/application-form"; }
+    private MvcResult form(String rawRoundId) throws Exception {
+        return mvc.perform(get(formPath(rawRoundId)).cookie(client.cookie())).andReturn();
+    }
     private String body(String motivation) {
         return body(motivation, new SubmissionTarget(roundId, firstQuestion, secondQuestion));
     }
