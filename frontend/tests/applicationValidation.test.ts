@@ -87,6 +87,11 @@ test('omits unanswered optional questions and empty links from the API payload',
     ],
   })
 
+  assert.deepEqual(
+    validateApplicationForm(validForm({ links: [form.links[0]] }), questions),
+    {},
+    'surrounding spaces are trimmed, not rejected',
+  )
   assert.deepEqual(toApplicationSubmissionPayload(form, questions), {
     motivation: 'อยากเรียนรู้',
     answers: [{ questionId: '10', answerText: 'คำตอบ' }],
