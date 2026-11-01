@@ -10,6 +10,8 @@ import java.net.URI;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -65,14 +67,16 @@ class RealTuAuthClientTest {
 		server.verify();
 	}
 
-	@Test
-	void returnsEmptyForDocumentedBadRequestInvalidCredentials() {
+	// The first body is documented in TU_API.md; the second is what the live API returned on 2026-11-01.
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"{\"status\":false,\"message\":\"User or Password Invalid!\"}",
+			"{\"status\":false,\"message\":\"Users or Password Invalid!\",\"Description\":\"ไม่พบข้อมูล Users or Password ของท่าน\"}"})
+	void returnsEmptyForBadRequestInvalidCredentials(String body) {
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 		server.expect(requestTo(ENDPOINT))
-				.andRespond(withBadRequest().body("""
-						{"status":false,"message":"User or Password Invalid!"}
-						""").contentType(MediaType.APPLICATION_JSON));
+				.andRespond(withBadRequest().body(body).contentType(MediaType.APPLICATION_JSON));
 
 		RealTuAuthClient client = new RealTuAuthClient(builder.build(), ENDPOINT, APPLICATION_KEY);
 
@@ -80,14 +84,14 @@ class RealTuAuthClientTest {
 		server.verify();
 	}
 
-	@Test
-	void distinguishesMalformedBadRequestFromInvalidCredentials() {
+	@ParameterizedTest
+	@ValueSource(strings = {"Could not read the request body!", "The request body has error! (UserName or PassWord Invalid!)"})
+	void distinguishesMalformedBadRequestFromInvalidCredentials(String message) {
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 		server.expect(requestTo(ENDPOINT))
-				.andRespond(withBadRequest().body("""
-						{"status":false,"message":"Could not read the request body!"}
-						""").contentType(MediaType.APPLICATION_JSON));
+				.andRespond(withBadRequest().body("{\"status\":false,\"message\":\"" + message + "\"}")
+						.contentType(MediaType.APPLICATION_JSON));
 
 		RealTuAuthClient client = new RealTuAuthClient(builder.build(), ENDPOINT, APPLICATION_KEY);
 

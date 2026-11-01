@@ -160,7 +160,7 @@ Application-Key: <ACCESS_TOKEN>
 | HTTP | Body status | Message / ความหมาย |
 |---:|---|---|
 | 200 | true | `Success` |
-| 400 | false | `User or Password Invalid!` |
+| 400 | false | `User or Password Invalid!` (เอกสารต้นทาง) — API จริงตอบ `Users or Password Invalid!` พร้อม Field `Description` (ทดสอบ 1 พ.ย. 2026) |
 | 400 | false | `Could not read the request body!` |
 | 400 | false | `The request body has error! (UserName or PassWord Invalid!)` |
 | 401 | false | `Application-Key header required` |

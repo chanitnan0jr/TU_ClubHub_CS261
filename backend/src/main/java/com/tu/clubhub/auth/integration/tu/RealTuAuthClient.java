@@ -2,6 +2,7 @@ package com.tu.clubhub.auth.integration.tu;
 
 import java.net.URI;
 import java.util.Optional;
+import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.slf4j.Logger;
@@ -22,6 +23,10 @@ public final class RealTuAuthClient implements TuAuthClient {
 	private static final Logger LOG = LoggerFactory.getLogger(RealTuAuthClient.class);
 	private static final String APPLICATION_KEY_HEADER = "Application-Key";
 	private static final JsonMapper ERROR_JSON_MAPPER = JsonMapper.builder().build();
+	// TU_API.md documents "User…"; the live API (checked 2026-11-01) answers "Users…". Only exact
+	// matches count, so "The request body has error! (UserName or PassWord Invalid!)" stays a defect.
+	private static final Set<String> INVALID_CREDENTIAL_MESSAGES =
+			Set.of("User or Password Invalid!", "Users or Password Invalid!");
 
 	private final RestClient restClient;
 	private final URI endpoint;
@@ -102,7 +107,7 @@ public final class RealTuAuthClient implements TuAuthClient {
 	private static boolean isInvalidCredentials(String body) {
 		try {
 			TuAuthErrorResponse error = ERROR_JSON_MAPPER.readValue(body, TuAuthErrorResponse.class);
-			return Boolean.FALSE.equals(error.status()) && "User or Password Invalid!".equals(error.message());
+			return Boolean.FALSE.equals(error.status()) && INVALID_CREDENTIAL_MESSAGES.contains(error.message());
 		} catch (Exception ignored) {
 			return false;
 		}
