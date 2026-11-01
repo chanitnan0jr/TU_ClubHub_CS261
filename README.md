@@ -66,7 +66,7 @@ Use Docker Engine/Desktop with Compose V2. Run from the repository root:
    ```sh
    docker compose up --build
    ```
-3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` / `tu-clubhub-demo`. Health is available at `http://localhost:8080/actuator/health`.
+3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` or `applicant-demo` (password `tu-clubhub-demo`). Health is available at `http://localhost:8080/actuator/health`.
 4. A fresh database has no clubs. Once the app has started (Flyway creates the tables), load the dev-only demo data in another terminal:
    ```sh
    scripts/seed-dev-data.sh
