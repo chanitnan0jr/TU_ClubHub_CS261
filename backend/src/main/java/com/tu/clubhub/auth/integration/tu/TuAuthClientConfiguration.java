@@ -15,6 +15,8 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties(TuAuthProperties.class)
 public class TuAuthClientConfiguration {
 
+	static final String TU_API_HOST = "restapi.tu.ac.th";
+
 	@Bean
 	TuAuthClient tuAuthClient(TuAuthProperties properties, Environment environment) {
 		if (properties.getMode() == TuAuthProperties.Mode.MOCK) {
@@ -39,6 +41,12 @@ public class TuAuthClientConfiguration {
 		URI endpoint = URI.create(endpointUrl);
 		if (!"https".equalsIgnoreCase(endpoint.getScheme())) {
 			throw new IllegalStateException("The TU Authentication API endpoint must use HTTPS");
+		}
+		// The Application-Key goes to this endpoint, so a mistyped URL must not send it to another host.
+		if (!TU_API_HOST.equalsIgnoreCase(endpoint.getHost())
+				|| endpoint.getUserInfo() != null
+				|| (endpoint.getPort() != -1 && endpoint.getPort() != 443)) {
+			throw new IllegalStateException("The TU Authentication API endpoint must be on https://" + TU_API_HOST);
 		}
 		if (properties.getConnectTimeout() == null || properties.getConnectTimeout().isNegative()
 				|| properties.getConnectTimeout().isZero()

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.env.MockEnvironment;
 
 class TuAuthClientConfigurationTest {
@@ -41,11 +43,27 @@ class TuAuthClientConfigurationTest {
 
 	@Test
 	void createsRealClientWhenHttpsEndpointAndApplicationKeyAreConfigured() {
+		assertInstanceOf(RealTuAuthClient.class,
+				configuration.tuAuthClient(real("https://restapi.tu.ac.th/api/v1/auth/Ad/verify"), new MockEnvironment()));
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"http://restapi.tu.ac.th/api/v1/auth/Ad/verify",
+			"https://tu.example.test/api/v1/auth/Ad/verify",
+			"https://restapi.tu.ac.th.example.test/api/v1/auth/Ad/verify",
+			"https://user@restapi.tu.ac.th/api/v1/auth/Ad/verify",
+			"https://restapi.tu.ac.th:8443/api/v1/auth/Ad/verify"})
+	void refusesEndpointsThatWouldSendTheApplicationKeyElsewhere(String endpointUrl) {
+		assertThrows(IllegalStateException.class,
+				() -> configuration.tuAuthClient(real(endpointUrl), new MockEnvironment()));
+	}
+
+	private static TuAuthProperties real(String endpointUrl) {
 		TuAuthProperties properties = new TuAuthProperties();
 		properties.setMode(TuAuthProperties.Mode.REAL);
-		properties.setEndpointUrl("https://tu.example.test/authentication");
+		properties.setEndpointUrl(endpointUrl);
 		properties.setApplicationKey("test-application-key");
-
-		assertInstanceOf(RealTuAuthClient.class, configuration.tuAuthClient(properties, new MockEnvironment()));
+		return properties;
 	}
 }
