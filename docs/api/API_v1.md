@@ -147,6 +147,8 @@ With the `dev` or `test` profile, the fixed demo credentials are `student-demo` 
 
 The `username` field is the TU account identifier entered by the user. The backend adapter maps it to the official TU API request format. The password must not be logged, stored, returned, or copied into the session.
 
+Before calling the TU service, the backend counts attempts per client address and per username (case-insensitive). A request over either limit gets `429 RATE_LIMITED` with `Retry-After` in seconds and `Cache-Control: no-store`, and the TU service is not called, even when the password is correct. Successful verification clears that username's count; the client address count stays. Requests rejected with `400` are not counted. Defaults are 50 attempts per client address per 10 minutes and 5 attempts per username per 15 minutes, in fixed windows; deployments can change them through `clubhub.auth.login-limit.*`. Counts are kept in memory per application instance.
+
 After TU verification succeeds, the backend creates a local `users` row on first login, keyed by the unique TU username. Later successful logins refresh the display name, email, and `last_login_at`; they preserve the local `system_role` and `account_status`. New accounts start as `USER` and `ACTIVE`. A suspended account is rejected after identity verification. Login never creates a `student_profiles` row because TU authentication currently does not provide an agreed, normalized student eligibility status.
 
 ### `GET /api/v1/auth/me`
@@ -365,7 +367,7 @@ All `/api/v1` errors use `Content-Type: application/problem+json`. The response 
 | `500` | `INTERNAL_ERROR` | Unexpected server failure |
 | `503` | `SERVICE_UNAVAILABLE`, `AUTH_PROVIDER_UNAVAILABLE` | A required dependency such as the database or TU Authentication API is unavailable |
 
-The table is the shared error vocabulary. An endpoint's OpenAPI operation lists the errors relevant to it. If rate limiting is introduced, its actual thresholds and retry policy must be documented before release; no numeric rate limit is set by this contract.
+The table is the shared error vocabulary. An endpoint's OpenAPI operation lists the errors relevant to it. Only `POST /api/v1/auth/login` is rate limited; its thresholds and retry policy are documented with that endpoint. Any other limiter must document its thresholds before release.
 
 ## 7. Authorization rules
 
