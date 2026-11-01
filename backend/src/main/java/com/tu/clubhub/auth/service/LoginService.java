@@ -16,13 +16,16 @@ public class LoginService {
 
 	private final TuAuthClient tuAuthClient;
 	private final UserAccountService userAccountService;
+	private final LoginRateLimiter rateLimiter;
 
-	public LoginService(TuAuthClient tuAuthClient, UserAccountService userAccountService) {
+	public LoginService(TuAuthClient tuAuthClient, UserAccountService userAccountService,
+			LoginRateLimiter rateLimiter) {
 		this.tuAuthClient = tuAuthClient;
 		this.userAccountService = userAccountService;
+		this.rateLimiter = rateLimiter;
 	}
 
-	public UserAccount login(String username, String password) {
+	public UserAccount login(String username, String password, String clientAddress) {
 		List<String> invalidFields = new ArrayList<>();
 		if (username == null || username.isBlank() || username.length() > 100) {
 			invalidFields.add("username");
@@ -34,11 +37,13 @@ public class LoginService {
 			throw new InvalidLoginRequestException(invalidFields);
 		}
 
+		rateLimiter.acquire(clientAddress, username);
 		TuAuthUser identity = tuAuthClient.authenticate(username, password)
 				.orElseThrow(AuthenticationFailedException::new);
 		if (!username.equals(identity.username())) {
 			throw new AuthenticationFailedException();
 		}
+		rateLimiter.recordSuccess(username);
 
 		StudentIdentity student = identity.isStudent()
 				? new StudentIdentity(identity.username(), identity.faculty(), identity.department(), identity.studentStatus())

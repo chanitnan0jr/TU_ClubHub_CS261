@@ -13,6 +13,7 @@ import com.tu.clubhub.auth.service.AccountNotAllowedException;
 import com.tu.clubhub.auth.service.AuthenticationFailedException;
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import com.tu.clubhub.auth.service.InvalidLoginRequestException;
+import com.tu.clubhub.auth.service.LoginRateLimitedException;
 import com.tu.clubhub.auth.service.LoginService;
 import com.tu.clubhub.config.AbsoluteSessionTimeoutFilter;
 import com.tu.clubhub.user.domain.UserAccount;
@@ -81,7 +82,8 @@ public class AuthController {
 			throw new InvalidLoginRequestException(List.of("username", "password"));
 		}
 
-		UserAccount account = loginService.login(request.username(), request.password());
+		UserAccount account = loginService.login(
+				request.username(), request.password(), servletRequest.getRemoteAddr());
 		ClubHubPrincipal principal = new ClubHubPrincipal(
 				account.getId(), account.getTuUsername(), account.getSystemRole());
 		Authentication authentication = UsernamePasswordAuthenticationToken.authenticated(
@@ -146,6 +148,14 @@ class AuthExceptionHandler {
 	ResponseEntity<ProblemResponse> accountNotAllowed(HttpServletRequest request) {
 		return problem(request, 403, "Account not allowed",
 				"This account is not allowed to use TU-ClubHub.", "ACCOUNT_NOT_ALLOWED", List.of());
+	}
+
+	@ExceptionHandler(LoginRateLimitedException.class)
+	ResponseEntity<ProblemResponse> rateLimited(
+			HttpServletRequest request, HttpServletResponse response, LoginRateLimitedException exception) {
+		response.setHeader("Retry-After", Long.toString(exception.retryAfterSeconds()));
+		return problem(request, 429, "Too many login attempts",
+				"Too many login attempts. Try again later.", "RATE_LIMITED", List.of());
 	}
 
 	@ExceptionHandler(TuAuthProviderUnavailableException.class)
