@@ -5,10 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.SocketTimeoutException;
 import java.net.URI;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -19,8 +25,10 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest;
 
+@ExtendWith(OutputCaptureExtension.class)
 class RealTuAuthClientTest {
 
 	private static final URI ENDPOINT = URI.create("https://tu.example.test/authentication");
@@ -123,6 +131,46 @@ class RealTuAuthClientTest {
 
 		assertFalse(exception.getMessage().contains("sensitive details"));
 		server.verify();
+	}
+
+	@Test
+	void logsEachOutcomeWithoutCredentialsTheKeyOrUpstreamBodies(CapturedOutput output) {
+		RestClient.Builder builder = RestClient.builder();
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		server.expect(requestTo(ENDPOINT)).andRespond(withSuccess("""
+				{"status":true,"message":"Success","type":"student"}
+				""", MediaType.APPLICATION_JSON));
+		server.expect(requestTo(ENDPOINT)).andRespond(withBadRequest().body("""
+				{"status":false,"message":"User or Password Invalid!"}
+				""").contentType(MediaType.APPLICATION_JSON));
+		server.expect(requestTo(ENDPOINT)).andRespond(withUnauthorizedRequest().body("upstream secret body"));
+		server.expect(requestTo(ENDPOINT)).andRespond(withStatus(HttpStatus.BAD_GATEWAY));
+		server.expect(requestTo(ENDPOINT)).andRespond(request -> {
+			throw new SocketTimeoutException("read timed out");
+		});
+
+		RealTuAuthClient client = new RealTuAuthClient(builder.build(), ENDPOINT, APPLICATION_KEY);
+		assertTrue(client.authenticate("student-123", "example-password").isPresent());
+		assertTrue(client.authenticate("student-123", "wrong-password").isEmpty());
+		for (int i = 0; i < 3; i++) {
+			assertThrows(TuAuthProviderUnavailableException.class,
+					() -> client.authenticate("student-123", "example-password"));
+		}
+		server.verify();
+
+		// Only this adapter's lines: framework DEBUG logging is configured elsewhere.
+		String logs = String.join("\n", output.toString().lines().filter(line -> line.contains("RealTuAuthClient")).toList());
+		for (String expected : List.of("TU authentication succeeded for a student account",
+				"TU authentication rejected the credentials",
+				"TU Authentication API refused the Application-Key (HTTP 401)",
+				"TU Authentication API returned HTTP 502",
+				"TU Authentication API request failed: SocketTimeoutException")) {
+			assertTrue(logs.contains(expected), expected);
+		}
+		for (String secret : List.of("student-123", "example-password", "wrong-password", APPLICATION_KEY,
+				"upstream secret body", "read timed out")) {
+			assertFalse(logs.contains(secret), secret);
+		}
 	}
 
 	private void assertDisplayName(String names, String expected) {
