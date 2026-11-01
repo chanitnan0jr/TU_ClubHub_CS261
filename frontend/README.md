@@ -14,6 +14,7 @@ Routes live in `src/app/AppRoutes.tsx`, under the path prefixes the backend forw
 | `/login` | Public | Login form. After login it returns to the `next` path (same-site paths only), or `/`. |
 | `/clubs/:clubId` | Public | `ClubDetailPage` reads `GET /api/v1/public/clubs/{id}` and `/recruitment-rounds` and shows only the fields they return. An unknown club shows "not found"; a failed load shows a retry button instead of placeholder data. The apply button is disabled because the application endpoints do not exist yet. |
 | `/clubs/:clubId/edit` | Session | `ClubEditFormContainer` is prefilled from the public profile, because there is no committee `GET /api/v1/clubs/{clubId}`, and saves with `PUT`. Blank optional fields are sent as `null`. A non-committee user gets the backend's 403. A club that is not `ACTIVE` cannot be loaded. |
+| `/clubs/:clubId/rounds/new` | Session | `RoundCreateRoutePage` creates the round with its questions through `POST /api/v1/clubs/{clubId}/rounds` and, for **บันทึกและเผยแพร่**, publishes it with `PATCH … {action: PUBLISH, version}`. A draft opens the questions page; it cannot be published later from the UI until a round read API exists. The form has no capacity field, because rounds have no seat limit. |
 | `/clubs/:clubId/rounds/:roundId/questions` | Session | `QuestionManagementPage` lists, adds, edits, deletes and reorders questions through `/api/v1/rounds/{roundId}/questions`. The backend allows these writes only while the round is an open draft with no applications and answers 409 without a reason otherwise, which the page explains. Applicant counts are not shown because the API does not return them. |
 
 Components without a route yet:
@@ -21,7 +22,7 @@ Components without a route yet:
 | Area | Current behavior |
 |---|---|
 | Authentication | `AuthContext` calls the `csrf`, `login`, `me`, and `logout` endpoints under `/api/v1/auth`, sending cookies and CSRF for writes. |
-| Recruitment round form | `RecruitmentRoundForm` passes form state to an `onSubmit` prop. It has no route and no client for `/api/v1/clubs/{clubId}/rounds`; the backend has create, replace and status change but no list or get yet. |
+| Recruitment round form | `RecruitmentRoundForm` is routed at `/clubs/:clubId/rounds/new` (below). Editing an existing round is not wired, because the backend has no round list or get yet. |
 | Application form | `DynamicApplicationForm` is a prototype with sample student/questions and local form/review/success states. It has no route, and its `submitApplicationAPI` is a local stub that reports success without calling the backend. |
 | Club profile form | `src/ClubProfileForm.tsx` is not used by any route. |
 
