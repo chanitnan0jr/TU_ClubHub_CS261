@@ -9,19 +9,32 @@ export class ApiError extends Error {
   readonly status: number
   readonly code?: string
   readonly fieldErrors: ProblemFieldError[]
+  readonly reason?: string
 
   constructor(
     status: number,
     message: string,
     code?: string,
     fieldErrors: ProblemFieldError[] = [],
+    reason?: string,
   ) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.fieldErrors = fieldErrors
+    this.reason = reason
   }
+}
+
+// Thai texts for the 409 reasons the application endpoints return (Task75 section 3.2).
+const CONFLICT_MESSAGES: Record<string, string> = {
+  ROUND_CANCELLED: 'รอบรับสมัครนี้ถูกยกเลิกแล้ว',
+  ROUND_NOT_OPEN: 'รอบรับสมัครนี้ยังไม่เปิดรับใบสมัคร',
+  ROUND_CLOSED: 'รอบรับสมัครนี้ปิดรับใบสมัครแล้ว',
+  APPLICATION_ALREADY_EXISTS: 'คุณได้ส่งใบสมัครในรอบรับสมัครนี้ไปแล้ว',
+  ALREADY_MEMBER: 'คุณเป็นสมาชิกปัจจุบันของชมรมนี้อยู่แล้ว',
+  MEMBERSHIP_LIMIT_REACHED: 'คุณเป็นสมาชิกชมรมครบจำนวนสูงสุด 5 ชมรมแล้ว',
 }
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -40,6 +53,7 @@ async function readProblem(response: Response): Promise<ApiError> {
 
   const detail = typeof problem.detail === 'string' ? problem.detail : ''
   const code = typeof problem.code === 'string' ? problem.code : undefined
+  const reason = typeof problem.reason === 'string' ? problem.reason : undefined
   const fieldErrors = Array.isArray(problem.fieldErrors)
     ? problem.fieldErrors.filter(
         (entry): entry is ProblemFieldError =>
@@ -50,7 +64,7 @@ async function readProblem(response: Response): Promise<ApiError> {
       )
     : []
 
-  return new ApiError(response.status, detail, code, fieldErrors)
+  return new ApiError(response.status, detail, code, fieldErrors, reason)
 }
 
 /** Fetches the session's CSRF header, which every write request must send. */
@@ -113,7 +127,7 @@ export function describeApiError(error: unknown, fallback: string): string {
       case 404:
         return 'ไม่พบข้อมูลที่ต้องการ'
       case 409:
-        return error.message || 'ข้อมูลขัดแย้งกับสถานะปัจจุบัน กรุณารีเฟรชแล้วลองใหม่'
+        return (error.reason && CONFLICT_MESSAGES[error.reason]) || error.message || 'ข้อมูลขัดแย้งกับสถานะปัจจุบัน กรุณารีเฟรชแล้วลองใหม่'
       case 503:
         return 'ระบบฐานข้อมูลไม่พร้อมใช้งานชั่วคราว กรุณาลองใหม่ภายหลัง'
       default:

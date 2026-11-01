@@ -51,6 +51,7 @@ test('a problem+json response becomes an ApiError with status, code and field er
         { field: 'questionText', code: 'INVALID', message: 'must not be blank' },
         { nope: true },
       ],
+      reason: 'SOME_REASON',
     }),
   )
   try {
@@ -58,6 +59,7 @@ test('a problem+json response becomes an ApiError with status, code and field er
       assert.ok(error instanceof ApiError)
       assert.equal(error.status, 400)
       assert.equal(error.code, 'VALIDATION_FAILED')
+      assert.equal(error.reason, 'SOME_REASON')
       assert.deepEqual(error.fieldErrors, [
         { field: 'questionText', code: 'INVALID', message: 'must not be blank' },
       ])
@@ -89,6 +91,11 @@ test('describeApiError gives a Thai message per status and keeps 409 detail', ()
   assert.match(describeApiError(new ApiError(403, '', 'ACCESS_DENIED'), fallback), /กรรมการ/)
   assert.match(describeApiError(new ApiError(404, ''), fallback), /ไม่พบ/)
   assert.equal(describeApiError(new ApiError(409, 'Round was modified'), fallback), 'Round was modified')
+  assert.equal(
+    describeApiError(new ApiError(409, 'conflict', 'RESOURCE_CONFLICT', [], 'ROUND_CLOSED'), fallback),
+    'รอบรับสมัครนี้ปิดรับใบสมัครแล้ว',
+  )
+  assert.equal(describeApiError(new ApiError(409, 'conflict', 'RESOURCE_CONFLICT', [], 'UNLISTED'), fallback), 'conflict')
   assert.match(describeApiError(new ApiError(503, ''), fallback), /ฐานข้อมูล/)
   assert.equal(describeApiError(new ApiError(500, ''), fallback), fallback)
   assert.match(
