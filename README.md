@@ -111,7 +111,7 @@ Open `http://localhost:5173`; Vite proxies `/api` to `http://localhost:8080`. Us
 | `DB_PASSWORD` | Password for direct JVM startup with the `dev` profile |
 | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Override the JDBC connection when database name, host port, or credentials differ; Compose supplies these to containers |
 | `SPRING_PROFILES_ACTIVE` | Compose defaults to `dev`; production must use real TU authentication |
-| `PORT` | Spring HTTP port; keep 8080 with the current Compose `app` port mapping |
+| `PORT` | Host port for the Compose `app` service (the container listens on 8080); Spring's HTTP port when run outside Compose |
 | `TU_AUTH_MODE` | `mock` for dev/test, `real` for TU integration |
 | `TU_AUTH_ENDPOINT_URL`, `TU_AUTH_APPLICATION_KEY` | Required in real mode; server environment only |
 | `TU_AUTH_CONNECT_TIMEOUT`, `TU_AUTH_READ_TIMEOUT` | Backend defaults: `3s` and `5s` |
