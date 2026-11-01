@@ -3,8 +3,10 @@ package com.tu.clubhub.application.service;
 import com.tu.clubhub.application.dto.ApplicationSubmission;
 import com.tu.clubhub.application.config.ApplicationSubmissionProperties;
 import com.tu.clubhub.application.dto.ApplicationSubmissionRequest;
+import com.tu.clubhub.application.dto.RoundApplicationForm;
 import com.tu.clubhub.application.domain.ValidatedApplicationSubmission;
 import com.tu.clubhub.application.repository.ApplicationRepository;
+import com.tu.clubhub.application.repository.ApplicationRepository.FormRound;
 import com.tu.clubhub.application.repository.ApplicationRepository.Question;
 import com.tu.clubhub.application.repository.ApplicationRepository.Round;
 import com.tu.clubhub.auth.dto.ProblemResponse.FieldError;
@@ -26,7 +28,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Implements API_v1.md section 11. HTTP/CSRF handling belongs to the controller/security filters. */
+/** Implements API_v1.md sections 11 and 12. HTTP/CSRF handling belongs to the controller/security filters. */
 @Service
 public class ApplicationService {
     private final ApplicationRepository repository;
@@ -62,6 +64,31 @@ public class ApplicationService {
             }
             throw exception;
         }
+    }
+
+    /**
+     * API_v1.md section 12: the same visibility and window checks as submission, with plain
+     * reads because loading a form reserves nothing. ActiveAccountFilter has already rejected
+     * a suspended account. Duplicate-application and membership checks stay on POST only.
+     */
+    @Transactional(readOnly = true)
+    public RoundApplicationForm form(String rawRoundId) {
+        long userId = currentUserId();
+        long roundId = validator.roundId(rawRoundId);
+        if (repository.findStudentStatus(userId).filter("ACTIVE"::equals).isEmpty()) {
+            throw failure(403, "ACCESS_DENIED", "Verified active student status is required.");
+        }
+        FormRound form = repository.findFormRound(roundId).orElseThrow(ApplicationService::notFound);
+        Round round = form.round();
+        if (!"ACTIVE".equals(form.clubStatus()) || round.publishedAt() == null) throw notFound();
+        requireOpenRound(round, clock.instant());
+        var questions = repository.findFormQuestions(roundId).stream()
+                .map(q -> new RoundApplicationForm.TextQuestion(Long.toString(q.id()), "TEXT", q.prompt(),
+                        q.required(), q.displayOrder(), q.maxLength()))
+                .toList();
+        return new RoundApplicationForm(new RoundApplicationForm.Round(Long.toString(round.id()),
+                Long.toString(round.clubId()), form.title(), form.description(), form.eligibilityText(),
+                round.opensAt(), round.closesAt()), questions);
     }
 
     private ApplicationSubmission submitInCurrentTransaction(String rawRoundId, ApplicationSubmissionRequest request) {
