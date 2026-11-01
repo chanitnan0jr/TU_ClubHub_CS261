@@ -17,12 +17,6 @@ export const validateRecruitmentRoundForm = (
     errors.semester = 'กรุณาเลือกภาคเรียน';
   }
 
-  if (!data.isUnlimitedCapacity) {
-    if (data.capacity === null || data.capacity <= 0) {
-      errors.capacity = 'กรุณาระบุจำนวนที่รับเป็นตัวเลขที่มากกว่า 0';
-    }
-  }
-
   if (!data.description.trim()) {
     errors.description = 'กรุณาระบุรายละเอียด/คุณสมบัติผู้สมัคร';
   }
@@ -54,12 +48,16 @@ export const validateRecruitmentRoundForm = (
     }
   }
 
-  if (data.confirmationStartDate && data.confirmationEndDate) {
-    const startConf = new Date(data.confirmationStartDate);
-    const endConf = new Date(data.confirmationEndDate);
+  // The API needs a confirmation deadline after closing and after any announcement.
+  if (!data.confirmationDeadline) {
+    errors.confirmationDeadline = 'กรุณาระบุวันสุดท้ายของการยืนยันสิทธิ์';
+  } else {
+    const deadline = new Date(`${data.confirmationDeadline}T23:59:59`);
 
-    if (endConf < startConf) {
-      errors.confirmationDates = 'วันสิ้นสุดการยืนยันสิทธิ์ต้องไม่เกิดก่อนวันเริ่มต้น';
+    if (data.closeAt && deadline <= new Date(data.closeAt)) {
+      errors.confirmationDeadline = 'วันสุดท้ายของการยืนยันสิทธิ์ต้องอยู่หลังวันปิดรับสมัคร';
+    } else if (data.announcementDate && data.announcementDate > data.confirmationDeadline) {
+      errors.confirmationDeadline = 'วันสุดท้ายของการยืนยันสิทธิ์ต้องไม่เกิดก่อนวันประกาศผล';
     }
   }
 

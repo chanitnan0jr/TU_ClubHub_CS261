@@ -7,18 +7,17 @@ export interface ScreeningQuestionInput {
   orderIndex: number;
 }
 
+// Rounds have no seat capacity, and confirmation needs only its last day
+// (RoundWrite in docs/api/rounds.openapi.yaml).
 export interface RecruitmentRoundFormInput {
   title: string;
   academicYear: number | null;
   semester: Semester | '';
-  capacity: number | null;
-  isUnlimitedCapacity: boolean;
   description: string;
   openAt: string;
   closeAt: string;
   announcementDate: string;
-  confirmationStartDate: string;
-  confirmationEndDate: string;
+  confirmationDeadline: string;
   questions: ScreeningQuestionInput[];
 }
 
@@ -26,12 +25,11 @@ export interface FormValidationError {
   title?: string;
   academicYear?: string;
   semester?: string;
-  capacity?: string;
   description?: string;
   openAt?: string;
   closeAt?: string;
   announcementDate?: string;
-  confirmationDates?: string;
+  confirmationDeadline?: string;
   questions?: string;
   general?: string;
 }
