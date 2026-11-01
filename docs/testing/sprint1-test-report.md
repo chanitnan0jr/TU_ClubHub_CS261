@@ -39,7 +39,7 @@
 | US-07 AC-03 รอบที่เปิดอยู่แสดงบนหน้าชมรม | Pass | flow ขั้น 4 |
 | US-07 AC-04 ปิดก่อนกำหนดแล้วหยุดรับทันที | Pass | flow ขั้น 6 และ `rechecksDeadlineOrManualCloseAfterWaitingForActualRoundLock` |
 | US-07 AC-05 ไม่ใช่กรรมการได้ 403 | Pass | `RecruitmentRoundApplicantRestrictionIntegrationTest` และ `RecruitmentRoundControllerTest` |
-| US-08 AC-01 – AC-02 เพิ่ม แก้ ลบ เรียง และบังคับตอบ | Pass | [task29](task29-application-questions-test-report.md) 21/21 |
+| US-08 AC-01 – AC-02 เพิ่ม แก้ ลบ เรียง และบังคับตอบ | Pass | [task29](task29-application-questions-test-report.md) 21/21 และ [การตรวจหา defect](task29-question-defect-review.md) (แก้ข้อความใน UI 2 จุดแล้ว) |
 | US-08 AC-03 ฟอร์มแสดงตามลำดับ | Pass | `applicationFormListsTextQuestionsInOrderWithoutCsrfOrWrites` และ flow ขั้น 5 |
 | US-08 AC-04 ลบคำถามที่มีคำตอบไม่ได้ | Pass | `ApplicationQuestionIntegrityIntegrationTest` (ได้ 409 แต่ยังไม่มี reason เฉพาะ) |
 | US-08 AC-05 ไม่กระทบรอบอื่น | Pass | task29 TC-08-06 |
