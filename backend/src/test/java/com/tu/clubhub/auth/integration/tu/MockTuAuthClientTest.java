@@ -19,6 +19,16 @@ class MockTuAuthClientTest {
 	}
 
 	@Test
+	void authenticatesTheDemoApplicantAsAnActiveStudent() {
+		var applicant = client.authenticate(MockTuAuthClient.APPLICANT_USERNAME, MockTuAuthClient.DEMO_PASSWORD)
+				.orElseThrow();
+
+		assertEquals(MockTuAuthClient.APPLICANT_USERNAME, applicant.username());
+		assertTrue(applicant.isStudent());
+		assertEquals("ACTIVE", applicant.studentStatus());
+	}
+
+	@Test
 	void rejectsUnknownAccountsAndIncorrectPasswords() {
 		assertTrue(client.authenticate("unknown-student", "any-password").isEmpty());
 		assertTrue(client.authenticate(MockTuAuthClient.DEMO_USERNAME, "incorrect-password").isEmpty());
