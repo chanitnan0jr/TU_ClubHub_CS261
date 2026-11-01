@@ -79,14 +79,14 @@ Select these services explicitly: enabling the profile without a service list al
 2. **Access the Application**:
    - Open your web browser and navigate to: [http://localhost:8080](http://localhost:8080)
    - If using split mode: [http://localhost](http://localhost)
-   - With `dev` + `TU_AUTH_MODE=mock`, use `student-demo` / `tu-clubhub-demo`.
+   - With `dev` + `TU_AUTH_MODE=mock`, two accounts share the password `tu-clubhub-demo`: `student-demo` (president of ชมรมเขียนโปรแกรม after seeding) and `applicant-demo` (a student with no memberships, for applying to that club).
    - After login the home page has a launcher that takes a club ID (and round ID). The club pages are `/clubs/{clubId}`, `/clubs/{clubId}/edit` and `/clubs/{clubId}/rounds/{roundId}/questions`. A fresh database has no clubs, so load the demo data first (step 3).
    - Unified health endpoint: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health).
 
 3. **Database Migrations and Initial Data**:
    - Flyway automatically applies all database migrations (`V1__init_schema.sql`, `V3__create_spring_session_tables.sql`) on startup.
-   - These create 17 business tables and the two Spring Session tables. There is no V2 or demo-data seed migration in the current repository.
-   - A fresh database has no demo clubs, memberships, or committee assignments. Mock login provisions a `users` row only; it does not create an eligible `student_profiles` row or grant committee access. API examples such as club ID `20001` are not seeded records.
+   - These create 17 business tables and the two Spring Session tables. The demo data in `V2__seed_test_data.sql` lives in test resources and is never applied in `dev` or `prod`.
+   - A fresh database has no demo clubs, memberships, or committee assignments. Mock login creates the `users` row and an ACTIVE `student_profiles` row from the mock TU status, but grants no membership or committee access. API examples such as club ID `20001` are not seeded records.
    - To load local demo data (10 clubs, committee accounts and sample rounds with questions), start the app once so Flyway creates the tables, then run `scripts/seed-dev-data.sh`. It is safe to run again. It makes `student-demo` the president of ชมรมเขียนโปรแกรม so the club editor and question pages work, and prints the page URLs to try. It is for local development only.
    - Check application logs:
      ```bash
