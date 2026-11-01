@@ -32,11 +32,11 @@ interface LoadFailure {
 type FormStep = 'form' | 'review';
 
 const cardClass =
-  'rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6';
+  'rounded-xl border border-[#E5E7EB] bg-white p-6';
 const inputClass =
-  'w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-rose-400 focus:ring-2 focus:ring-rose-100';
+  'w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-3 text-sm leading-[1.5] text-[#1F2937] outline-none transition placeholder:text-[#6B7280] focus:border-[#C41E3A] focus:ring-2 focus:ring-[#C41E3A]/10';
 const primaryButtonClass =
-  'inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#C81E3D] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#A01830] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C81E3D] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none';
+  'inline-flex min-h-12 items-center justify-center rounded-lg bg-[#C41E3A] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#9B1C1C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C41E3A] disabled:cursor-not-allowed disabled:bg-[#E5E7EB] disabled:text-[#6B7280]';
 
 export function DynamicApplicationForm({
   clubId,
@@ -99,6 +99,29 @@ export function DynamicApplicationForm({
     loaded?.key === requestKey ? loaded.application : null;
   const loadError =
     loadFailure?.key === requestKey ? loadFailure.message : null;
+  const errorTargets: Array<{ id: string; label: string }> = [];
+  if (errors.motivation) {
+    errorTargets.push({ id: 'application-motivation', label: 'เหตุผลที่สนใจเข้าร่วมชมรม' });
+  }
+  if (current) {
+    for (const question of current.form.questions) {
+      if (errors.answers?.[question.id]) {
+        errorTargets.push({
+          id: `application-answer-${question.id}`,
+          label: `คำถามข้อ ${question.displayOrder}`,
+        });
+      }
+    }
+  }
+  formData.links.forEach((link, index) => {
+    const linkErrors = errors.links?.[link.id];
+    if (linkErrors?.label) {
+      errorTargets.push({ id: `${link.id}-label`, label: `ชื่อเอกสารรายการที่ ${index + 1}` });
+    }
+    if (linkErrors?.url) {
+      errorTargets.push({ id: `${link.id}-url`, label: `URL เอกสารรายการที่ ${index + 1}` });
+    }
+  });
 
   const updateFormData = (update: (data: ApplicationFormData) => ApplicationFormData) => {
     setFormData(update);
@@ -161,8 +184,13 @@ export function DynamicApplicationForm({
     setErrors((previous) => {
       const links = { ...previous.links };
       if (links[linkId]) {
-        links[linkId] = { ...links[linkId], [field]: undefined };
-        if (!links[linkId].label && !links[linkId].url) delete links[linkId];
+        const remainingErrors = { ...links[linkId] };
+        delete remainingErrors[field];
+        if (!remainingErrors.label && !remainingErrors.url) {
+          delete links[linkId];
+        } else {
+          links[linkId] = remainingErrors;
+        }
       }
       const next: ApplicationFormErrors = { ...previous, links };
       if (Object.keys(links).length === 0) delete next.links;
@@ -262,7 +290,12 @@ export function DynamicApplicationForm({
         <span className="font-medium text-slate-700">ส่งใบสมัคร</span>
       </nav>
 
-      <>
+      <div className="flex flex-col gap-5 sm:gap-6">
+          {step === 'form' && (
+            <p className="rounded-lg bg-[#EFF4F8] px-3 py-2.5 text-xs leading-[1.5] text-[#4B5563]">
+              กรุณากรอกข้อมูลให้ครบถ้วน ระบบจะแจ้งช่องที่ต้องแก้ไขก่อนส่งใบสมัคร
+            </p>
+          )}
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900">
               {step === 'form' ? 'แบบฟอร์มสมัครเข้าร่วมชมรม' : 'ตรวจสอบข้อมูลใบสมัคร'}
@@ -276,47 +309,54 @@ export function DynamicApplicationForm({
 
           <ClubRoundSummary clubName={title} form={form} />
 
-          <ol className="flex items-center gap-3 text-xs font-bold" aria-label="ขั้นตอนการสมัคร">
+          <ol className="grid grid-cols-2 gap-3 text-sm font-semibold" aria-label="ขั้นตอนการสมัคร">
             <li className="flex items-center gap-2">
-              <span className={`flex h-7 w-7 items-center justify-center rounded-full ${
-                step === 'form' ? 'bg-[#C81E3D] text-white' : 'bg-emerald-500 text-white'
+              <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ${
+                step === 'form' ? 'bg-[#C41E3A] text-white' : 'bg-emerald-500 text-white'
               }`}>
                 {step === 'form' ? '1' : '✓'}
               </span>
-              <span className={step === 'form' ? 'text-rose-700' : 'text-slate-600'}>
+              <span className={step === 'form' ? 'text-[#C41E3A]' : 'text-slate-600'}>
                 กรอกข้อมูล
               </span>
             </li>
-            <li aria-hidden="true" className="text-slate-300">━━━━</li>
             <li className="flex items-center gap-2">
-              <span className={`flex h-7 w-7 items-center justify-center rounded-full ${
-                step === 'review' ? 'bg-[#C81E3D] text-white' : 'bg-slate-200 text-slate-500'
+              <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ${
+                step === 'review' ? 'bg-[#C41E3A] text-white' : 'bg-slate-200 text-slate-500'
               }`}>
                 2
               </span>
-              <span className={step === 'review' ? 'text-rose-700' : 'text-slate-400'}>
+              <span className={step === 'review' ? 'text-[#C41E3A]' : 'text-slate-400'}>
                 ตรวจสอบข้อมูล
               </span>
             </li>
           </ol>
 
           {submitError && (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">
               {submitError}
             </div>
           )}
 
           {step === 'form' ? (
-            <form className="flex flex-col gap-5" onSubmit={handleNext}>
-              {Object.keys(errors).length > 0 && (
+            <form className="flex flex-col gap-5 sm:gap-6" onSubmit={handleNext} noValidate>
+              {errorTargets.length > 0 && (
                 <div
                   id="application-form-errors"
-                  className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"
+                  className="rounded-lg bg-[#FDE8E8] p-4 text-sm text-[#9B1C1C]"
                   role="alert"
                   aria-live="polite"
                 >
-                  <p className="font-bold">ยังส่งใบสมัครไม่ได้ กรุณาตรวจสอบข้อมูล</p>
-                  <p className="mt-1 text-xs">แก้ไขช่องที่มีข้อความแจ้งเตือนสีแดง</p>
+                  <p className="font-semibold">ยังส่งใบสมัครไม่ได้ กรุณาตรวจสอบข้อมูลต่อไปนี้</p>
+                  <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-[#C41E3A]">
+                    {errorTargets.map((target) => (
+                      <li key={target.id}>
+                        <a className="underline underline-offset-2" href={`#${target.id}`}>
+                          {target.label}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
@@ -335,11 +375,11 @@ export function DynamicApplicationForm({
               </section>
 
               <section className={cardClass}>
-                <h2 className="mb-3 text-base font-extrabold text-slate-900">
+                <h2 className="mb-3 text-lg font-bold text-[#112937]">
                   ความสนใจและแรงบันดาลใจ
                 </h2>
                 <label htmlFor="application-motivation" className="mb-1.5 block text-sm font-bold text-slate-800">
-                  เหตุผลที่สนใจเข้าร่วมชมรมนี้ <span className="text-rose-600">*</span>
+                  เหตุผลที่สนใจเข้าร่วมชมรมนี้ <span className="text-[#C41E3A]">*</span>
                 </label>
                 <textarea
                   id="application-motivation"
@@ -358,23 +398,29 @@ export function DynamicApplicationForm({
                   }}
                   placeholder="อธิบายเหตุผล ความคาดหวัง หรือสิ่งที่อยากเรียนรู้จากการเข้าร่วมกิจกรรมของชมรม..."
                   aria-invalid={Boolean(errors.motivation)}
-                  aria-describedby={errors.motivation ? 'motivation-error' : 'motivation-count'}
-                  className={`${inputClass} resize-y ${errors.motivation ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500 focus:ring-rose-100' : ''}`}
+                  aria-describedby={
+                    errors.motivation
+                      ? 'motivation-error motivation-count'
+                      : 'motivation-count'
+                  }
+                  className={`${inputClass} min-h-[120px] resize-y ${errors.motivation ? 'border-2 border-[#C41E3A]' : ''}`}
                 />
-                {errors.motivation ? (
-                  <p id="motivation-error" className="mt-1.5 text-xs font-medium text-rose-600">
+                {errors.motivation && (
+                  <p id="motivation-error" className="text-sm text-[#9B1C1C]">
                     {errors.motivation}
                   </p>
-                ) : (
-                  <p id="motivation-count" className="mt-1.5 text-right text-xs text-slate-400">
-                    {Array.from(formData.motivation).length.toLocaleString('th-TH')} / 2,000 ตัวอักษร
-                  </p>
                 )}
+                <p
+                  id="motivation-count"
+                  className={`text-right text-xs ${errors.motivation ? 'text-[#9B1C1C]' : 'text-[#6B7280]'}`}
+                >
+                  {Array.from(formData.motivation).length.toLocaleString('th-TH')} / 2,000 ตัวอักษร
+                </p>
               </section>
 
               <section className={cardClass}>
                 <div className="mb-4">
-                  <h2 className="text-base font-extrabold text-slate-900">
+                  <h2 className="text-lg font-bold text-[#112937]">
                     คำถามคัดเลือกจากทางชมรม
                   </h2>
                   <p className="mt-1 text-xs text-slate-500">
@@ -394,10 +440,10 @@ export function DynamicApplicationForm({
                       const questionError = errors.answers?.[question.id];
                       return (
                         <div key={question.id}>
-                          <label htmlFor={answerId} className="mb-1.5 block text-sm font-bold leading-relaxed text-slate-800">
+                          <label htmlFor={answerId} className="mb-1.5 block text-sm font-semibold leading-relaxed text-[#1F2937]">
                             {question.displayOrder}. {question.questionText}{' '}
                             {question.isRequired ? (
-                              <span className="text-rose-600">* (จำเป็นต้องตอบ)</span>
+                              <span className="text-[#C41E3A]">* (จำเป็นต้องตอบ)</span>
                             ) : (
                               <span className="font-normal text-slate-400">(ไม่บังคับ)</span>
                             )}
@@ -410,14 +456,14 @@ export function DynamicApplicationForm({
                             placeholder="เขียนคำตอบของคุณ..."
                             aria-invalid={Boolean(questionError)}
                             aria-describedby={questionError ? errorId : undefined}
-                            className={`${inputClass} resize-y ${questionError ? 'border-rose-500 bg-rose-50/30 focus:border-rose-500 focus:ring-rose-100' : ''}`}
+                            className={`${inputClass} min-h-12 resize-y ${questionError ? 'border-2 border-[#C41E3A]' : ''}`}
                           />
                           {questionError ? (
-                            <p id={errorId} className="mt-1.5 text-xs font-medium text-rose-600">
+                            <p id={errorId} className="text-sm text-[#9B1C1C]">
                               {questionError}
                             </p>
                           ) : (
-                            <p className="mt-1.5 text-right text-xs text-slate-400">
+                            <p className="text-right text-xs text-[#6B7280]">
                               {Array.from(answer).length.toLocaleString('th-TH')} / {question.maxLength.toLocaleString('th-TH')} ตัวอักษร
                             </p>
                           )}
@@ -433,9 +479,13 @@ export function DynamicApplicationForm({
                   <h2 className="text-base font-extrabold text-slate-900">
                     เอกสารประกอบ / พอร์ตโฟลิโอ <span className="font-normal text-slate-400">(ถ้ามี)</span>
                   </h2>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    แนบลิงก์ HTTPS ที่กรรมการสามารถเข้าถึงได้ ไม่รองรับการอัปโหลดไฟล์ (สูงสุด 5 รายการ)
-                  </p>
+                  <div className="rounded-lg bg-[#EFF4F8] p-3.5 text-sm leading-[1.5] text-[#1F2937]">
+                    <p className="text-xs font-semibold">การแนบเอกสารประกอบ</p>
+                    <p className="mt-1">
+                      ใช้ลิงก์ HTTPS ที่กรรมการสามารถเปิดดูได้ ตั้งค่าสิทธิ์การเข้าถึงให้เรียบร้อย
+                      ไม่รองรับการอัปโหลดไฟล์ และแนบได้สูงสุด 5 รายการ
+                    </p>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-4">
                   {formData.links.map((link, index) => {
@@ -443,7 +493,7 @@ export function DynamicApplicationForm({
                     return (
                       <fieldset
                         key={link.id}
-                        className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+                        className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-3.5"
                       >
                         <legend className="px-1 text-xs font-bold text-slate-600">
                           เอกสารรายการที่ {index + 1}
@@ -459,10 +509,10 @@ export function DynamicApplicationForm({
                               onChange={(event) => updateLink(link.id, 'label', event.target.value)}
                               placeholder="พอร์ตโฟลิโอ หรือผลงานที่เคยทำ"
                               aria-invalid={Boolean(linkErrors?.label)}
-                              className={`${inputClass} ${linkErrors?.label ? 'border-rose-500' : ''}`}
+                              className={`${inputClass} min-h-12 ${linkErrors?.label ? 'border-2 border-[#C41E3A]' : ''}`}
                             />
                             {linkErrors?.label && (
-                              <p className="mt-1 text-xs text-rose-600">{linkErrors.label}</p>
+                              <p className="text-sm text-[#9B1C1C]">{linkErrors.label}</p>
                             )}
                           </div>
                           <div>
@@ -477,16 +527,16 @@ export function DynamicApplicationForm({
                               onChange={(event) => updateLink(link.id, 'url', event.target.value)}
                               placeholder="https://example.com/portfolio"
                               aria-invalid={Boolean(linkErrors?.url)}
-                              className={`${inputClass} ${linkErrors?.url ? 'border-rose-500' : ''}`}
+                              className={`${inputClass} min-h-12 ${linkErrors?.url ? 'border-2 border-[#C41E3A]' : ''}`}
                             />
                             {linkErrors?.url && (
-                              <p className="mt-1 text-xs text-rose-600">{linkErrors.url}</p>
+                              <p className="text-sm text-[#9B1C1C]">{linkErrors.url}</p>
                             )}
                           </div>
                           <button
                             type="button"
                             onClick={() => removeLink(link.id)}
-                            className="self-end rounded-xl px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-50"
+                            className="self-end rounded-lg px-3 py-2 text-sm font-semibold text-[#C41E3A] transition hover:bg-rose-50"
                           >
                             ลบเอกสารรายการนี้
                           </button>
@@ -498,7 +548,7 @@ export function DynamicApplicationForm({
                     <button
                       type="button"
                       onClick={addLink}
-                      className="self-start rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                      className="self-start rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-[#C41E3A] transition hover:bg-rose-100"
                     >
                       + เพิ่มลิงก์เอกสาร
                     </button>
@@ -506,20 +556,23 @@ export function DynamicApplicationForm({
                 </div>
               </section>
 
-              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+              <p className="text-xs text-[#6B7280]">
+                โปรดตรวจสอบสิทธิ์การเข้าถึงของลิงก์เอกสารก่อนส่งใบสมัคร
+              </p>
+              <div className="flex flex-row gap-3">
                 <Link
                   to={`/clubs/${encodeURIComponent(clubId)}`}
-                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                  className="inline-flex min-h-12 w-[90px] shrink-0 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm font-semibold text-[#1F2937] transition hover:bg-slate-50"
                 >
                   ยกเลิก
                 </Link>
-                <button type="submit" className={primaryButtonClass}>
+                <button type="submit" className={`${primaryButtonClass} flex-1`}>
                   ตรวจสอบข้อมูลใบสมัคร <span className="ml-2" aria-hidden="true">→</span>
                 </button>
               </div>
             </form>
           ) : (
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-5 sm:gap-6">
               <section className={cardClass}>
                 <h2 className="text-base font-extrabold text-slate-900">ความสนใจและแรงบันดาลใจ</h2>
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
@@ -556,7 +609,7 @@ export function DynamicApplicationForm({
                             href={link.url.trim()}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-1 block break-all text-sm text-rose-700 underline"
+                            className="mt-1 block break-all text-sm text-[#C41E3A] underline"
                           >
                             {link.url.trim()}
                           </a>
@@ -565,16 +618,19 @@ export function DynamicApplicationForm({
                   </ul>
                 )}
               </section>
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm leading-[1.5] text-[#1F2937]">
                 <input
                   type="checkbox"
                   checked={hasConfirmed}
                   onChange={(event) => setHasConfirmed(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-[#C81E3D]"
+                  className="mt-3 h-5 w-5 shrink-0 accent-[#C41E3A]"
                 />
                 <span>ฉันตรวจสอบข้อมูลและยืนยันว่าข้อมูลในใบสมัครถูกต้อง</span>
               </label>
-              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+              <p className="text-xs text-[#6B7280]">
+                การส่งใบสมัครนี้จะส่งข้อมูลให้ชมรมที่คุณเลือกเพื่อพิจารณา
+              </p>
+              <div className="flex flex-row gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -583,7 +639,7 @@ export function DynamicApplicationForm({
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                   disabled={isSubmitting}
-                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                  className="inline-flex min-h-12 flex-1 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm font-semibold text-[#1F2937] transition hover:bg-slate-50 disabled:opacity-50"
                 >
                   กลับไปแก้ไข
                 </button>
@@ -591,7 +647,7 @@ export function DynamicApplicationForm({
                   type="button"
                   onClick={handleSubmit}
                   disabled={!hasConfirmed || isSubmitting || hasSubmitted}
-                  className={primaryButtonClass}
+                  className={`${primaryButtonClass} flex-1`}
                   aria-live="polite"
                 >
                   {isSubmitting ? (
@@ -611,7 +667,7 @@ export function DynamicApplicationForm({
               </div>
             </div>
           )}
-      </>
+      </div>
       {showSuccessDialog && (
         <SuccessDialog
           receipt={receipt}
@@ -625,21 +681,30 @@ export function DynamicApplicationForm({
 
 function PageShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-16 font-sans text-slate-800">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-8">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
+    <div className="min-h-screen bg-[#F9FAFB] pb-16 font-sans text-[#1F2937]">
+      <header className="sticky top-0 z-40 flex h-16 items-center border-b border-[#E5E7EB] bg-white px-4 sm:h-20 sm:px-12">
+        <div className="mx-auto flex w-full max-w-[1344px] items-center justify-between gap-4">
           <Link to="/" className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#C81E3D] text-xs font-black text-white shadow-sm">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C41E3A] text-sm font-black text-white">
               TU
             </span>
-            <span className="text-base font-extrabold tracking-tight text-slate-900">
+            <span className="text-xl font-bold tracking-tight text-[#112937]">
               ClubHub
             </span>
           </Link>
-          <span className="text-xs font-semibold text-slate-500">แบบฟอร์มสมัครชมรม</span>
+          <nav aria-label="เมนูหลัก" className="hidden items-center gap-8 text-sm sm:flex">
+            <Link to="/" className="font-semibold text-[#C41E3A]">
+              ค้นหาชมรม
+            </Link>
+            <Link to="/profile/applications" className="text-[#4B5563] hover:text-[#C41E3A]">
+              ประวัติการสมัคร
+            </Link>
+            <span className="text-[#112937]">บัญชีนักศึกษา</span>
+          </nav>
+          <span className="text-xs font-semibold text-[#6B7280] sm:hidden">แบบฟอร์มสมัครชมรม</span>
         </div>
       </header>
-      <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 pt-6 sm:pt-8">
+      <main className="mx-auto flex w-full max-w-[832px] flex-col gap-5 px-4 pt-5 sm:gap-6 sm:px-8 sm:pt-7">
         {children}
       </main>
     </div>
@@ -666,7 +731,7 @@ function SuccessDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="application-success-title"
-        className="w-full max-w-md rounded-3xl bg-white p-7 text-center shadow-2xl"
+        className="w-full max-w-md rounded-xl bg-white p-7 text-center shadow-2xl"
       >
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl font-bold text-emerald-600">
           ✓
@@ -696,7 +761,7 @@ function SuccessDialog({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C81E3D]"
+            className="inline-flex min-h-12 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white px-5 py-3 text-sm font-semibold text-[#1F2937] transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C41E3A]"
           >
             ปิด
           </button>
@@ -717,15 +782,20 @@ function ClubRoundSummary({
   form: RoundApplicationForm;
 }) {
   return (
-    <section className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-100/80 p-4">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-xl font-bold text-rose-700">
+    <section className="flex items-start gap-4 rounded-xl bg-[#EFF4F8] p-5">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-white text-lg font-bold text-[#C41E3A]">
         TU
       </div>
-      <div className="min-w-0">
-        <h2 className="truncate text-sm font-extrabold text-slate-900">{clubName}</h2>
-        <p className="mt-0.5 text-xs font-medium text-slate-600">{form.round.title}</p>
-        <p className="mt-1 text-[11px] text-slate-400">
-          ปิดรับสมัคร {formatThaiDateTime(form.round.closesAt)}
+      <div className="min-w-0 space-y-1">
+        <h2 className="truncate text-lg font-semibold text-[#112937]">{clubName}</h2>
+        <p className="text-sm text-[#1F2937]">{form.round.title}</p>
+        <p className="text-xs text-[#4B5563]">{form.round.description}</p>
+        {form.round.eligibilityText && (
+          <p className="text-xs text-[#6B7280]">{form.round.eligibilityText}</p>
+        )}
+        <p className="text-xs text-[#6B7280]">
+          เปิดรับสมัคร {formatThaiDateTime(form.round.opensAt)} – ปิดรับสมัคร{' '}
+          {formatThaiDateTime(form.round.closesAt)}
         </p>
       </div>
     </section>

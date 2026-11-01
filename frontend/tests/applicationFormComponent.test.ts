@@ -132,6 +132,51 @@ test('application form loads dynamic questions and validates required fields', a
       screen.getByRole('alert').textContent ?? '',
       /ยังส่งใบสมัครไม่ได้/,
     )
+    assert.equal(
+      screen.getByRole('link', { name: /เหตุผลที่สนใจเข้าร่วมชมรม/ }).getAttribute('href'),
+      '#application-motivation',
+    )
+    assert.equal(
+      screen.getByRole('link', { name: 'คำถามข้อ 1' }).getAttribute('href'),
+      '#application-answer-81001',
+    )
+    assert.equal(stub.getSubmissionCount(), 0)
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
+test('invalid document URLs show the application form validation message', async () => {
+  const stub = applicationApiStub()
+  try {
+    renderApplication()
+    fireEvent.change(
+      await screen.findByLabelText(/เหตุผลที่สนใจเข้าร่วมชมรมนี้/),
+      { target: { value: 'อยากร่วมทำกิจกรรมอาสา' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(/เหตุใดจึงสนใจเข้าร่วมกิจกรรมของชมรม/),
+      { target: { value: 'อยากช่วยพัฒนาชุมชน' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มลิงก์เอกสาร/ }))
+    fireEvent.change(screen.getByLabelText(/ชื่อ\/คำอธิบายเอกสาร/), {
+      target: { value: 'ผลงาน' },
+    })
+    fireEvent.change(screen.getByLabelText(/URL ลิงก์เอกสาร/), {
+      target: { value: 'not-a-url' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
+
+    assert.match(
+      screen.getByText(/กรุณาระบุ URL HTTPS ที่ถูกต้อง/).textContent ?? '',
+      /URL HTTPS/,
+    )
+    assert.equal(screen.getByLabelText(/URL ลิงก์เอกสาร/).getAttribute('aria-invalid'), 'true')
+    assert.equal(
+      screen.getByRole('link', { name: 'URL เอกสารรายการที่ 1' }).getAttribute('href'),
+      '#link-0-url',
+    )
     assert.equal(stub.getSubmissionCount(), 0)
   } finally {
     cleanup()
