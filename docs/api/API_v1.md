@@ -27,7 +27,7 @@ Initial source review on 2026-10-19; application POST status updated on 2026-10-
 | `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard | Editor/client exist but are not mounted |
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
 | Committee round `GET` list/detail and `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
-| `GET /api/v1/rounds/{roundId}/application-form` (§12) | Account/student/window policy confirmed by Task42 requester; PO/team review pending; no handler | Form prototype only |
+| `GET /api/v1/rounds/{roundId}/application-form` (§12) | Implemented with the Task42-confirmed account/student/window policy; PO/team review pending | Form prototype only |
 | `POST /api/v1/rounds/{roundId}/applications` (§11) | Implemented: transactional service, HTTP handler, shared Problem errors, session/CSRF; see [Task45 verification](../testing/task45-concurrency-and-rollback.md) | No submission client |
 | `/actuator/health` | Implemented | Operational endpoint |
 
@@ -45,7 +45,7 @@ The foundation contract covers:
 - Applicant-facing form schemas and the read policy in [section 12](#12-round-application-form-task42).
 - A minimal health endpoint for operations.
 
-Application review, membership decisions, notifications, search, and dashboards remain product backlog work; their request and response schemas must be defined before implementation. Recruitment management is specified separately in [rounds.openapi.yaml](rounds.openapi.yaml). The submission contract is defined below, but its implementation is still pending. A not-yet-implemented endpoint must not return a success response as a stub.
+Application review, membership decisions, notifications, search, and dashboards remain product backlog work; their request and response schemas must be defined before implementation. Recruitment management is specified separately in [rounds.openapi.yaml](rounds.openapi.yaml). The application form and submission contracts are defined below and implemented. A not-yet-implemented endpoint must not return a success response as a stub.
 
 ## 2. API conventions
 
@@ -146,6 +146,8 @@ With the `dev` or `test` profile, the fixed demo credentials are `student-demo` 
 ```
 
 The `username` field is the TU account identifier entered by the user. The backend adapter maps it to the official TU API request format. The password must not be logged, stored, returned, or copied into the session.
+
+Before calling the TU service, the backend counts attempts per client address and per username (case-insensitive). A request over either limit gets `429 RATE_LIMITED` with `Retry-After` in seconds and `Cache-Control: no-store`, and the TU service is not called, even when the password is correct. Successful verification clears that username's count; the client address count stays. Requests rejected with `400` are not counted. Defaults are 50 attempts per client address per 10 minutes and 5 attempts per username per 15 minutes, in fixed windows; deployments can change them through `clubhub.auth.login-limit.*`. Counts are kept in memory per application instance.
 
 After TU verification succeeds, the backend creates a local `users` row on first login, keyed by the unique TU username. Later successful logins refresh the display name, email, and `last_login_at`; they preserve the local `system_role` and `account_status`. New accounts start as `USER` and `ACTIVE`. A suspended account is rejected after identity verification. Login never creates a `student_profiles` row because TU authentication currently does not provide an agreed, normalized student eligibility status.
 
@@ -365,7 +367,7 @@ All `/api/v1` errors use `Content-Type: application/problem+json`. The response 
 | `500` | `INTERNAL_ERROR` | Unexpected server failure |
 | `503` | `SERVICE_UNAVAILABLE`, `AUTH_PROVIDER_UNAVAILABLE` | A required dependency such as the database or TU Authentication API is unavailable |
 
-The table is the shared error vocabulary. An endpoint's OpenAPI operation lists the errors relevant to it. If rate limiting is introduced, its actual thresholds and retry policy must be documented before release; no numeric rate limit is set by this contract.
+The table is the shared error vocabulary. An endpoint's OpenAPI operation lists the errors relevant to it. Only `POST /api/v1/auth/login` is rate limited; its thresholds and retry policy are documented with that endpoint. Any other limiter must document its thresholds before release.
 
 ## 7. Authorization rules
 
@@ -615,7 +617,7 @@ Clients must not retry a `4xx` response unchanged. After a lost response or a `5
 
 ## 12. Round application form (Task42)
 
-**Review status: not reviewed or approved. Implementation pending.** Task42 specifies two operations in the existing OpenAPI 3.1.0 [openapi.yaml](openapi.yaml): `getRoundApplicationForm` and `submitApplication`. It does not add a specification file or change the committee management contract in `rounds.openapi.yaml` (3.0.3). Submission rules in §11 remain decided. On 2026-10-20 the Task42 requester confirmed that GET uses the same ACTIVE account/student and currently open-round checks as submission. This records that explicit task decision; it does not claim a PO/team review has occurred. Task74 records the applicant-form action in the [permission-matrix handoff](../security/permission-matrix.md#s2-permission-matrix) for review; that documentation addition does not complete PO/team approval. Remaining questions are listed below and tracked under T74-D09. The requested round-scoped POST replaces the earlier contract-only club-nested route as explained in §11; no implementation or deployed-client compatibility is claimed.
+**Review status: not reviewed or approved. Both operations are implemented.** Task42 specifies two operations in the existing OpenAPI 3.1.0 [openapi.yaml](openapi.yaml): `getRoundApplicationForm` and `submitApplication`. It does not add a specification file or change the committee management contract in `rounds.openapi.yaml` (3.0.3). Submission rules in §11 remain decided. On 2026-10-20 the Task42 requester confirmed that GET uses the same ACTIVE account/student and currently open-round checks as submission. This records that explicit task decision; it does not claim a PO/team review has occurred. Task74 records the applicant-form action in the [permission-matrix handoff](../security/permission-matrix.md#s2-permission-matrix) for review; that documentation addition does not complete PO/team approval. Remaining questions are listed below and tracked under T74-D09. The requested round-scoped POST replaces the earlier contract-only club-nested route as explained in §11; no implementation or deployed-client compatibility is claimed.
 
 ### `GET /api/v1/rounds/{roundId}/application-form`
 

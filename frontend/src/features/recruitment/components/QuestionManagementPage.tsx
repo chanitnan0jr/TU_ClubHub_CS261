@@ -14,13 +14,13 @@ import {
 } from '../api/questionApi';
 import { ApiError, describeApiError } from '../../../lib/api';
 
-// The questions endpoints answer 409 without a reason, and the backend only
-// allows writes while the round is an open draft with no applications.
+// The questions endpoints answer 409 with an English detail and no reason, and the
+// backend only allows writes while the round is an open draft with no applications.
 const NOT_EDITABLE_MESSAGE =
-  'ไม่สามารถแก้ไขคำถามได้ในสถานะปัจจุบัน: แก้ไขได้เฉพาะรอบที่ยังเป็นฉบับร่าง ยังไม่ปิด และยังไม่มีผู้สมัคร (คำถามที่มีคำตอบแล้วลบไม่ได้)';
+  'ไม่สามารถแก้ไขคำถามได้ในสถานะปัจจุบัน: แก้ไขได้เฉพาะรอบที่ยังเป็นฉบับร่าง ยังไม่ปิด และยังไม่มีผู้สมัคร (คำถามที่มีคำตอบแล้วลบไม่ได้) หรือมีผู้แก้ไขพร้อมกัน กรุณารีเฟรชแล้วลองใหม่';
 
 const describeWriteError = (err: unknown, fallback: string) =>
-  err instanceof ApiError && err.status === 409 && !err.message
+  err instanceof ApiError && err.status === 409
     ? NOT_EDITABLE_MESSAGE
     : describeApiError(err, fallback);
 

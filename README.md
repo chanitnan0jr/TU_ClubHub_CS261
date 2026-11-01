@@ -2,7 +2,7 @@
 
 TU-ClubHub is a web platform in development for Thammasat University students to discover clubs, apply for membership, and track results. Club committees manage profiles and recruitment; central staff reporting is planned.
 
-> **Status reviewed: 2026-10-29.** Authentication, public club APIs, club profile updates, recruitment round writes, per-question management, and application submission APIs have implementations. The main frontend routes login, club detail, club editing, and question management; the round form and application form still need integration. The status below describes repository contents, not a deployment or test result. The [Sprint 2 Task74 analysis and review packet](docs/architecture/task74-sprint2-analysis.md) records user decisions and remains Draft / Pending Team Review; it does not establish team approval or a completed workflow.
+> **Status reviewed: 2026-10-29.** Authentication, public club APIs, club profile updates, recruitment round writes, per-question management, and application submission APIs have implementations. The main frontend routes login, club detail, club editing, round creation, and question management; the application form still needs integration. The status below describes repository contents, not a deployment or test result. The [Sprint 2 Task74 analysis and review packet](docs/architecture/task74-sprint2-analysis.md) records user decisions and remains Draft / Pending Team Review; it does not establish team approval or a completed workflow.
 
 ## Current implementation
 
@@ -11,9 +11,9 @@ TU-ClubHub is a web platform in development for Thammasat University students to
 | Authentication | TU real/mock adapters; session login/logout/me, CSRF, 30-minute idle and 8-hour absolute expiry; every authenticated request rechecks the account and a suspended account loses its session (`403 ACCOUNT_NOT_ALLOWED`); login creates/updates `student_profiles` from documented TU status values (unknown → `UNKNOWN`); public routes are one method + path list; connected login UI | Verify with real TU access (student-profile sync has passed automated tests only) and read the current global role from the database |
 | Public clubs (US-02) | Public profile and paginated currently open rounds APIs backed by the database; `/clubs/:clubId` shows their data | Club listing/search is absent; the apply buttons stay disabled until the application form is integrated |
 | Club profile (US-06) | `PUT /api/v1/clubs/{clubId}` with committee guard, rechecked inside the service transaction; `/clubs/:clubId/edit` prefills from the public profile and saves | `GET /api/v1/clubs/{clubId}` is contract-only; category/tag writes |
-| Recruitment (US-07) | Create, replace, publish, and close APIs with version checks and the self-review restriction; responses follow the `Round` schema, including questions; form component | Committee list/detail `GET`, `CANCEL` (effective `PRESIDENT`), and frontend integration of the round form |
+| Recruitment (US-07) | Create, replace, publish, and close APIs with version checks and the self-review restriction; responses follow the `Round` schema, including questions; `/clubs/:clubId/rounds/new` creates and optionally publishes a round | Committee list/detail `GET`, `CANCEL` (effective `PRESIDENT`), and publishing a draft from the UI after editing its questions |
 | Questions (US-08) | Questions saved with round `POST`/`PUT`, plus list/create/update/delete/reorder under `/api/v1/rounds/{roundId}/questions` with the self-review restriction and Problem error bodies; `/clubs/:clubId/rounds/:roundId/questions` uses them | Specific conflict codes such as `QUESTION_HAS_ANSWERS` (409 currently returns `RESOURCE_CONFLICT`) |
-| Applications (US-03) | `POST /api/v1/rounds/{roundId}/applications` saves the application, answers, links, and initial history in one transaction, with session/CSRF checks and Problem errors; database tables; a form prototype | `GET .../application-form`, a submission client, and real question data; the prototype does not persist applications |
+| Applications (US-03) | `GET /api/v1/rounds/{roundId}/application-form` returns an open round's questions; `POST /api/v1/rounds/{roundId}/applications` saves the application, answers, links, and initial history in one transaction, with session/CSRF checks and Problem errors; database tables; a form prototype | A submission client and real question data in the form; the prototype does not persist applications |
 | Later workflows | Schema and design for review, results, membership, notifications, and reporting | Application history, decisions, confirmation/decline, Admin APIs, and dashboards |
 | Runtime | Flyway migrations, health endpoint, Docker/Compose, and CI workflow | Deployment and verification of the selected release |
 
@@ -39,7 +39,7 @@ Dependency versions are recorded in [frontend/package.json](frontend/package.jso
 |---|---|
 | [Commit rules](COMMIT_RULES.md) | Conventional Commit format and project commit guidance |
 | [API v1 contract](docs/api/API_v1.md) | Shared endpoint, session, CSRF, response, and error conventions |
-| [Main OpenAPI specification](docs/api/openapi.yaml) | Authentication, clubs, health, and application submission, plus the pending application-form and Sprint 2 contracts |
+| [Main OpenAPI specification](docs/api/openapi.yaml) | Authentication, clubs, health, the application form and submission, plus the pending Sprint 2 contracts |
 | [Recruitment OpenAPI specification](docs/api/rounds.openapi.yaml) | Round/question writes plus pending committee reads and cancellation |
 | [System architecture](docs/architecture/system-architecture.md) | System boundaries, modules, security, workflows, and deployment target |
 | [Sprint 2 Task74 artefacts](docs/architecture/task74-sprint2-analysis.md) | Draft review packet linking the business flow, state machine, permissions, rule index, decisions, Story/AC traceability, QA scenarios, and approval checklist |
@@ -66,7 +66,7 @@ Use Docker Engine/Desktop with Compose V2. Run from the repository root:
    ```sh
    docker compose up --build
    ```
-3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` / `tu-clubhub-demo`. Health is available at `http://localhost:8080/actuator/health`.
+3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` or `applicant-demo` (password `tu-clubhub-demo`). Health is available at `http://localhost:8080/actuator/health`.
 4. A fresh database has no clubs. Once the app has started (Flyway creates the tables), load the dev-only demo data in another terminal:
    ```sh
    scripts/seed-dev-data.sh
@@ -111,7 +111,7 @@ Open `http://localhost:5173`; Vite proxies `/api` to `http://localhost:8080`. Us
 | `DB_PASSWORD` | Password for direct JVM startup with the `dev` profile |
 | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Override the JDBC connection when database name, host port, or credentials differ; Compose supplies these to containers |
 | `SPRING_PROFILES_ACTIVE` | Compose defaults to `dev`; production must use real TU authentication |
-| `PORT` | Spring HTTP port; keep 8080 with the current Compose `app` port mapping |
+| `PORT` | Host port for the Compose `app` service (the container listens on 8080); Spring's HTTP port when run outside Compose |
 | `TU_AUTH_MODE` | `mock` for dev/test, `real` for TU integration |
 | `TU_AUTH_ENDPOINT_URL`, `TU_AUTH_APPLICATION_KEY` | Required in real mode; server environment only |
 | `TU_AUTH_CONNECT_TIMEOUT`, `TU_AUTH_READ_TIMEOUT` | Backend defaults: `3s` and `5s` |

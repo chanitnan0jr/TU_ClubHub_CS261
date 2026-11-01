@@ -7,6 +7,7 @@ import LoginPage from "../pages/LoginPage";
 import MyApplicationsPage from "../pages/MyApplicationsPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import QuestionManagementRoutePage from "../pages/QuestionManagementRoutePage";
+import RoundCreateRoutePage from "../pages/RoundCreateRoutePage";
 import RequireAuth from "./RequireAuth";
 
 // Paths must stay under the prefixes the backend forwards to index.html
@@ -30,6 +31,14 @@ export default function AppRoutes() {
         element={
           <RequireAuth>
             <ClubEditRoutePage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/clubs/:clubId/rounds/new"
+        element={
+          <RequireAuth>
+            <RoundCreateRoutePage />
           </RequireAuth>
         }
       />

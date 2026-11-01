@@ -2,6 +2,8 @@ package com.tu.clubhub.application.repository;
 
 import com.tu.clubhub.application.domain.ValidatedApplicationSubmission.Answer;
 import com.tu.clubhub.application.domain.ValidatedApplicationSubmission.Link;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -19,6 +21,8 @@ public class ApplicationRepository {
             Instant opensAt, Instant closesAt, Instant closedAt) {}
     public record Question(long id, boolean required, int maxLength) {}
     public record Memberships(boolean alreadyMember, long distinctClubs) {}
+    public record FormRound(Round round, String clubStatus, String title, String description, String eligibilityText) {}
+    public record FormQuestion(long id, String prompt, boolean required, int displayOrder, int maxLength) {}
 
     private final JdbcTemplate jdbc;
 
@@ -52,11 +56,30 @@ public class ApplicationRepository {
         return jdbc.query("""
                 SELECT id, club_id, publication_status, published_at, opens_at, closes_at, closed_at
                 FROM recruitment_rounds WHERE id = ? FOR SHARE
-                """, (rs, row) -> new Round(rs.getLong("id"), rs.getLong("club_id"),
-                rs.getString("publication_status"), instant(rs.getObject("published_at", OffsetDateTime.class)),
-                instant(rs.getObject("opens_at", OffsetDateTime.class)),
-                instant(rs.getObject("closes_at", OffsetDateTime.class)),
-                instant(rs.getObject("closed_at", OffsetDateTime.class))), roundId).stream().findFirst();
+                """, (rs, row) -> round(rs), roundId).stream().findFirst();
+    }
+
+    /** Form read only: plain reads, because loading a form reserves nothing (API_v1.md section 12). */
+    public Optional<String> findStudentStatus(long userId) {
+        return jdbc.query("SELECT student_status FROM student_profiles WHERE user_id = ?",
+                (rs, row) -> rs.getString("student_status"), userId).stream().findFirst();
+    }
+
+    public Optional<FormRound> findFormRound(long roundId) {
+        return jdbc.query("""
+                SELECT r.id, r.club_id, r.publication_status, r.published_at, r.opens_at, r.closes_at, r.closed_at,
+                       r.title, r.description, r.eligibility_text, c.status AS club_status
+                FROM recruitment_rounds r JOIN clubs c ON c.id = r.club_id WHERE r.id = ?
+                """, (rs, row) -> new FormRound(round(rs), rs.getString("club_status"), rs.getString("title"),
+                rs.getString("description"), rs.getString("eligibility_text")), roundId).stream().findFirst();
+    }
+
+    public List<FormQuestion> findFormQuestions(long roundId) {
+        return jdbc.query("""
+                SELECT id, prompt, is_required, display_order, max_length FROM application_questions
+                WHERE round_id = ? ORDER BY display_order, id
+                """, (rs, row) -> new FormQuestion(rs.getLong("id"), rs.getString("prompt"),
+                rs.getBoolean("is_required"), rs.getInt("display_order"), rs.getInt("max_length")), roundId);
     }
 
     public Optional<String> lockClubStatus(long clubId) {
@@ -137,6 +160,14 @@ public class ApplicationRepository {
                     && "uq_applications_round_applicant".equals(sql.getServerErrorMessage().getConstraint())) return true;
         }
         return false;
+    }
+
+    private static Round round(ResultSet rs) throws SQLException {
+        return new Round(rs.getLong("id"), rs.getLong("club_id"), rs.getString("publication_status"),
+                instant(rs.getObject("published_at", OffsetDateTime.class)),
+                instant(rs.getObject("opens_at", OffsetDateTime.class)),
+                instant(rs.getObject("closes_at", OffsetDateTime.class)),
+                instant(rs.getObject("closed_at", OffsetDateTime.class)));
     }
 
     private static Instant instant(OffsetDateTime value) { return value == null ? null : value.toInstant(); }

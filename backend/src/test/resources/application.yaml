@@ -11,6 +11,13 @@ tu:
   auth:
     mode: mock
 
+clubhub:
+  auth:
+    # Every MockMvc request comes from 127.0.0.1; LoginRateLimitIntegrationTest sets its own low limits.
+    login-limit:
+      attempts-per-client: 100000
+      attempts-per-username: 100000
+
 server:
   servlet:
     session:

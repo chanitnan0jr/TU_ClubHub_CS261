@@ -8,12 +8,18 @@ public final class MockTuAuthClient implements TuAuthClient {
 
 	static final String DEMO_USERNAME = "student-demo";
 	static final String DEMO_PASSWORD = "tu-clubhub-demo";
+	// student-demo is a member of the club it runs, so the demo needs a second student to apply.
+	static final String APPLICANT_USERNAME = "applicant-demo";
 
 	private static final Map<String, DemoAccount> ACCOUNTS = Map.of(
 			DEMO_USERNAME,
 			new DemoAccount(DEMO_PASSWORD, new TuAuthUser(
 					DEMO_USERNAME, "Demo Student", "student-demo@dome.tu.ac.th", "student", "Demo Department", "Demo Faculty",
-					"ปกติ", null))
+					"ปกติ", null)),
+			APPLICANT_USERNAME,
+			new DemoAccount(DEMO_PASSWORD, new TuAuthUser(
+					APPLICANT_USERNAME, "Demo Applicant", "applicant-demo@dome.tu.ac.th", "student", "Demo Department",
+					"Demo Faculty", "ปกติ", null))
 	);
 
 	@Override

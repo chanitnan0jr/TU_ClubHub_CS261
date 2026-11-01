@@ -1,6 +1,6 @@
 # Local Demonstration Guide with Docker Compose
 
-This guide runs the current TU-ClubHub application and PostgreSQL locally using the checked-in Compose configuration. Reviewed on 2026-10-19; see [README](../../README.md#current-implementation) for feature status. Starting the containers does not make pending product workflows available.
+This guide runs the current TU-ClubHub application and PostgreSQL locally using the checked-in Compose configuration. Reviewed on 2026-11-01 against release `v0.1.0-sprint1`; see [README](../../README.md#current-implementation) for feature status. Starting the containers does not make pending product workflows available.
 
 ---
 
@@ -79,20 +79,38 @@ Select these services explicitly: enabling the profile without a service list al
 2. **Access the Application**:
    - Open your web browser and navigate to: [http://localhost:8080](http://localhost:8080)
    - If using split mode: [http://localhost](http://localhost)
-   - With `dev` + `TU_AUTH_MODE=mock`, use `student-demo` / `tu-clubhub-demo`.
+   - With `dev` + `TU_AUTH_MODE=mock`, two accounts share the password `tu-clubhub-demo`: `student-demo` (president of ชมรมเขียนโปรแกรม after seeding) and `applicant-demo` (a student with no memberships, for applying to that club).
    - After login the home page has a launcher that takes a club ID (and round ID). The club pages are `/clubs/{clubId}`, `/clubs/{clubId}/edit` and `/clubs/{clubId}/rounds/{roundId}/questions`. A fresh database has no clubs, so load the demo data first (step 3).
    - Unified health endpoint: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health).
 
 3. **Database Migrations and Initial Data**:
    - Flyway automatically applies all database migrations (`V1__init_schema.sql`, `V3__create_spring_session_tables.sql`) on startup.
-   - These create 17 business tables and the two Spring Session tables. There is no V2 or demo-data seed migration in the current repository.
-   - A fresh database has no demo clubs, memberships, or committee assignments. Mock login provisions a `users` row only; it does not create an eligible `student_profiles` row or grant committee access. API examples such as club ID `20001` are not seeded records.
+   - These create 17 business tables and the two Spring Session tables. The demo data in `V2__seed_test_data.sql` lives in test resources and is never applied in `dev` or `prod`.
+   - A fresh database has no demo clubs, memberships, or committee assignments. Mock login creates the `users` row and an ACTIVE `student_profiles` row from the mock TU status, but grants no membership or committee access. API examples such as club ID `20001` are not seeded records.
    - To load local demo data (10 clubs, committee accounts and sample rounds with questions), start the app once so Flyway creates the tables, then run `scripts/seed-dev-data.sh`. It is safe to run again. It makes `student-demo` the president of ชมรมเขียนโปรแกรม so the club editor and question pages work, and prints the page URLs to try. It is for local development only.
    - Check application logs:
      ```bash
      docker compose logs -f app
      ```
    - In split mode, use `docker compose logs -f backend`.
+
+4. **Smoke Test**:
+   ```bash
+   scripts/smoke-test.sh   # BASE_URL and DB_CONTAINER override the defaults
+   ```
+   It checks health, pages, the API and database, a mock login, and that PostgreSQL listens on loopback only, and exits non-zero on any failure.
+
+### US-03 Demo Walkthrough (application submission)
+
+After seeding, all of this works in the browser (`dev`, `TU_AUTH_MODE=mock`, password `tu-clubhub-demo`):
+
+1. Log in as `student-demo`, the president of ชมรมเขียนโปรแกรม (`/clubs/3` on a fresh seed).
+2. Edit the club at `/clubs/3/edit`.
+3. Create a round at `/clubs/3/rounds/new` (or the home page button): opening time in the past, closing time in the future, a confirmation deadline after closing, and the questions in the form. Click **บันทึกและเผยแพร่**. A draft cannot be published later from the UI yet.
+4. Open `/clubs/3`: the round appears with an apply button.
+5. Log out, log in as `applicant-demo`, click **สมัครเข้าร่วมชมรมนี้**, fill in the form, review and submit. The dialog shows the application number and `SUBMITTED`.
+
+`student-demo` cannot apply to its own club (it is already a member). The application history page (US-04) is not built yet.
 
 ---
 

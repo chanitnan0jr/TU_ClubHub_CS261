@@ -12,14 +12,11 @@ function validForm(
     title: 'รอบรับสมัครตัวอย่าง',
     academicYear: 2569,
     semester: 'SEMESTER_1',
-    capacity: 30,
-    isUnlimitedCapacity: false,
     description: 'รายละเอียดและคุณสมบัติผู้สมัคร',
     openAt: '2026-11-01T09:00',
     closeAt: '2026-11-10T17:00',
     announcementDate: '2026-11-15',
-    confirmationStartDate: '2026-11-16',
-    confirmationEndDate: '2026-11-20',
+    confirmationDeadline: '2026-11-20',
     questions: [
       { questionText: 'เหตุใดจึงสนใจเข้าร่วมชมรม?', isRequired: true, orderIndex: 0 },
     ],
@@ -50,24 +47,6 @@ test('requires title, academic year, semester, description, and application date
   )
 })
 
-test('requires positive capacity unless capacity is unlimited', () => {
-  assert.equal(
-    'capacity' in validateRecruitmentRoundForm(validForm({ capacity: null })),
-    true,
-  )
-  assert.equal(
-    'capacity' in validateRecruitmentRoundForm(validForm({ capacity: 0 })),
-    true,
-  )
-  assert.equal(
-    'capacity' in
-      validateRecruitmentRoundForm(
-        validForm({ isUnlimitedCapacity: true, capacity: null }),
-      ),
-    false,
-  )
-})
-
 test('requires closing date to be after opening date', () => {
   assert.equal(
     'closeAt' in
@@ -94,16 +73,27 @@ test('does not allow announcement before applications close', () => {
   )
 })
 
-test('does not allow confirmation to end before it starts', () => {
+test('requires a confirmation deadline after closing and on or after the announcement', () => {
   assert.equal(
-    'confirmationDates' in
-      validateRecruitmentRoundForm(
-        validForm({
-          confirmationStartDate: '2026-11-20',
-          confirmationEndDate: '2026-11-19',
-        }),
-      ),
-    true,
+    validateRecruitmentRoundForm(validForm({ confirmationDeadline: '' })).confirmationDeadline,
+    'กรุณาระบุวันสุดท้ายของการยืนยันสิทธิ์',
+  )
+  assert.equal(
+    validateRecruitmentRoundForm(
+      validForm({ closeAt: '2026-11-21T09:00', announcementDate: '', confirmationDeadline: '2026-11-20' }),
+    ).confirmationDeadline,
+    'วันสุดท้ายของการยืนยันสิทธิ์ต้องอยู่หลังวันปิดรับสมัคร',
+  )
+  assert.equal(
+    validateRecruitmentRoundForm(
+      validForm({ announcementDate: '2026-11-21', confirmationDeadline: '2026-11-20' }),
+    ).confirmationDeadline,
+    'วันสุดท้ายของการยืนยันสิทธิ์ต้องไม่เกิดก่อนวันประกาศผล',
+  )
+  assert.equal(
+    'confirmationDeadline' in
+      validateRecruitmentRoundForm(validForm({ announcementDate: '2026-11-20', confirmationDeadline: '2026-11-20' })),
+    false,
   )
 })
 

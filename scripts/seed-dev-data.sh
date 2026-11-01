@@ -29,7 +29,8 @@ psql_db < backend/src/test/resources/db/migration/V2__seed_test_data.sql
 }
 
 echo "Seeded. Log in at http://localhost:8080 as student-demo / tu-clubhub-demo (TU_AUTH_MODE=mock)."
-echo "student-demo is president of ชมรมเขียนโปรแกรม, so /clubs/<id>/edit works for it. Club pages:"
+echo "student-demo is president of ชมรมเขียนโปรแกรม, so /clubs/<id>/edit works for it."
+echo "Apply to that club as applicant-demo / tu-clubhub-demo; student-demo is already a member. Club pages:"
 psql_db -At -F '  ' -c "SELECT '/clubs/' || id, name FROM clubs ORDER BY id"
 echo "Draft round for the question page:"
 psql_db -At -F '  ' -c "SELECT '/clubs/' || club_id || '/rounds/' || id || '/questions', title

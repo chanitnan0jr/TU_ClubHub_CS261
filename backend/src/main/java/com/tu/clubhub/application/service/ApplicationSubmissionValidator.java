@@ -15,14 +15,17 @@ import org.springframework.stereotype.Component;
 /** Stateless validation; question-specific lengths/requirements are checked under the round lock. */
 @Component
 public class ApplicationSubmissionValidator {
-    public ValidatedApplicationSubmission validate(String rawRoundId, ApplicationSubmissionRequest request) {
-        long roundId;
+    public long roundId(String rawRoundId) {
         try {
-            roundId = positiveId(rawRoundId);
+            return positiveId(rawRoundId);
         } catch (IllegalArgumentException exception) {
             throw ApplicationSubmissionException.failure(400, "INVALID_RESOURCE_ID",
                     "roundId must be a positive decimal bigint without leading zeroes.");
         }
+    }
+
+    public ValidatedApplicationSubmission validate(String rawRoundId, ApplicationSubmissionRequest request) {
+        long roundId = roundId(rawRoundId);
         List<FieldError> errors = new ArrayList<>();
         if (request == null) {
             throw ApplicationSubmissionException.validation(

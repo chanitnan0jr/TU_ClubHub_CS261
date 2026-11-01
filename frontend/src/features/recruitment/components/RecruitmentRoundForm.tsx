@@ -15,20 +15,22 @@ interface RecruitmentRoundFormProps {
   onSubmit: (data: RecruitmentRoundFormInput, isDraft: boolean) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
+  submitError?: string | null;
 }
+
+// Buddhist-era academic years around the current one.
+const currentAcademicYear = new Date().getFullYear() + 543;
+const academicYearOptions = [currentAcademicYear - 1, currentAcademicYear, currentAcademicYear + 1];
 
 const defaultFormInput: RecruitmentRoundFormInput = {
   title: '',
-  academicYear: 2567,
+  academicYear: currentAcademicYear,
   semester: 'SEMESTER_1',
-  capacity: 60,
-  isUnlimitedCapacity: false,
   description: '',
   openAt: '',
   closeAt: '',
   announcementDate: '',
-  confirmationStartDate: '',
-  confirmationEndDate: '',
+  confirmationDeadline: '',
   questions: [
     { questionText: 'เพราะเหตุใดคุณจึงสนใจเข้าร่วมชมรมอาสาพัฒนา?', isRequired: true, orderIndex: 0 },
     { questionText: 'คุณมีทักษะหรือประสบการณ์ใดที่อยากนำมาช่วยชมรม?', isRequired: true, orderIndex: 1 },
@@ -46,6 +48,7 @@ export const RecruitmentRoundForm = ({
   onSubmit,
   onCancel,
   isLoading = false,
+  submitError = null,
 }: RecruitmentRoundFormProps) => {
   const [formData, setFormData] = useState<RecruitmentRoundFormInput>({
     ...defaultFormInput,
@@ -101,14 +104,13 @@ export const RecruitmentRoundForm = ({
     updateField('questions', withQuestionOrder(updated));
   };
 
+  // The API needs every round field even for a draft, so drafts are validated too.
   const handleSubmit = async (isDraft: boolean) => {
-    if (!isDraft) {
-      const validationErrors = validateRecruitmentRoundForm(formData);
-      if (Object.keys(validationErrors).length > 0) {
-        setErrors(validationErrors);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
-      }
+    const validationErrors = validateRecruitmentRoundForm(formData);
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
     setErrors({});
     await onSubmit(formData, isDraft);
@@ -176,6 +178,12 @@ export const RecruitmentRoundForm = ({
           </div>
         )}
 
+        {submitError && (
+          <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 font-medium shadow-sm">
+            {submitError}
+          </div>
+        )}
+
         <form className="flex flex-col gap-6">
           {/* SECTION 01: ข้อมูลรอบรับสมัคร */}
           <section className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-5">
@@ -212,8 +220,11 @@ export const RecruitmentRoundForm = ({
                   onChange={(e) => updateField('academicYear', Number(e.target.value))}
                   className="h-[44px] w-full rounded-lg border border-slate-300 px-3 text-sm bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 >
-                  <option value={2567}>2567</option>
-                  <option value={2568}>2568</option>
+                  {academicYearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
                 </select>
                 {errors.academicYear && (
                   <p className="text-xs text-rose-500 mt-1 font-medium">{errors.academicYear}</p>
@@ -237,38 +248,6 @@ export const RecruitmentRoundForm = ({
                   <p className="text-xs text-rose-500 mt-1 font-medium">{errors.semester}</p>
                 )}
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">จำนวนที่รับ (คน)</label>
-              <div className="flex items-center gap-4">
-                <input
-                  type="number"
-                  disabled={formData.isUnlimitedCapacity}
-                  value={formData.capacity ?? ''}
-                  onChange={(e) =>
-                    updateField('capacity', e.target.value ? Number(e.target.value) : null)
-                  }
-                  placeholder="60"
-                  className="h-[44px] w-36 rounded-lg border border-slate-300 px-3 text-sm disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-                <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={formData.isUnlimitedCapacity}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      updateField('isUnlimitedCapacity', checked);
-                      if (checked) updateField('capacity', null);
-                    }}
-                    className="h-4 w-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                  />
-                  ไม่จำกัดจำนวน
-                </label>
-              </div>
-              {errors.capacity && (
-                <p className="text-xs text-rose-500 mt-1 font-medium">{errors.capacity}</p>
-              )}
             </div>
 
             <div>
@@ -331,24 +310,18 @@ export const RecruitmentRoundForm = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">ช่วงเวลายืนยันสิทธิ์</label>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  <input
-                    type="date"
-                    value={formData.confirmationStartDate}
-                    onChange={(e) => updateField('confirmationStartDate', e.target.value)}
-                    className="h-[44px] w-full rounded-lg border border-slate-300 px-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                  <span className="hidden sm:inline text-slate-400 text-center">-</span>
-                  <input
-                    type="date"
-                    value={formData.confirmationEndDate}
-                    onChange={(e) => updateField('confirmationEndDate', e.target.value)}
-                    className="h-[44px] w-full rounded-lg border border-slate-300 px-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-                {errors.confirmationDates && (
-                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.confirmationDates}</p>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  วันสุดท้ายของการยืนยันสิทธิ์ <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={formData.confirmationDeadline}
+                  onChange={(e) => updateField('confirmationDeadline', e.target.value)}
+                  className="h-[44px] w-full rounded-lg border border-slate-300 px-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+                <p className="text-xs text-slate-500 mt-1">ผู้ผ่านการคัดเลือกยืนยันสิทธิ์ได้ถึง 23:59 น. ของวันนี้</p>
+                {errors.confirmationDeadline && (
+                  <p className="text-xs text-rose-500 mt-1 font-medium">{errors.confirmationDeadline}</p>
                 )}
               </div>
             </div>

@@ -79,7 +79,8 @@ export function validateApplicationForm(
       itemErrors.label = 'กรุณาระบุชื่อเอกสารไม่เกิน 200 ตัวอักษร';
     }
 
-    if (!isValidHttpsUrl(link.url)) {
+    // The payload trims the URL, so surrounding spaces are not an error.
+    if (!isValidHttpsUrl(link.url.trim())) {
       itemErrors.url =
         'กรุณาระบุ URL HTTPS ที่ถูกต้องและไม่มีข้อมูลชื่อผู้ใช้หรือรหัสผ่าน';
     }
