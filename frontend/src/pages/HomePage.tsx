@@ -71,6 +71,14 @@ export default function HomePage() {
             >
               แก้ไขโปรไฟล์ชมรม
             </button>
+            <button
+              type="button"
+              disabled={!clubOk}
+              onClick={() => navigate(`/clubs/${clubId}/rounds/new`)}
+              className={linkButtonClass}
+            >
+              สร้างรอบรับสมัคร
+            </button>
           </div>
 
           <div>
