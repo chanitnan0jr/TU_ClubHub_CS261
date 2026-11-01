@@ -83,6 +83,7 @@ public class SecurityConfiguration {
 				// After CSRF so an invalid token is still reported as CSRF_INVALID.
 				.addFilterAfter(new ActiveAccountFilter(userAccountRepository, objectMapper), CsrfFilter.class)
 				.authorizeHttpRequests(authorize -> authorize
+						.dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
 						.requestMatchers(PublicRoutes.MATCHER).permitAll()
 						.anyRequest().authenticated())
 				.requestCache(cache -> cache.disable())
@@ -103,7 +104,7 @@ public class SecurityConfiguration {
 		return http.build();
 	}
 
-	static void writeProblem(
+	static ProblemResponse writeProblem(
 			ObjectMapper objectMapper,
 			HttpServletResponse response,
 			String path,
@@ -114,7 +115,7 @@ public class SecurityConfiguration {
 		response.setStatus(status);
 		response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
 		response.setHeader("Cache-Control", "no-store");
-		objectMapper.writeValue(response.getOutputStream(), new ProblemResponse(
+		var body = new ProblemResponse(
 				"urn:tuclubhub:problem:" + code.toLowerCase().replace('_', '-'),
 				title,
 				status,
@@ -122,6 +123,8 @@ public class SecurityConfiguration {
 				path,
 				code,
 				java.util.UUID.randomUUID().toString(),
-				List.of()));
+				List.of());
+		objectMapper.writeValue(response.getOutputStream(), body);
+		return body;
 	}
 }

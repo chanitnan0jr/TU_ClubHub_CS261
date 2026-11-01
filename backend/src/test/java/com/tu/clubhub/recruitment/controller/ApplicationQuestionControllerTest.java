@@ -130,6 +130,7 @@ class ApplicationQuestionControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("RESOURCE_CONFLICT"))
                 .andExpect(jsonPath("$.detail").value("Question has answers"))
+                .andExpect(jsonPath("$.reason").value("QUESTION_HAS_ANSWERS"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
 }
