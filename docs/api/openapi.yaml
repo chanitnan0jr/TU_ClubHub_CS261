@@ -853,7 +853,7 @@ paths:
       tags: [Applications]
       operationId: getRoundApplicationForm
       summary: Get the applicant-facing text-question form for a recruitment round
-      x-implementation-status: pending
+      x-implementation-status: implemented
       x-contract-status: defined-pending-review
       x-review-required:
         - Confirm whether prior application or membership eligibility should additionally block reading the form; not specified as a GET rejection here.

@@ -27,7 +27,7 @@ Initial source review on 2026-10-19; application POST status updated on 2026-10-
 | `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard | Editor/client exist but are not mounted |
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
 | Committee round `GET` list/detail and `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
-| `GET /api/v1/rounds/{roundId}/application-form` (§12) | Account/student/window policy confirmed by Task42 requester; PO/team review pending; no handler | Form prototype only |
+| `GET /api/v1/rounds/{roundId}/application-form` (§12) | Implemented with the Task42-confirmed account/student/window policy; PO/team review pending | Form prototype only |
 | `POST /api/v1/rounds/{roundId}/applications` (§11) | Implemented: transactional service, HTTP handler, shared Problem errors, session/CSRF; see [Task45 verification](../testing/task45-concurrency-and-rollback.md) | No submission client |
 | `/actuator/health` | Implemented | Operational endpoint |
 
@@ -45,7 +45,7 @@ The foundation contract covers:
 - Applicant-facing form schemas and the read policy in [section 12](#12-round-application-form-task42).
 - A minimal health endpoint for operations.
 
-Application review, membership decisions, notifications, search, and dashboards remain product backlog work; their request and response schemas must be defined before implementation. Recruitment management is specified separately in [rounds.openapi.yaml](rounds.openapi.yaml). The submission contract is defined below, but its implementation is still pending. A not-yet-implemented endpoint must not return a success response as a stub.
+Application review, membership decisions, notifications, search, and dashboards remain product backlog work; their request and response schemas must be defined before implementation. Recruitment management is specified separately in [rounds.openapi.yaml](rounds.openapi.yaml). The application form and submission contracts are defined below and implemented. A not-yet-implemented endpoint must not return a success response as a stub.
 
 ## 2. API conventions
 
@@ -615,7 +615,7 @@ Clients must not retry a `4xx` response unchanged. After a lost response or a `5
 
 ## 12. Round application form (Task42)
 
-**Review status: not reviewed or approved. Implementation pending.** Task42 specifies two operations in the existing OpenAPI 3.1.0 [openapi.yaml](openapi.yaml): `getRoundApplicationForm` and `submitApplication`. It does not add a specification file or change the committee management contract in `rounds.openapi.yaml` (3.0.3). Submission rules in §11 remain decided. On 2026-10-20 the Task42 requester confirmed that GET uses the same ACTIVE account/student and currently open-round checks as submission. This records that explicit task decision; it does not claim a PO/team review has occurred. Task74 records the applicant-form action in the [permission-matrix handoff](../security/permission-matrix.md#s2-permission-matrix) for review; that documentation addition does not complete PO/team approval. Remaining questions are listed below and tracked under T74-D09. The requested round-scoped POST replaces the earlier contract-only club-nested route as explained in §11; no implementation or deployed-client compatibility is claimed.
+**Review status: not reviewed or approved. Both operations are implemented.** Task42 specifies two operations in the existing OpenAPI 3.1.0 [openapi.yaml](openapi.yaml): `getRoundApplicationForm` and `submitApplication`. It does not add a specification file or change the committee management contract in `rounds.openapi.yaml` (3.0.3). Submission rules in §11 remain decided. On 2026-10-20 the Task42 requester confirmed that GET uses the same ACTIVE account/student and currently open-round checks as submission. This records that explicit task decision; it does not claim a PO/team review has occurred. Task74 records the applicant-form action in the [permission-matrix handoff](../security/permission-matrix.md#s2-permission-matrix) for review; that documentation addition does not complete PO/team approval. Remaining questions are listed below and tracked under T74-D09. The requested round-scoped POST replaces the earlier contract-only club-nested route as explained in §11; no implementation or deployed-client compatibility is claimed.
 
 ### `GET /api/v1/rounds/{roundId}/application-form`
 
