@@ -603,7 +603,7 @@ paths:
                 $ref: '#/components/schemas/Problem'
               example:
                 type: urn:tuclubhub:problem:resource-conflict
-                title: Question cannot be modified
+                title: "Resource state conflict"
                 status: 409
                 detail: Cannot modify a screening question that already has submitted answers.
                 instance: /api/v1/rounds/70001/questions/81001
@@ -672,7 +672,7 @@ paths:
                 $ref: '#/components/schemas/Problem'
               example:
                 type: urn:tuclubhub:problem:resource-conflict
-                title: Question cannot be deleted
+                title: "Resource state conflict"
                 status: 409
                 detail: Cannot delete a screening question that already has submitted answers.
                 instance: /api/v1/rounds/70001/questions/81001
@@ -1073,6 +1073,7 @@ components:
       properties:
         type:
           type: string
+          format: uri-reference
         title:
           type: string
         status:
@@ -1081,6 +1082,7 @@ components:
           type: string
         instance:
           type: string
+          format: uri-reference
         code:
           type: string
         reason:

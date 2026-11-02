@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getClubProfile, updateClubProfile } from '../api/clubApi';
+import { describeApiError } from '../../../lib/api';
 import type { ClubResponseDto, ClubUpdateRequestDto } from '../types/club';
 
 export const useClubProfile = (clubId: string) => {
@@ -26,8 +27,8 @@ export const useClubProfile = (clubId: string) => {
       .then((profile) => {
         if (current) setData(profile);
       })
-      .catch((err: any) => {
-        if (current) setErrorMessage(err.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+      .catch((err: unknown) => {
+        if (current) setErrorMessage(describeApiError(err, 'เกิดข้อผิดพลาดในการโหลดข้อมูล'));
       })
       .finally(() => {
         if (current) setIsLoading(false);
@@ -53,8 +54,8 @@ export const useClubProfile = (clubId: string) => {
       const updatedProfile = await updateClubProfile(clubId, updateData);
       setData(updatedProfile);
       setSuccessMessage('อัปเดตข้อมูลชมรมสำเร็จเรียบร้อย');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'ไม่สามารถอัปเดตข้อมูลได้');
+    } catch (err: unknown) {
+      setErrorMessage(describeApiError(err, 'ไม่สามารถอัปเดตข้อมูลได้'));
     } finally {
       setIsSubmitting(false);
     }

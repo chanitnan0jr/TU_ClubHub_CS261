@@ -136,7 +136,8 @@ public class AuthController {
 }
 
 @RestControllerAdvice(assignableTypes = AuthController.class)
-class AuthExceptionHandler {
+@org.springframework.core.annotation.Order(0)
+class AuthExceptionHandler extends com.tu.clubhub.common.error.ApiExceptionHandler {
 
 	@ExceptionHandler(AuthenticationFailedException.class)
 	ResponseEntity<ProblemResponse> authenticationFailed(HttpServletRequest request) {
