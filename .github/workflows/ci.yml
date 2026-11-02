@@ -55,6 +55,14 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Write frontend summary
+        if: always()
+        run: |
+          echo "### Frontend CI (${{ job.status }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Linter:** \`npm run lint\` (\`oxlint\`)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Unit Tests:** \`npm test\` (\`tsx --test tests/*.test.ts\`)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Build:** \`npm run build\` (\`tsc -b && vite build\`)" >> "$GITHUB_STEP_SUMMARY"
+
   backend:
     name: Backend CI (Compile & Verify)
     runs-on: ubuntu-latest
@@ -96,6 +104,25 @@ jobs:
 
       - name: Run Maven verify
         run: ./mvnw clean verify
+
+      - name: Write backend test summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, xml.etree.ElementTree as ET
+          tests = failures = errors = skipped = 0
+          for path in glob.glob("target/surefire-reports/TEST-*.xml"):
+              root = ET.parse(path).getroot()
+              tests += int(root.attrib.get("tests", 0))
+              failures += int(root.attrib.get("failures", 0))
+              errors += int(root.attrib.get("errors", 0))
+              skipped += int(root.attrib.get("skipped", 0))
+          passed = tests - failures - errors - skipped
+          print("### Backend CI (${{ job.status }})")
+          print("| Total | Passed | Failures | Errors | Skipped |")
+          print("|---:|---:|---:|---:|---:|")
+          print(f"| {tests} | {passed} | {failures} | {errors} | {skipped} |")
+          PY
 
       - name: Upload backend tests and coverage
         if: always()
