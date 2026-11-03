@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router";
 import ApplicationRoutePage from "../pages/ApplicationRoutePage";
+import ClubSearchPage from "../pages/ClubSearchPage";
 import ClubDetailRoutePage from "../pages/ClubDetailRoutePage";
 import ClubEditRoutePage from "../pages/ClubEditRoutePage";
 import HomePage from "../pages/HomePage";
@@ -15,7 +16,8 @@ import RequireAuth from "./RequireAuth";
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/" element={<ClubSearchPage />} />
+      <Route path="/dashboard" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/clubs/:clubId" element={<ClubDetailRoutePage />} />
       <Route

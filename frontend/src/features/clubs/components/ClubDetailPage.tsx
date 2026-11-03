@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import type { RecruitmentRoundData } from '../types/club';
 import { fetchClubDetail, type ClubDetailResult } from '../services/clubService';
 import { formatThaiDateTime } from '../../../lib/format';
@@ -12,9 +13,6 @@ interface ClubDetailPageProps {
   // Routes an authenticated student to the selected round's application form.
   onNavigateToApplication?: (roundId: string) => void;
 }
-
-// รูป Cover สำรอง กรณีที่ชมรมไม่มีรูปหรือโหลดรูปไม่ขึ้น
-const DEFAULT_COVER_IMAGE = 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&q=80&w=1200';
 
 const formatPeriod = (round: RecruitmentRoundData) =>
   `${formatThaiDateTime(round.opensAt)} – ${formatThaiDateTime(round.closesAt)}`;
@@ -95,8 +93,7 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
   }
 
   const { club } = result;
-  const coverSrc =
-    club.bannerUrl && club.bannerUrl !== failedCover ? club.bannerUrl : DEFAULT_COVER_IMAGE;
+  const coverSrc = club.bannerUrl && club.bannerUrl !== failedCover ? club.bannerUrl : undefined;
   const emailUrl = club.contacts.email ? `mailto:${club.contacts.email}` : '';
   const hasContacts = Boolean(
     club.contacts.website || club.contacts.facebook || club.contacts.instagram || emailUrl,
@@ -123,17 +120,12 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
             </span>
           </div>
 
-          <div className="flex-1 max-w-md hidden sm:block">
-            <div className="relative">
-              <input
-                type="text"
-                disabled
-                placeholder="ค้นหาชมรม (ยังไม่เปิดใช้งาน)"
-                className="w-full h-9 rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-4 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
-              />
-              <span className="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
-            </div>
-          </div>
+          <Link
+            to="/"
+            className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:text-sm"
+          >
+            สำรวจชมรม
+          </Link>
 
           <div>
             {isLoggedIn ? (
@@ -170,16 +162,20 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
           )}
         </div>
 
-        {/* Hero Cover Image & Fallback */}
+        {/* Club cover */}
         <div className="relative rounded-3xl overflow-hidden bg-white border border-slate-200/80 shadow-sm">
-          <div className="h-48 sm:h-72 w-full bg-slate-800 relative overflow-hidden">
-            <img
-              src={coverSrc}
-              onError={() => setFailedCover(coverSrc)}
-              alt={club.name}
-              className="w-full h-full object-cover opacity-85"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          <div className={`h-48 sm:h-72 w-full relative overflow-hidden ${coverSrc ? 'bg-slate-800' : 'bg-gradient-to-br from-rose-100 via-rose-50 to-orange-50'}`}>
+            {coverSrc && (
+              <>
+                <img
+                  src={coverSrc}
+                  onError={() => setFailedCover(coverSrc)}
+                  alt={club.name}
+                  className="w-full h-full object-cover opacity-85"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              </>
+            )}
           </div>
 
           <div className="p-5 sm:p-7 pt-0 relative flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
