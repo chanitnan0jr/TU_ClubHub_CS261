@@ -5,6 +5,10 @@ import { apiRequest, describeApiError, resetAuthFailureNotification, subscribeAu
 export type User = {
   id: string;
   role: "USER" | "STUDENT" | "CLUB_COMMITTEE" | "ADMIN" | string;
+  displayName?: string | null;
+  studentCode?: string | null;
+  email?: string | null;
+  facultyName?: string | null;
 };
 
 type AuthContextType = {
