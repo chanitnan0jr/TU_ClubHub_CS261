@@ -1,3 +1,4 @@
+import { CentralDashboardPage } from '../features/admin-dashboard/pages/CentralDashboardPage';
 import { Route, Routes } from "react-router";
 import ApplicationRoutePage from "../pages/ApplicationRoutePage";
 import ClubDetailRoutePage from "../pages/ClubDetailRoutePage";
@@ -18,6 +19,7 @@ export default function AppRoutes() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/clubs/:clubId" element={<ClubDetailRoutePage />} />
+      <Route path="/admin/dashboard" element={<CentralDashboardPage />} />
       <Route
         path="/clubs/:clubId/rounds/:roundId/apply"
         element={
