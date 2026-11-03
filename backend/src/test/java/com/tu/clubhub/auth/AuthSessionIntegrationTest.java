@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -238,6 +239,12 @@ class AuthSessionIntegrationTest {
 		// Accessing protected endpoint /api/v1/auth/me after timeout should be rejected with 401
 		mockMvc.perform(get("/api/v1/auth/me").cookie(authenticatedCookie))
 				.andExpect(status().isUnauthorized())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+				.andExpect(jsonPath("$.status").value(401))
+				.andExpect(jsonPath("$.type").value("urn:tuclubhub:problem:authentication-required"))
+				.andExpect(jsonPath("$.title").value("Authentication required"))
+				.andExpect(jsonPath("$.instance").value("/api/v1/auth/me"))
+				.andExpect(jsonPath("$.traceId").isNotEmpty())
 				.andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
 				.andExpect(jsonPath("$.detail").value("Your session has expired. Sign in again."));
 

@@ -5,7 +5,7 @@ export interface RecordedRequest {
   body: unknown
 }
 
-type Responder = (request: RecordedRequest) => Response
+type Responder = (request: RecordedRequest) => Response | Promise<Response>
 
 /**
  * Replaces globalThis.fetch with a stub that records each request and answers

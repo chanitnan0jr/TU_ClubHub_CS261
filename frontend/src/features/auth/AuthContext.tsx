@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
+import { apiRequest, describeApiError, resetAuthFailureNotification, subscribeAuthFailures } from "../../lib/api";
 
 export type User = {
   id: string;
@@ -10,188 +11,78 @@ type AuthContextType = {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  notice: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const isMockAuth =
-  import.meta.env.VITE_MOCK_AUTH === "true" ||
-  import.meta.env.VITE_ENABLE_MOCK_AUTH === "true";
+const isMockAuth = import.meta.env?.VITE_MOCK_AUTH === "true" || import.meta.env?.VITE_ENABLE_MOCK_AUTH === "true";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const csrfTokenRef = useRef<string>("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
+  const authVersion = useRef(0);
 
-  // ดึง CSRF Token เริ่มต้น
-  const fetchCsrfToken = async () => {
-    try {
-      const res = await fetch("/api/v1/auth/csrf", { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        const token = data.token || data.csrfToken || "";
-        if (token) {
-          csrfTokenRef.current = token;
-        }
-      }
-    } catch {
-      // Ignore
-    }
-  };
+  useEffect(() => subscribeAuthFailures(failure => {
+    authVersion.current++;
+    setUser(null);
+    setNotice(failure === 'account-not-allowed'
+      ? 'บัญชีนี้ไม่ได้รับอนุญาตให้ใช้งานระบบ'
+      : 'เซสชันหมดอายุหรือยังไม่ได้เข้าสู่ระบบ กรุณาเข้าสู่ระบบอีกครั้ง');
+  }), []);
 
   useEffect(() => {
+    let cancelled = false;
+    const version = authVersion.current;
     const checkSession = async () => {
       try {
         if (isMockAuth) {
-          const testUser = sessionStorage.getItem("tu_test_user");
-          if (testUser) {
-            setUser(JSON.parse(testUser));
-          }
-          setIsLoading(false);
+          const saved = sessionStorage.getItem("tu_test_user");
+          if (saved && !cancelled) setUser(JSON.parse(saved));
           return;
         }
-
-        await fetchCsrfToken();
-
-        const res = await fetch("/api/v1/auth/me", {
-          credentials: "include",
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          // รองรับทั้งแบบหุ้ม user: { ... } หรือส่งตรงๆ
-          const userData = data.user || data;
-          setUser(userData);
-        } else {
-          setUser(null);
-        }
-      } catch {
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
+        const data = await apiRequest<{ user: User }>("/api/v1/auth/me", { notifyAuthFailure: false });
+        if (!cancelled && version === authVersion.current) { resetAuthFailureNotification(); setUser(data.user); }
+      } catch { if (!cancelled && version === authVersion.current) setUser(null); }
+      finally { if (!cancelled) setIsLoading(false); }
     };
-
-    checkSession();
+    void checkSession();
+    return () => { cancelled = true; };
   }, []);
 
   const login = async (username: string, password: string) => {
+    authVersion.current++;
+    setNotice(null);
     if (isMockAuth) {
-      const mockUser: User = {
-        id: "mock-id-1",
-        role: "STUDENT",
-      };
+      const mockUser: User = { id: "mock-id-1", role: "STUDENT" };
       setUser(mockUser);
       sessionStorage.setItem("tu_test_user", JSON.stringify(mockUser));
+      resetAuthFailureNotification();
       return;
     }
-
-    if (!csrfTokenRef.current) {
-      await fetchCsrfToken();
-    }
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (csrfTokenRef.current) {
-      headers["X-CSRF-TOKEN"] = csrfTokenRef.current;
-    }
-
-    const response = await fetch("/api/v1/auth/login", {
-      method: "POST",
-      headers,
-      credentials: "include",
-      body: JSON.stringify({ username, password }),
-    });
-
-    if (!response.ok) {
-      let errorMsg = "เข้าสู่ระบบไม่สำเร็จ โปรดตรวจสอบรหัสนักศึกษาหรือรหัสผ่าน";
-      try {
-        const errData = await response.json();
-        // รองรับมาตรฐาน RFC 7807 Problem Details (detail / title / message)
-        errorMsg = errData.detail || errData.title || errData.message || errorMsg;
-      } catch {
-        // Fallback
-      }
-      throw new Error(errorMsg);
-    }
-
-    // อัปเดต CSRF Token ใหม่จาก Response Body หากมีส่งกลับมา (ตามสเปก PR #8)
     try {
-      const responseData = await response.json().catch(() => ({}));
-      if (responseData.csrf && responseData.csrf.token) {
-        csrfTokenRef.current = responseData.csrf.token;
-      }
-    } catch {
-      // Ignore parsing if empty
-    }
-
-    // ดึงข้อมูลผู้ใช้ต่อ
-    const meResponse = await fetch("/api/v1/auth/me", {
-      credentials: "include",
-    });
-
-    if (meResponse.ok) {
-      const data = await meResponse.json();
-      const userData = data.user || data;
-      setUser(userData);
-    } else {
-      throw new Error("ไม่สามารถดึงข้อมูลผู้ใช้ได้หลังเข้าสู่ระบบ");
-    }
+      await apiRequest("/api/v1/auth/login", { method: "POST", body: { username, password } });
+      // Subsequent writes fetch the fresh token from the current session through apiRequest.
+      const data = await apiRequest<{ user: User }>("/api/v1/auth/me");
+      resetAuthFailureNotification();
+      setUser(data.user);
+    } catch (error) { throw new Error(describeApiError(error, "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง")); }
   };
 
   const logout = async () => {
-    if (isMockAuth) {
-      setUser(null);
-      sessionStorage.removeItem("tu_test_user");
-      return;
-    }
-
+    authVersion.current++;
+    setNotice(null);
     try {
-      if (!csrfTokenRef.current) {
-        await fetchCsrfToken();
-      }
-
-      const headers: Record<string, string> = {};
-      if (csrfTokenRef.current) {
-        headers["X-CSRF-TOKEN"] = csrfTokenRef.current;
-      }
-
-      const response = await fetch("/api/v1/auth/logout", {
-        method: "POST",
-        headers,
-        credentials: "include",
-      });
-
-      // ตรวจสอบ Status ตามสเปก (204 No Content หรือ 401) ก่อนล้าง State
-      if (response.status === 204 || response.status === 401 || response.ok) {
-        setUser(null);
-      } else {
-        throw new Error("Server rejected logout");
-      }
-    } catch {
-      // หากเกิดข้อผิดพลาดเครือข่าย แต่บังคับล้างเฉพาะเมื่อแน่ใจ หรือเคลียร์ client state
-      setUser(null);
-    } finally {
-      setUser(null);
-    }
+      if (isMockAuth) sessionStorage.removeItem("tu_test_user");
+      else await apiRequest<void>("/api/v1/auth/logout", { method: "POST" });
+    } catch (error) {
+      setNotice(describeApiError(error, "ไม่สามารถติดต่อระบบเพื่อออกจากระบบได้ กรุณาลองใหม่"));
+    } finally { setUser(null); }
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        login,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, notice, login, logout }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {

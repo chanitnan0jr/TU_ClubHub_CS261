@@ -1,12 +1,13 @@
 package com.tu.clubhub.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -110,7 +111,16 @@ class StudentProfileLoginIntegrationTest {
 		when(tuAuthClient.authenticate(username, PASSWORD))
 				.thenReturn(Optional.of(student(username, "ปกติ", null)));
 
-		assertThrows(Exception.class, () -> mockMvc.perform(loginRequest(username, anonymous)));
+		// The shared API advice now handles this failure instead of leaking an uncaught exception.
+		mockMvc.perform(loginRequest(username, anonymous))
+				.andExpect(status().isInternalServerError())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+				.andExpect(jsonPath("$.status").value(500))
+				.andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+				.andExpect(jsonPath("$.type").value("urn:tuclubhub:problem:internal-error"))
+				.andExpect(jsonPath("$.detail").value("The request could not be completed."))
+				.andExpect(jsonPath("$.instance").value("/api/v1/auth/login"))
+				.andExpect(jsonPath("$.traceId").isNotEmpty());
 
 		assertTrue(userAccountRepository.findByTuUsername(username).isEmpty(), "the account insert is rolled back");
 		assertEquals(0, userAccountRepository.count());

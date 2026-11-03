@@ -201,6 +201,8 @@ paths:
                 traceId: 01J9EXAMPLE7K4D5
         default:
           $ref: '#/components/responses/ServerError'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
   /api/v1/auth/me:
     get:
       tags: [Authentication]
@@ -706,7 +708,7 @@ paths:
                 type: urn:tuclubhub:problem:club-not-found
                 title: Club not found
                 status: 404
-                detail: No public club was found for this identifier.
+                detail: "No club was found for this identifier."
                 instance: /api/v1/clubs/20001
                 code: CLUB_NOT_FOUND
                 traceId: 01J9EXAMPLE7K4D5
@@ -880,6 +882,8 @@ paths:
           $ref: '#/components/responses/ServiceUnavailable'
         default:
           $ref: '#/components/responses/ServerError'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
   /api/v1/rounds/{roundId}/application-form:
     get:
       tags: [Applications]
@@ -981,6 +985,7 @@ paths:
                 type: urn:tuclubhub:problem:invalid-resource-id
                 title: Invalid resource identifier
                 status: 400
+                detail: "A resource identifier has an invalid format."
                 instance: /api/v1/rounds/abc/application-form
                 code: INVALID_RESOURCE_ID
                 traceId: example-form-trace
@@ -1014,6 +1019,7 @@ paths:
                 type: urn:tuclubhub:problem:resource-not-found
                 title: Resource not found
                 status: 404
+                detail: "No resource was found for this identifier."
                 instance: /api/v1/rounds/70001/application-form
                 code: RESOURCE_NOT_FOUND
                 traceId: example-form-trace
@@ -1028,8 +1034,9 @@ paths:
                 $ref: '#/components/schemas/ApplicationFormAvailabilityConflict'
               example:
                 type: urn:tuclubhub:problem:resource-conflict
-                title: Application form unavailable
+                title: "Resource state conflict"
                 status: 409
+                detail: "The request conflicts with the current resource state."
                 instance: /api/v1/rounds/70001/application-form
                 code: RESOURCE_CONFLICT
                 reason: ROUND_CLOSED
@@ -1226,7 +1233,7 @@ paths:
                 type: urn:tuclubhub:problem:resource-not-found
                 title: Resource not found
                 status: 404
-                detail: No published recruitment round was found at this path.
+                detail: "No resource was found for this identifier."
                 instance: /api/v1/rounds/70001/applications
                 code: RESOURCE_NOT_FOUND
                 traceId: 01J9EXAMPLE7K4D5
@@ -1246,7 +1253,7 @@ paths:
                   summary: The round was cancelled
                   value:
                     type: urn:tuclubhub:problem:resource-conflict
-                    title: Application conflicts with current state
+                    title: "Resource state conflict"
                     status: 409
                     detail: This recruitment round has been cancelled.
                     instance: /api/v1/rounds/70001/applications
@@ -1257,7 +1264,7 @@ paths:
                   summary: The round has not opened yet
                   value:
                     type: urn:tuclubhub:problem:resource-conflict
-                    title: Application conflicts with current state
+                    title: "Resource state conflict"
                     status: 409
                     detail: This recruitment round is not open for applications yet.
                     instance: /api/v1/rounds/70001/applications
@@ -1268,7 +1275,7 @@ paths:
                   summary: The round has closed, on schedule or early
                   value:
                     type: urn:tuclubhub:problem:resource-conflict
-                    title: Application conflicts with current state
+                    title: "Resource state conflict"
                     status: 409
                     detail: This recruitment round is closed.
                     instance: /api/v1/rounds/70001/applications
@@ -1279,7 +1286,7 @@ paths:
                   summary: The student already applied to this round, in any status
                   value:
                     type: urn:tuclubhub:problem:resource-conflict
-                    title: Application conflicts with current state
+                    title: "Resource state conflict"
                     status: 409
                     detail: You have already submitted an application for this round.
                     instance: /api/v1/rounds/70001/applications
@@ -1290,7 +1297,7 @@ paths:
                   summary: The student is already an active member of this club
                   value:
                     type: urn:tuclubhub:problem:resource-conflict
-                    title: Application conflicts with current state
+                    title: "Resource state conflict"
                     status: 409
                     detail: You are already a member of this club.
                     instance: /api/v1/rounds/70001/applications
@@ -1301,7 +1308,7 @@ paths:
                   summary: The student is an active member of five clubs
                   value:
                     type: urn:tuclubhub:problem:resource-conflict
-                    title: Application conflicts with current state
+                    title: "Resource state conflict"
                     status: 409
                     detail: You are already an active member of five clubs.
                     instance: /api/v1/rounds/70001/applications
@@ -1312,6 +1319,8 @@ paths:
           $ref: '#/components/responses/ServerError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
     get:
       tags: [Committee Review & Results]
       operationId: listRoundApplicationsForCommittee
@@ -3977,11 +3986,12 @@ components:
           $ref: '#/components/schemas/PageMetadata'
     Problem:
       type: object
-      required: [type, title, status, code, traceId]
+      additionalProperties: false
+      required: [type, title, status, code, traceId, detail, instance]
       properties:
         type:
           type: string
-          format: uri
+          format: "uri-reference"
         title:
           type: string
         status:
@@ -3992,6 +4002,7 @@ components:
           type: string
         instance:
           type: string
+          format: uri-reference
         code:
           type: string
         reason:
@@ -4061,7 +4072,7 @@ components:
             type: urn:tuclubhub:problem:club-not-found
             title: Club not found
             status: 404
-            detail: No public club was found for this identifier.
+            detail: "No club was found for this identifier."
             instance: /api/v1/public/clubs/20001
             code: CLUB_NOT_FOUND
             traceId: 01J9EXAMPLE7K4D5
@@ -4133,6 +4144,11 @@ components:
             traceId: 01J9EXAMPLE7K4D5
     MethodNotAllowed:
       description: The request method is not supported for this path
+      headers:
+        Allow:
+          description: HTTP methods supported by this resource
+          schema:
+            type: string
       content:
         application/problem+json:
           schema:
@@ -4145,6 +4161,26 @@ components:
             instance: /api/v1/clubs/20001
             code: METHOD_NOT_ALLOWED
             traceId: 01J9EXAMPLE7K4D5
+    UnsupportedMediaType:
+      description: The request content type is not supported
+      headers:
+        Accept:
+          description: Request media types supported by this resource
+          schema:
+            type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:http-415
+            title: Unsupported Media Type
+            status: 415
+            detail: The request content type is not supported.
+            instance: /api/v1/rounds/70001/applications
+            code: HTTP_415
+            traceId: example-task80-trace
+            fieldErrors: []
     ServiceUnavailable:
       description: A required dependency, such as the database, is unavailable
       content:

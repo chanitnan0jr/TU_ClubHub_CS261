@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useAuth } from "./AuthContext";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, notice } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -42,9 +42,9 @@ export default function Login() {
           </p>
         </div>
 
-        {error && (
-          <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg">
-            {error}
+        {(error || notice) && (
+          <div role="alert" className="p-3 text-sm text-red-700 bg-red-100 rounded-lg">
+            {error || notice}
           </div>
         )}
 

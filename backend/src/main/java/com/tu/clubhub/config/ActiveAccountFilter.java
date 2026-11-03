@@ -38,8 +38,26 @@ public final class ActiveAccountFilter extends OncePerRequestFilter {
 		if (authentication != null
 				&& authentication.getPrincipal() instanceof ClubHubPrincipal principal
 				&& principal.userId() != null
-				&& !isSessionCleanup(request)
-				&& isSuspended(principal.userId())) {
+				&& !isSessionCleanup(request)) {
+			boolean suspended;
+			try {
+				suspended = isSuspended(principal.userId());
+			} catch (RuntimeException exception) {
+				if (!request.getRequestURI().startsWith("/api/")) throw exception;
+				int status = exception instanceof org.springframework.dao.DataAccessResourceFailureException
+						|| exception instanceof org.springframework.transaction.CannotCreateTransactionException ? 503 : 500;
+				String code = com.tu.clubhub.auth.dto.ProblemResponse.codeFor(status);
+				var body = SecurityConfiguration.writeProblem(objectMapper, response, request.getRequestURI(), status,
+						com.tu.clubhub.auth.dto.ProblemResponse.titleFor(code, status),
+						com.tu.clubhub.auth.dto.ProblemResponse.defaultDetail(code), code);
+				com.tu.clubhub.common.error.ApiExceptionHandler.logFailure(exception, request,
+						(String) body.getProperties().get("traceId"));
+				return;
+			}
+			if (!suspended) {
+				filterChain.doFilter(request, response);
+				return;
+			}
 			HttpSession session = request.getSession(false);
 			if (session != null) {
 				session.invalidate();

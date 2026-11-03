@@ -28,6 +28,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class RecruitmentRoundErrorResponseTest {
 
+    @Test
+    void arbitraryServiceReasonCannotLeakThroughScopedAdvice() throws Exception {
+        when(clubSecurity.isCommittee(1L)).thenReturn(true);
+        when(service.closeRound(1L, 10L, 0L)).thenThrow(new org.springframework.web.server.ResponseStatusException(
+                HttpStatus.CONFLICT, "SECRET SELECT password FROM private_table /private/key java.sql.Exception"));
+        mockMvc.perform(patch(PATH).with(authentication(login())).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"action\":\"CLOSE\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.code").value("RESOURCE_CONFLICT"))
+                .andExpect(jsonPath("$.type").value("urn:tuclubhub:problem:resource-conflict"))
+                .andExpect(jsonPath("$.title").value("Resource state conflict"))
+                .andExpect(jsonPath("$.detail").value("The request conflicts with the current resource state."))
+                .andExpect(jsonPath("$.instance").value(PATH))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.reason").doesNotExist())
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("SECRET"))));
+    }
+
     private static final String PATH =
             "/api/v1/clubs/1/rounds/10";
 
@@ -144,6 +164,7 @@ class RecruitmentRoundErrorResponseTest {
                 .andExpect(jsonPath("$.code").value("RESOURCE_CONFLICT"))
                 .andExpect(jsonPath("$.detail").value(
                         "Round was modified; reload before retrying"))
+                .andExpect(jsonPath("$.reason").value("VERSION_MISMATCH"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
 
