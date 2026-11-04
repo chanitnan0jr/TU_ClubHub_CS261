@@ -3,7 +3,7 @@ import test from 'node:test'
 import { JSDOM } from 'jsdom'
 import * as React from 'react'
 import { createElement } from 'react'
-import { problem, stubFetch } from './helpers.ts'
+import { json, problem, stubFetch } from './helpers.ts'
 import type { PublicClubSearchItem } from '../src/features/clubs/types/publicClubSearch.ts'
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/' })
@@ -35,14 +35,32 @@ const club: PublicClubSearchItem = {
   hasOpenRecruitment: true,
 }
 
+const categories = {
+  items: [
+    { id: '30001', name: 'เทคโนโลยีและนวัตกรรม' },
+    { id: '30002', name: 'กีฬาและสุขภาพ' },
+    { id: '30003', name: 'ศิลปะและวัฒนธรรม' },
+    { id: '30004', name: 'จิตอาสาและสิ่งแวดล้อม' },
+  ],
+}
+
+const page = (items: PublicClubSearchItem[] = []) => ({
+  items,
+  page: { number: 0, size: 20, totalElements: items.length, totalPages: items.length ? 1 : 0 },
+})
+
 test('search controls update the selected criteria and can be cleared', async () => {
-  const stub = stubFetch(() => problem(401, 'AUTHENTICATION_REQUIRED', 'No active session'))
+  const stub = stubFetch((request) => {
+    if (request.url === '/api/v1/public/club-categories') return json(categories)
+    if (request.url.startsWith('/api/v1/public/clubs?')) return json(page())
+    return problem(401, 'AUTHENTICATION_REQUIRED', 'No active session')
+  })
   try {
     render(createElement(MemoryRouter, null,
       createElement(AuthProvider, null, createElement(ClubSearchPage))))
 
     const search = await screen.findByRole('searchbox', { name: 'ค้นหาชมรม' })
-    const category = screen.getByRole('combobox', { name: 'หมวดหมู่ชมรม' })
+    const category = await screen.findByRole('combobox', { name: 'หมวดหมู่ชมรม' })
     const recruitment = screen.getByRole('checkbox', { name: 'เปิดรับสมัครอยู่' })
 
     fireEvent.change(search, { target: { value: 'ดนตรี' } })
@@ -52,20 +70,59 @@ test('search controls update the selected criteria and can be cleared', async ()
     assert.equal((search as HTMLInputElement).value, 'ดนตรี')
     assert.equal((category as HTMLSelectElement).value, 'ศิลปะและวัฒนธรรม')
     assert.equal((recruitment as HTMLInputElement).checked, true)
-    assert.ok(screen.getByRole('heading', { name: 'ไม่พบชมรม' }))
-    const activeFilters = screen.getByRole('group', { name: 'ตัวกรองที่เลือก' })
-    assert.ok(activeFilters.textContent?.includes('ค้นหาชมรม: ดนตรี'))
-    assert.ok(activeFilters.textContent?.includes('ศิลปะและวัฒนธรรม'))
-    assert.ok(activeFilters.textContent?.includes('เปิดรับสมัครอยู่'))
-    assert.match(activeFilters.querySelector('span')?.className ?? '', /bg-blue-50.*text-blue-700/)
-    assert.match(activeFilters.querySelectorAll('span')[1]?.className ?? '', /bg-rose-50.*text-rose-800/)
-    assert.match(activeFilters.querySelectorAll('span')[2]?.className ?? '', /bg-emerald-50.*text-emerald-700/)
-    assert.equal(stub.requests.some((request) => request.url.includes('/api/v1/public/clubs?')), false)
+    assert.ok(await screen.findByRole('heading', { name: 'ไม่พบชมรม' }))
+    assert.equal(screen.queryByRole('group', { name: 'ตัวกรองที่เลือก' }), null)
+    await waitFor(() => {
+      assert.ok(stub.requests.some((request) => {
+        const url = new URL(request.url, 'http://localhost')
+        return url.pathname === '/api/v1/public/clubs'
+          && url.searchParams.get('q') === 'ดนตรี'
+          && url.searchParams.get('categoryId') === '30003'
+          && url.searchParams.get('recruitmentStatus') === 'OPEN'
+      }))
+    })
 
     fireEvent.click(screen.getByRole('button', { name: 'ล้างตัวกรอง' }))
-    await waitFor(() => assert.equal((search as HTMLInputElement).value, ''))
+    await waitFor(() => {
+      assert.equal((search as HTMLInputElement).value, '')
+      assert.ok(stub.requests.some((request) => {
+        const url = new URL(request.url, 'http://localhost')
+        return url.pathname === '/api/v1/public/clubs'
+          && !url.searchParams.has('q')
+          && !url.searchParams.has('categoryId')
+          && !url.searchParams.has('recruitmentStatus')
+      }))
+    })
     assert.equal((category as HTMLSelectElement).value, '')
     assert.equal((recruitment as HTMLInputElement).checked, false)
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
+test('renders clubs returned by the public search endpoint and updates filtered results', async () => {
+  const stub = stubFetch((request) => {
+    if (request.url === '/api/v1/public/club-categories') return json(categories)
+    if (request.url.startsWith('/api/v1/public/clubs?')) {
+      const url = new URL(request.url, 'http://localhost')
+      return json(page(url.searchParams.get('q') === 'ฟุตบอล' ? [] : [club]))
+    }
+    return problem(401, 'AUTHENTICATION_REQUIRED', 'No active session')
+  })
+  try {
+    render(createElement(MemoryRouter, null,
+      createElement(AuthProvider, null, createElement(ClubSearchPage))))
+
+    assert.ok(await screen.findByRole('link', { name: /ชมรมดนตรีสากล/ }))
+    fireEvent.change(screen.getByRole('searchbox', { name: 'ค้นหาชมรม' }), {
+      target: { value: 'ฟุตบอล' },
+    })
+    assert.ok(await screen.findByRole('heading', { name: 'ไม่พบชมรม' }))
+    assert.ok(stub.requests.some((request) => {
+      const url = new URL(request.url, 'http://localhost')
+      return url.pathname === '/api/v1/public/clubs' && url.searchParams.get('q') === 'ฟุตบอล'
+    }))
   } finally {
     cleanup()
     stub.restore()

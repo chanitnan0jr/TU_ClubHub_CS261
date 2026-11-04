@@ -1,14 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../features/auth/AuthContext';
+import { searchPublicClubs } from '../features/clubs/services/publicClubSearchService';
 import type { PublicClubSearchItem } from '../features/clubs/types/publicClubSearch';
+import { apiRequest, describeApiError } from '../lib/api';
 
-const categories = [
-  'เทคโนโลยีและนวัตกรรม',
-  'กีฬาและสุขภาพ',
-  'ศิลปะและวัฒนธรรม',
-  'จิตอาสาและสิ่งแวดล้อม',
-];
+interface PublicClubCategoriesResponse {
+  items: { id: string; name: string }[];
+}
 
 function ClubCard({ club }: { club: PublicClubSearchItem }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -63,13 +62,41 @@ interface ClubSearchPageProps {
   clubs?: PublicClubSearchItem[];
 }
 
-export default function ClubSearchPage({ clubs = [] }: ClubSearchPageProps) {
+export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
   const { isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('');
   const [recruitmentOpen, setRecruitmentOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const [retryKey, setRetryKey] = useState(0);
+  const [categoriesResult, setCategoriesResult] = useState<{
+    retryKey: number;
+    items: PublicClubCategoriesResponse['items'];
+  } | null>(null);
+  const [categoryFailure, setCategoryFailure] = useState<{
+    retryKey: number;
+    message: string;
+  } | null>(null);
+  const [searchResult, setSearchResult] = useState<{
+    key: string;
+    items: PublicClubSearchItem[];
+    page: { number: number; totalPages: number };
+  } | null>(null);
+  const [searchFailure, setSearchFailure] = useState<{ key: string; message: string } | null>(null);
+  const usesApi = clubs === undefined;
+  const currentCategories = categoriesResult?.retryKey === retryKey
+    ? categoriesResult.items
+    : [];
+  const categoriesReady = categoriesResult?.retryKey === retryKey;
+  const categoryError = categoryFailure?.retryKey === retryKey
+    ? categoryFailure.message
+    : null;
+  const searchKey = JSON.stringify([query.trim(), category, recruitmentOpen, page, retryKey]);
+  const currentSearch = searchResult?.key === searchKey ? searchResult : null;
+  const searchError = searchFailure?.key === searchKey ? searchFailure.message : null;
+  const categoryId = currentCategories.find((item) => item.name === category)?.id ?? '';
   const hasFilters = Boolean(query.trim() || category || recruitmentOpen);
-  const filteredClubs = clubs.filter((club) => {
+  const filteredClubs = (usesApi ? currentSearch?.items ?? [] : clubs ?? []).filter((club) => {
     const matchesQuery = !query.trim()
       || club.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())
       || club.description.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
@@ -78,10 +105,74 @@ export default function ClubSearchPage({ clubs = [] }: ClubSearchPageProps) {
     return matchesQuery && matchesCategory && matchesRecruitment;
   });
 
+  useEffect(() => {
+    if (!usesApi) return;
+    let ignore = false;
+    apiRequest<PublicClubCategoriesResponse>('/api/v1/public/club-categories')
+      .then((response) => {
+        if (!ignore) {
+          setCategoriesResult({ retryKey, items: response.items });
+          setCategoryFailure(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!ignore) {
+          setCategoryFailure({
+            retryKey,
+            message: describeApiError(error, 'ไม่สามารถโหลดหมวดหมู่ชมรมได้ กรุณาลองใหม่'),
+          });
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [retryKey, usesApi]);
+
+  useEffect(() => {
+    if (!usesApi || !categoriesReady) return;
+    let ignore = false;
+    const timeout = window.setTimeout(() => {
+      searchPublicClubs({
+        query,
+        categoryId,
+        recruitmentOpen,
+        page,
+      })
+        .then((response) => {
+          if (!ignore) {
+            setSearchResult({
+              key: searchKey,
+              items: response.items,
+              page: {
+                number: response.page.number,
+                totalPages: response.page.totalPages,
+              },
+            });
+            setSearchFailure(null);
+          }
+        })
+        .catch((error: unknown) => {
+          if (!ignore) {
+            setSearchFailure({
+              key: searchKey,
+              message: error instanceof Error
+                ? error.message
+                : 'ไม่สามารถโหลดรายชื่อชมรมได้ กรุณาลองใหม่',
+            });
+          }
+        });
+    }, 250);
+    return () => {
+      ignore = true;
+      window.clearTimeout(timeout);
+    };
+  }, [categoriesReady, categoryId, page, query, recruitmentOpen, retryKey, searchKey, usesApi]);
+
   const clearFilters = () => {
     setQuery('');
     setCategory('');
     setRecruitmentOpen(false);
+    setPage(0);
   };
 
   return (
@@ -109,7 +200,7 @@ export default function ClubSearchPage({ clubs = [] }: ClubSearchPageProps) {
                 <button
                   type="button"
                   onClick={() => void logout()}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                 >
                   ออกจากระบบ
                 </button>
@@ -117,7 +208,7 @@ export default function ClubSearchPage({ clubs = [] }: ClubSearchPageProps) {
             ) : (
               <Link
                 to={`/login?next=${encodeURIComponent('/')}`}
-                className="rounded-xl bg-[#8b1e3f] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#701832]"
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
               >
                 เข้าสู่ระบบ
               </Link>
@@ -148,7 +239,10 @@ export default function ClubSearchPage({ clubs = [] }: ClubSearchPageProps) {
                   id="club-search"
                   type="search"
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setPage(0);
+                  }}
                   placeholder="พิมพ์ชื่อชมรมที่สนใจ"
                   className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-rose-700 focus:ring-4 focus:ring-rose-100"
                 />
@@ -160,11 +254,23 @@ export default function ClubSearchPage({ clubs = [] }: ClubSearchPageProps) {
                 <select
                   id="club-category"
                   value={category}
-                  onChange={(event) => setCategory(event.target.value)}
+                  onChange={(event) => {
+                    setCategory(event.target.value);
+                    setPage(0);
+                  }}
                   className="h-12 w-full appearance-none rounded-xl border border-slate-300 bg-white py-0 pl-3 pr-10 text-sm text-slate-700 outline-none transition focus:border-rose-700 focus:ring-4 focus:ring-rose-100"
                 >
                   <option value="">ทุกหมวดหมู่</option>
-                  {categories.map((name) => <option key={name} value={name}>{name}</option>)}
+                  {usesApi
+                    ? currentCategories.map((item) => (
+                      <option key={item.id} value={item.name}>{item.name}</option>
+                    ))
+                    : [
+                      'เทคโนโลยีและนวัตกรรม',
+                      'กีฬาและสุขภาพ',
+                      'ศิลปะและวัฒนธรรม',
+                      'จิตอาสาและสิ่งแวดล้อม',
+                    ].map((name) => <option key={name} value={name}>{name}</option>)}
                 </select>
                 <svg
                   aria-hidden="true"
@@ -180,7 +286,10 @@ export default function ClubSearchPage({ clubs = [] }: ClubSearchPageProps) {
               <input
                 type="checkbox"
                 checked={recruitmentOpen}
-                onChange={(event) => setRecruitmentOpen(event.target.checked)}
+                onChange={(event) => {
+                  setRecruitmentOpen(event.target.checked);
+                  setPage(0);
+                }}
                 className="h-4 w-4 accent-[#8b1e3f]"
               />
               <span className="text-sm font-semibold text-slate-700">เปิดรับสมัครอยู่</span>
@@ -203,7 +312,24 @@ export default function ClubSearchPage({ clubs = [] }: ClubSearchPageProps) {
           <h2 className="text-xl font-extrabold text-slate-900">ชมรมทั้งหมด</h2>
         </div>
 
-        {filteredClubs.length ? (
+        {categoryError || searchError ? (
+          <section aria-live="polite" className="rounded-2xl border border-rose-200 bg-white px-5 py-14 text-center">
+            <p role="alert" className="text-sm font-semibold text-rose-800">
+              {categoryError ?? searchError}
+            </p>
+            <button
+              type="button"
+              onClick={() => setRetryKey((key) => key + 1)}
+              className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            >
+              ลองใหม่
+            </button>
+          </section>
+        ) : usesApi && !currentSearch ? (
+          <p role="status" className="rounded-2xl border border-slate-200 bg-white px-5 py-14 text-center text-sm font-semibold text-slate-600">
+            กำลังโหลดชมรม...
+          </p>
+        ) : filteredClubs.length ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {filteredClubs.map((club) => <ClubCard key={club.id} club={club} />)}
           </div>
@@ -216,26 +342,30 @@ export default function ClubSearchPage({ clubs = [] }: ClubSearchPageProps) {
               </svg>
             </div>
             <h3 className="mt-4 text-lg font-bold text-slate-900">ไม่พบชมรม</h3>
-            {hasFilters && (
-              <div role="group" className="mt-4 flex flex-wrap justify-center gap-2" aria-label="ตัวกรองที่เลือก">
-                {query.trim() && (
-                  <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
-                    ค้นหาชมรม: {query.trim()}
-                  </span>
-                )}
-                {category && (
-                  <span className="rounded-full bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-800">
-                    {category}
-                  </span>
-                )}
-                {recruitmentOpen && (
-                  <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
-                    เปิดรับสมัครอยู่
-                  </span>
-                )}
-              </div>
-            )}
           </section>
+        )}
+        {usesApi && currentSearch && currentSearch.page.totalPages > 1 && (
+          <nav aria-label="หน้ารายการชมรม" className="mt-6 flex items-center justify-center gap-4">
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              ก่อนหน้า
+            </button>
+            <span className="text-sm text-slate-600">
+              หน้า {currentSearch.page.number + 1} จาก {currentSearch.page.totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page + 1 >= currentSearch.page.totalPages}
+              onClick={() => setPage((current) => Math.min(currentSearch.page.totalPages - 1, current + 1))}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              ถัดไป
+            </button>
+          </nav>
         )}
       </main>
       <footer className="border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-500">
