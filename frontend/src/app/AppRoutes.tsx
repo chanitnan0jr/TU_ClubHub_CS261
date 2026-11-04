@@ -67,6 +67,14 @@ export default function AppRoutes() {
           </RequireAuth>
         }
       />
+      <Route
+        path="/me/applications"
+        element={
+          <RequireAuth>
+            <MyApplicationsPage />
+          </RequireAuth>
+        }
+      />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
