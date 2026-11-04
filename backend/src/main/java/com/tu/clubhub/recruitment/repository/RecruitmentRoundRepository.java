@@ -147,6 +147,12 @@ public class RecruitmentRoundRepository {
                 request.version());
     }
 
+    public boolean hasQuestionAnswers(Long roundId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM application_answers WHERE round_id = ?)
+                """, Boolean.class, roundId));
+    }
+
     public boolean hasApplications(Long roundId) {
         Long count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM applications WHERE round_id = ?",

@@ -8,10 +8,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /** JDBC persistence for application questions. Authorization belongs in the service. */
@@ -159,7 +162,8 @@ public class ApplicationQuestionRepository {
     }
 
     /**
-     * Assigns a complete new order (1..n). Call only after locking the round,
+     * Assigns a complete relative order (1..n without answered anchors).
+     * Answered positions stay fixed, including gaps. Call after locking the round,
      * validating permission, and checking the round's editable state.
      *
      * PostgreSQL enforces UNIQUE(round_id, display_order) immediately, so a
@@ -185,18 +189,42 @@ public class ApplicationQuestionRepository {
             return;
         }
 
-        long maxOrder = current.stream().mapToLong(Question::displayOrder)
-                .max().orElse(0L);
+        // US-08 BR-05/BR-07: answered rows keep their exact display_order, including gaps.
+        Set<Long> answered = new HashSet<>(jdbcTemplate.queryForList("""
+                SELECT q.id FROM application_questions q WHERE q.round_id = ?
+                AND EXISTS (SELECT 1 FROM application_answers a
+                    WHERE a.question_id = q.id AND a.round_id = q.round_id)
+                """, Long.class, roundId));
+        Map<Long, Question> byId = current.stream().collect(Collectors.toMap(Question::id, Function.identity()));
+        List<Integer> positions = new ArrayList<>();
+        long next = 1;
+        for (Long id : questionIds) {
+            if (answered.contains(id)) {
+                long fixed = byId.get(id).displayOrder();
+                if (next > fixed) throw new AnsweredQuestionOrderException();
+                next = fixed;
+            }
+            if (next > Integer.MAX_VALUE) throw new IllegalStateException("Question display order exceeds INTEGER range");
+            positions.add((int) next++);
+        }
+        long maxOrder = Math.max(current.stream().mapToLong(Question::displayOrder).max().orElse(0L),
+                positions.stream().mapToLong(Integer::longValue).max().orElse(0L));
         if (maxOrder + questionIds.size() > Integer.MAX_VALUE) {
             throw new IllegalStateException("No safe temporary display-order range");
         }
+        // Never temporarily update an answered row either. Both passes affect only unlocked questions.
+        for (int i = 0; i < questionIds.size(); i++) {
+            if (!answered.contains(questionIds.get(i)))
+                updateDisplayOrder(roundId, questionIds.get(i), (int) (maxOrder + i + 1));
+        }
+        for (int i = 0; i < questionIds.size(); i++) {
+            if (!answered.contains(questionIds.get(i)))
+                updateDisplayOrder(roundId, questionIds.get(i), positions.get(i));
+        }
+    }
 
-        for (int i = 0; i < questionIds.size(); i++) {
-            updateDisplayOrder(roundId, questionIds.get(i), (int) (maxOrder + i + 1));
-        }
-        for (int i = 0; i < questionIds.size(); i++) {
-            updateDisplayOrder(roundId, questionIds.get(i), i + 1);
-        }
+    public static final class AnsweredQuestionOrderException extends RuntimeException {
+        public AnsweredQuestionOrderException() { super("An answered question's position cannot change"); }
     }
 
     /** Call after a successful delete, from the same write transaction. */

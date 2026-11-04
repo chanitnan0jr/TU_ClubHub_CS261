@@ -83,6 +83,10 @@ public class RecruitmentRoundService {
 
         requireVersion(round, request.version());
 
+        // Full replacement deletes every existing question ID, even when prompts are unchanged.
+        // findRound already holds the same parent lock used by per-question writes/submission.
+        if (repository.hasQuestionAnswers(roundId)) throw conflict("Question has answers");
+
         if (!"DRAFT".equals(round.publicationStatus())
                 || round.closedAt() != null) {
             throw conflict("Only draft rounds can be edited");
