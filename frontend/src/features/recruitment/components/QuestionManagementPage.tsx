@@ -14,14 +14,15 @@ import {
 } from '../api/questionApi';
 import { ApiError, describeApiError } from '../../../lib/api';
 
-// The questions endpoints answer 409 with an English detail and no reason, and the
-// backend only allows writes while the round is an open draft with no applications.
+// Preserve the existing fallback for other 409 conflicts; use the documented reason for answered questions.
 const NOT_EDITABLE_MESSAGE =
   'ไม่สามารถแก้ไขคำถามได้ในสถานะปัจจุบัน: แก้ไขได้เฉพาะรอบที่ยังเป็นฉบับร่าง ยังไม่ปิด และยังไม่มีผู้สมัคร (คำถามที่มีคำตอบแล้วลบไม่ได้) หรือมีผู้แก้ไขพร้อมกัน กรุณารีเฟรชแล้วลองใหม่';
 
 const describeWriteError = (err: unknown, fallback: string) =>
   err instanceof ApiError && err.status === 409
-    ? NOT_EDITABLE_MESSAGE
+    ? err.reason === 'QUESTION_HAS_ANSWERS'
+      ? 'ไม่สามารถแก้ไขหรือลบคำถามนี้ได้ เนื่องจากมีผู้สมัครตอบคำถามแล้ว'
+      : NOT_EDITABLE_MESSAGE
     : describeApiError(err, fallback);
 
 interface QuestionManagementPageProps {
@@ -93,6 +94,8 @@ export const QuestionManagementPage = ({ clubId, roundId }: QuestionManagementPa
     failureFallback: string,
   ) => {
     setIsBusy(true);
+    clearTimeout(toastTimer.current);
+    setToastMessage(null);
     setErrorMessage(null);
     try {
       await action();
@@ -227,7 +230,7 @@ export const QuestionManagementPage = ({ clubId, roundId }: QuestionManagementPa
             คำถามที่ผู้สมัครต้องตอบในแบบฟอร์มสมัครของรอบนี้ เรียงตามลำดับที่แสดง
           </p>
           <p className="text-xs text-slate-500 mt-1">
-            เพิ่ม แก้ไข ลบ และจัดลำดับได้เฉพาะรอบที่ยังเป็นฉบับร่าง ยังไม่ปิด และยังไม่มีผู้สมัคร
+            แก้ไขและลบได้เฉพาะคำถามที่ยังไม่มีคำตอบ ในรอบฉบับร่างที่ยังไม่ปิด การจัดลำดับต้องคงตำแหน่งข้อที่มีคำตอบ และเพิ่มคำถามได้เมื่อยังไม่มีใบสมัคร
           </p>
         </div>
 

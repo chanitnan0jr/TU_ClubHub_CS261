@@ -239,12 +239,9 @@ class ApplicationQuestionIntegrityIntegrationTest {
         assertStatus(409, () -> service.updateQuestion(
                 f.roundId(), answered, "Changed question", false));
 
-        // Both answered and unanswered questions must be protected.
+        // Answered content and its fixed position remain protected.
         assertStatus(409, () -> service.deleteQuestion(
                 f.roundId(), answered));
-
-        assertStatus(409, () -> service.deleteQuestion(
-                f.roundId(), unanswered));
 
         assertStatus(409, () -> service.reorderQuestions(
                 f.roundId(), List.of(unanswered, answered)));
@@ -264,6 +261,17 @@ class ApplicationQuestionIntegrityIntegrationTest {
                 SELECT * FROM application_status_history
                 WHERE application_id = ? ORDER BY id
                 """, application));
+
+        // The updated requirement permits independent unanswered questions in the same draft.
+        service.updateQuestion(f.roundId(), unanswered, "Updated optional question", false);
+        assertEquals("Updated optional question", repository.findByIdAndRound(f.roundId(), unanswered).orElseThrow().questionText());
+        service.deleteQuestion(f.roundId(), unanswered);
+        assertTrue(repository.findByIdAndRound(f.roundId(), unanswered).isEmpty());
+        assertEquals(questionsBefore.get(0), questionRows(f.roundId()).get(0));
+        assertEquals(answersBefore, jdbc.queryForList("SELECT * FROM application_answers WHERE application_id = ? ORDER BY id", application));
+        assertEquals(historyBefore, jdbc.queryForList("SELECT * FROM application_status_history WHERE application_id = ? ORDER BY id", application));
+        assertEquals(applicationBefore, jdbc.queryForMap("SELECT * FROM applications WHERE id = ?", application));
+        assertEquals(((Number) roundBefore.get("version")).longValue() + 2, version(f.roundId()));
     }
 
     private long question(long roundId, String text, boolean required) {

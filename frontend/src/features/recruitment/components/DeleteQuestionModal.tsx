@@ -30,7 +30,7 @@ export const DeleteQuestionModal: React.FC<DeleteQuestionModalProps> = ({
         </div>
 
         <p className="text-xs sm:text-sm text-slate-600 leading-relaxed text-center sm:text-left">
-          ลบได้เฉพาะรอบที่ยังเป็นฉบับร่างและยังไม่มีผู้สมัคร จึงไม่มีคำตอบของผู้สมัครถูกลบ คำถามข้อถัดไปจะเลื่อนลำดับขึ้นมาแทน คุณต้องการดำเนินการต่อหรือไม่?
+          ลบได้เฉพาะคำถามที่ยังไม่มีคำตอบในรอบฉบับร่างที่ยังไม่ปิด โดยข้อมูลคำตอบและตำแหน่งของข้อที่มีคำตอบแล้วจะคงเดิม คุณต้องการดำเนินการต่อหรือไม่?
         </p>
 
         <label className="flex items-start gap-3 p-3 rounded-xl border border-rose-300 bg-rose-50/50 cursor-pointer">

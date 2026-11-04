@@ -71,58 +71,59 @@ class ApplicationQuestionIntegrityTest {
     }
 
     @Test
-    void cannotUpdateQuestionWhenRoundHasApplications() {
+    void answeredQuestionCannotBeUpdatedAndRoundIsLockedBeforeCheckingAnswers() {
         existingQuestion();
-
-        var error = assertThrows(
-                ResponseStatusException.class,
-                () -> service.updateQuestion(
-                        ROUND_ID, QUESTION_ID, "Changed question", false));
-
+        when(repository.hasAnswers(ROUND_ID, QUESTION_ID)).thenReturn(true);
+        var error = assertThrows(ResponseStatusException.class,
+                () -> service.updateQuestion(ROUND_ID, QUESTION_ID, "Changed question", false));
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
-        assertEquals(
-                "Rounds with applications cannot have questions edited",
-                error.getReason());
-
-        verify(repository, never()).update(
-                anyLong(), anyLong(), anyString(), anyBoolean());
+        assertEquals("Question has answers", error.getReason());
+        var order = inOrder(repository);
+        order.verify(repository).lockRoundScope(ROUND_ID);
+        order.verify(repository).hasAnswers(ROUND_ID, QUESTION_ID);
+        verify(repository, never()).update(anyLong(), anyLong(), anyString(), anyBoolean());
         verifyNoVersionChange();
     }
 
     @Test
-    void cannotDeleteEvenUnansweredQuestionWhenRoundHasApplications() {
+    void answeredQuestionCannotBeDeleted() {
         existingQuestion();
-        when(repository.hasAnswers(ROUND_ID, QUESTION_ID))
-                .thenReturn(false);
-
-        var error = assertThrows(
-                ResponseStatusException.class,
+        when(repository.hasAnswers(ROUND_ID, QUESTION_ID)).thenReturn(true);
+        var error = assertThrows(ResponseStatusException.class,
                 () -> service.deleteQuestion(ROUND_ID, QUESTION_ID));
-
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
-        assertEquals(
-                "Rounds with applications cannot have questions edited",
-                error.getReason());
-
+        assertEquals("Question has answers", error.getReason());
         verify(repository, never()).delete(anyLong(), anyLong());
         verify(repository, never()).compactDisplayOrder(anyLong());
         verifyNoVersionChange();
     }
 
     @Test
-    void cannotReorderQuestionsWhenRoundHasApplications() {
-        var error = assertThrows(
-                ResponseStatusException.class,
-                () -> service.reorderQuestions(
-                        ROUND_ID, List.of(41L, QUESTION_ID)));
+    void unansweredQuestionCanBeUpdatedEvenWithOtherApplications() {
+        existingQuestion();
+        when(repository.update(ROUND_ID, QUESTION_ID, "Changed question", false)).thenReturn(1);
+        when(repository.bumpRoundVersion(eq(ROUND_ID), any(Instant.class))).thenReturn(1);
+        service.updateQuestion(ROUND_ID, QUESTION_ID, "Changed question", false);
+        verify(repository).update(ROUND_ID, QUESTION_ID, "Changed question", false);
+        verify(repository).bumpRoundVersion(eq(ROUND_ID), any(Instant.class));
+    }
 
-        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
-        assertEquals(
-                "Rounds with applications cannot have questions edited",
-                error.getReason());
+    @Test
+    void unansweredQuestionCanBeDeletedEvenWithOtherApplications() {
+        existingQuestion();
+        when(repository.delete(ROUND_ID, QUESTION_ID)).thenReturn(1);
+        when(repository.bumpRoundVersion(eq(ROUND_ID), any(Instant.class))).thenReturn(1);
+        service.deleteQuestion(ROUND_ID, QUESTION_ID);
+        verify(repository).delete(ROUND_ID, QUESTION_ID);
+        verify(repository).bumpRoundVersion(eq(ROUND_ID), any(Instant.class));
+    }
 
-        verify(repository, never()).reorder(anyLong(), anyList());
-        verifyNoVersionChange();
+    @Test
+    void otherApplicationsDoNotPreventReordering() {
+        when(repository.bumpRoundVersion(eq(ROUND_ID), any(Instant.class))).thenReturn(1);
+        service.reorderQuestions(ROUND_ID, List.of(41L, QUESTION_ID));
+        verify(repository).reorder(ROUND_ID, List.of(41L, QUESTION_ID));
+        verify(repository).bumpRoundVersion(eq(ROUND_ID), any(Instant.class));
     }
 
     private void existingQuestion() {
