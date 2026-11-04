@@ -9,7 +9,7 @@
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task79 (Role Check) และ Seed Data จาก Task55 |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | boom boom|
 | **Trello Card Link** | [https://trello.com/c/1YJliqm2](https://trello.com/c/1YJliqm2) |
 
 ---

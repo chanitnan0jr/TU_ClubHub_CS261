@@ -9,7 +9,7 @@
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (DevOps / QA) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task82 (CI พื้นฐาน) และ Flyway Migration จาก Task55 |
 | **SDLC Labels** | 5. Deployment & DevOps |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | Sirawich Kridatikanwut, 34Woraphon Pupatanun|
 | **Trello Card Link** | [https://trello.com/c/efbn4Fes](https://trello.com/c/efbn4Fes) |
 
 ---

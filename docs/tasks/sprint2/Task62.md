@@ -9,7 +9,7 @@
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | OpenAPI Spec จาก Task75 และ Seed Data จาก Task55 |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | 34Woraphon Pupatanun|
 | **Trello Card Link** | [https://trello.com/c/VY017bis](https://trello.com/c/VY017bis) |
 
 ---
