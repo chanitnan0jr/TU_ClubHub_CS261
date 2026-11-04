@@ -1,4 +1,4 @@
-                                                                                                      # Sprint 2: Database migration and seed data (without Docker)
+# Sprint 2: Database migration and seed data (without Docker)
 
 Use on a **disposable local PostgreSQL 17 database only**. Do not run these seeds against production or a team-shared database.
 
@@ -98,18 +98,10 @@ Expected: `NOTICE: Sprint 2 seed verification PASSED`.
 - Review the original base V2 separately before merging changes into dev workflows.
 - Attach terminal logs/screenshots of Flyway, counts, second run, and `git diff` to the PR.
 
-## Important scope note
+## 7. Task75 schema verification and Flyway deliverable
 
-Schema compatibility with **Task75** requires checking `docs/architecture/task75-sprint2-design.md` and `docs/database/TU-ClubHub-ERD-Updated.dbml`. This sample is based only on the V1 schema and V2 seed supplied in chat. It does not claim Task75 has been fully verified and deliberately does not create an unnecessary `V4` migration.
-
-## 7. Task75 schema audit and Flyway deliverable
-
-Before deciding to add a new `V4__...sql` migration, compare `docs/architecture/task75-sprint2-design.md` and `docs/database/TU-ClubHub-ERD-Updated.dbml` against existing `V1` and `V3`. Create a **new versioned migration** only for actual schema differences; never edit applied versions. The existing SQL in this package is **seed-only**, not a replacement for this schema audit or a confirmed migration acceptance test.
+Per [`docs/architecture/task75-sprint2-design.md` (§4.1)](../../architecture/task75-sprint2-design.md#41-ผลการตรวจสอบความสอดคล้องของ-database-schema-และ-erd) and [`docs/database/TU-ClubHub-ERD-Updated.dbml`](../../database/TU-ClubHub-ERD-Updated.dbml), the 17 domain tables in `V1__init_schema.sql` and the Spring Session JDBC tables in `V3__create_spring_session_tables.sql` already satisfy all Sprint 2 requirements without breaking schema changes, so an empty `V4` migration is intentionally omitted.
 
 ## 8. Mock authentication caveat
 
-The team's existing V2 seed states that only `student-demo` can sign in through the current mock TU auth. New `seed_s2_...` users are database fixtures for integration/API/data testing, not automatically usable login accounts. If US-04/05/09/10 UI tests need to log in as these users, coordinate with the authentication mock owner to expose appropriate fictional accounts.
-
-## 9. Local database test status
-
-These SQL files were prepared from the V1 schema and V2 fixture shared in chat. They have **not been executed against PostgreSQL** in this session; attach actual execution logs and rerun verification before marking acceptance criteria complete.
+In `TU_AUTH_MODE=mock`, `student-demo` (president of `ชมรมเขียนโปรแกรม`) and `applicant-demo` (student applicant) can sign in locally with password `tu-clubhub-demo`. The `seed_s2_...` users are database fixtures for integration, API, and committee review testing (`US-04`, `US-05`, `US-09`, `US-10`).
