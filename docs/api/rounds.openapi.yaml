@@ -285,12 +285,23 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
-        "409":
-          description: Version mismatch, invalid state or edit policy conflict
+        '409':
+          description: Answered-question protection (QUESTION_HAS_ANSWERS), version, round-state or edit-policy
+            conflict; no partial mutation
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-conflict
+                title: Resource state conflict
+                status: 409
+                detail: Question has answers
+                instance: /api/v1/clubs/20001/rounds/70001
+                code: RESOURCE_CONFLICT
+                reason: QUESTION_HAS_ANSWERS
+                fieldErrors: []
+                traceId: 00000000-0000-4000-8000-000000000051
         "415":
           description: Unsupported media type
           content:
@@ -320,9 +331,14 @@ paths:
             schema:
               $ref: "#/components/schemas/RoundReplace"
       description:
-        Replace all editable data; omitted nullable fields become null.
-        Never upsert. Questions replaced atomically only when policy permits. Version
-        checked atomically.
+        >-
+        Replace all editable data; omitted nullable fields become null. Never upsert. Questions replaced
+        atomically only when policy permits. Version checked atomically. Full replacement deletes and
+        recreates every old question ID. After permission, parent-row lock and version checks, any answer
+        referencing an existing question in this round rejects the entire replacement with 409
+        RESOURCE_CONFLICT and root reason QUESTION_HAS_ANSWERS, including an empty questions array. No
+        round, question or answer changes on rejection. Other application/state restrictions remain in
+        force.
     patch:
       operationId: transitionRound
       x-implementation-status: partial
@@ -542,13 +558,18 @@ paths:
       - Application questions
       operationId: replaceApplicationQuestion
       summary: Replace editable fields of one application question
-      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
-        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
-        an application to this round cannot read or manage its questions. Check authorization against the actual
-        round owner, including within write transactions. PUT requires both fields; it does not change displayOrder.
-        Use PUT /order for ordering. The question must belong to roundId. Modification is rejected with 409
-        RESOURCE_CONFLICT (reason QUESTION_HAS_ANSWERS) if one or more answers in application_answers reference
-        this question (Task51).
+      description: >-
+        Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has
+        submitted an application to this round cannot read or manage its questions. Check authorization
+        against the actual round owner, including within write transactions. PUT requires both fields; it
+        does not change displayOrder. Use PUT /order for ordering. The question must belong to roundId.
+        Modification is rejected with 409 RESOURCE_CONFLICT (reason QUESTION_HAS_ANSWERS) if one or more
+        answers in application_answers reference this question (Task51). Task51 requires an open DRAFT for
+        unanswered edits. Other answered questions in that draft do not block this target. Any answer
+        referencing this exact question blocks it before the round-state check. The parent FOR UPDATE lock
+        is acquired before checking answers; submission holds FOR SHARE on the same parent until its answers
+        commit. No rejected write changes the question, answers or round version.
       parameters:
       - name: X-CSRF-TOKEN
         in: header
@@ -596,21 +617,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '409':
-          description: Question already has submitted answers (reason QUESTION_HAS_ANSWERS), round state/edit-policy conflict, or concurrent modification
+          description: Answered-question protection (QUESTION_HAS_ANSWERS), version, round-state or edit-policy
+            conflict; no partial mutation
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
               example:
                 type: urn:tuclubhub:problem:resource-conflict
-                title: "Resource state conflict"
+                title: Resource state conflict
                 status: 409
-                detail: Cannot modify a screening question that already has submitted answers.
+                detail: Question has answers
                 instance: /api/v1/rounds/70001/questions/81001
                 code: RESOURCE_CONFLICT
                 reason: QUESTION_HAS_ANSWERS
                 fieldErrors: []
-                traceId: 01J9EXAMPLE7K4D5
+                traceId: 00000000-0000-4000-8000-000000000051
         '415':
           description: Unsupported media type
           content:
@@ -622,12 +644,18 @@ paths:
       - Application questions
       operationId: deleteApplicationQuestion
       summary: Delete one application question only if it has no answers
-      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
-        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
-        an application to this round cannot read or manage its questions. Check authorization against the actual
-        round owner, including within write transactions. Deletion is rejected when one or more answers reference
-        this question (409 RESOURCE_CONFLICT with reason QUESTION_HAS_ANSWERS). Other edit-state policy conflicts also return 409. Never cascade-delete
-        answers. Recompact remaining displayOrder values transactionally.
+      description: >-
+        Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has
+        submitted an application to this round cannot read or manage its questions. Check authorization
+        against the actual round owner, including within write transactions. Deletion is rejected when one
+        or more answers reference this question (409 RESOURCE_CONFLICT with reason QUESTION_HAS_ANSWERS).
+        Other edit-state policy conflicts also return 409. Never cascade-delete answers. Recompact remaining
+        displayOrder values transactionally. Task51 requires an open DRAFT for unanswered deletion; answers
+        to other questions do not block this target. Check this exact question after the parent FOR UPDATE
+        lock, shared with the submission FOR SHARE protocol. Deletion compacts only unanswered positions
+        without moving answered rows; gaps are valid. Rejection changes no question, answer or round
+        version.
       parameters:
       - name: X-CSRF-TOKEN
         in: header
@@ -665,21 +693,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '409':
-          description: Question already has submitted answers (reason QUESTION_HAS_ANSWERS), round state/edit-policy conflict, or concurrent modification
+          description: Answered-question protection (QUESTION_HAS_ANSWERS), version, round-state or edit-policy
+            conflict; no partial mutation
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
               example:
                 type: urn:tuclubhub:problem:resource-conflict
-                title: "Resource state conflict"
+                title: Resource state conflict
                 status: 409
-                detail: Cannot delete a screening question that already has submitted answers.
+                detail: Question has answers
                 instance: /api/v1/rounds/70001/questions/81001
                 code: RESOURCE_CONFLICT
                 reason: QUESTION_HAS_ANSWERS
                 fieldErrors: []
-                traceId: 01J9EXAMPLE7K4D5
+                traceId: 00000000-0000-4000-8000-000000000051
   /api/v1/rounds/{roundId}/questions/order:
     parameters:
     - name: roundId
@@ -694,13 +723,19 @@ paths:
       - Application questions
       operationId: reorderApplicationQuestions
       summary: Set the full application-question order for one round
-      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
-        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
-        an application to this round cannot read or manage its questions. Check authorization against the actual
-        round owner, including within write transactions. questionIds must contain every currently existing question
-        ID in the round exactly once, including no foreign IDs; [] is valid only when no questions exist. Reorder
-        is atomic and assigns displayOrder = 1..n. Missing, duplicate or foreign IDs return 400. A stale set
-        changed concurrently returns 409. Editing remains subject to round state policy.
+      description: >-
+        Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has
+        submitted an application to this round cannot read or manage its questions. Check authorization
+        against the actual round owner, including within write transactions. questionIds must contain every
+        currently existing question ID in the round exactly once, including no foreign IDs; [] is valid only
+        when no questions exist. Reorder is atomic and assigns displayOrder = 1..n when no answered anchors
+        exist. Missing, duplicate or foreign IDs return 400. A stale set changed concurrently returns 409.
+        Editing remains subject to round state policy. Task51 follows US-08 BR-05/BR-07: answered questions
+        retain their exact numeric displayOrder. Assign unanswered questions to available positions in the
+        requested relative order, retaining gaps where needed. A layout that cannot keep every answered
+        position fails atomically with 409 RESOURCE_CONFLICT and reason QUESTION_HAS_ANSWERS. A mixed open
+        DRAFT is allowed; PUBLISHED/CLOSED remain blocked. When no answers exist the result is 1..n.
       parameters:
       - name: X-CSRF-TOKEN
         in: header
@@ -748,11 +783,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '409':
-          description: Round state/edit-policy conflict or concurrent modification
+          description: Answered-question protection (QUESTION_HAS_ANSWERS), version, round-state or edit-policy
+            conflict; no partial mutation
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-conflict
+                title: Resource state conflict
+                status: 409
+                detail: Question has answers
+                instance: /api/v1/rounds/70001/questions/order
+                code: RESOURCE_CONFLICT
+                reason: QUESTION_HAS_ANSWERS
+                fieldErrors: []
+                traceId: 00000000-0000-4000-8000-000000000051
         '415':
           description: Unsupported media type
           content:

@@ -4,7 +4,7 @@
 |---|---|
 | Version | `v1` |
 | Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.2.0), `rounds.openapi.yaml` (v1.1.0), and `task75-sprint2-design.md` |
-| Last updated | 2026-11-01 |
+| Last updated | 2026-11-04 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
@@ -413,7 +413,7 @@ The table includes new APIs and unfinished parts of existing contracts. Define m
 | US-05 | Confirm or decline an offer | User decisions record retry, opposite-action conflict, transaction-time checks and rejection of all prior target membership rows for fresh confirmation; define operation/DTOs and implement publication/atomicity/concurrency |
 | US-06 | Club profile editing extensions | Pending GET integration, category/tag writes, and concurrent update policy; PUT already exists |
 | US-07 | Recruitment management completion | GET list/detail and CANCEL from rounds.openapi.yaml remain pending; define cancellation reason and complete permission checks |
-| US-08 | Recruitment question integration | Round POST/PUT and per-question list/create/update/delete/reorder APIs exist, and the question-management page uses them; current policy permits changes only on drafts without applications; define any future question versioning separately |
+| US-08 | Recruitment question integration | Round POST/PUT and per-question list/create/update/delete/reorder APIs exist, and the question-management page uses them; Task51 permits editing/deleting unanswered existing questions in mixed open drafts while answered content/positions stay fixed; adding questions and full replacement still require no applications; PUBLISHED/CLOSED remain locked; define future question versioning separately |
 | US-09 | Committee application review | Scope, privacy boundaries, and self-review are decided in the matrix; current story remains read-only; decision/publication need separate implementation work |
 | Selection-results Draft | Explicit review action, internal decisions and result publication | See [selection-results-draft.md](../stories/sprint2/selection-results-draft.md); the user confirmed ชนิตว์นันท์ as Owner of the two Draft Stories. FE/BE owners remain to be assigned; temporary IDs, team review, operation paths/DTOs/audit design and handlers remain pending |
 | US-10 | Central dashboard | Admin aggregate access is decided; define metrics and academic-period attribution |
@@ -478,7 +478,7 @@ Update this Markdown contract, the OpenAPI document, backend DTOs, and frontend 
 3. Verify the upstream mapping into local student status. Only verified `ACTIVE` is eligible under the adopted matrix; do not infer this from login success.
 4. Implement the submission limits in section 11 and complete publication/confirmation DTOs, scheduling and membership transitions within the adopted permissions.
 5. Implement the decided committee/admin matrix, including PRESIDENT publication, self-review prohibition, no Admin override, and the enforcement gaps listed in the matrix.
-6. Define a separate versioning design if questions must change after publication; current policy permits editing only drafts without applications.
+6. Define a separate versioning design if questions must change after publication; current policy keeps PUBLISHED/CLOSED locked; see the Task51 mixed-DRAFT exception for existing unanswered questions.
 
 Mark defined but unimplemented APIs as pending, and keep unresolved schemas identified separately. Live TU integration and completed product workflows require their own verification. Authorization policy itself is decided by the permission matrix.
 
@@ -548,7 +548,7 @@ Length limits count Unicode characters in the submitted value, before trimming, 
 
 Only text questions exist in the current model. There is no choice/options schema and no client-supplied question type: a supplied `optionId`, `selectedOptions`, score, applicant identity, application status, or other unknown field is `400 VALIDATION_FAILED`. Reject duplicate `questionId` values even when their answer texts differ; JSON Schema `uniqueItems` alone cannot enforce this identifier-level rule. Missing required answers, blank supplied optional answers, wrong-round/unknown questions, and overlong text also use `400 VALIDATION_FAILED` with indexed `fieldErrors` where applicable.
 
-Loading the form does not reserve a submission or freeze round availability. If a round closes while the student is filling it in, the transaction-time state check returns `409 RESOURCE_CONFLICT` with `reason: ROUND_CLOSED`, with no writes. Current policy permits question edits only on drafts without applications ([permission matrix](../security/permission-matrix.md#3-permission-matrix)); no form version/ETag/precondition token is defined for this POST. Always validate against the current stored question set. If that set changed and an answer is now invalid or required data is missing, use the existing `400 VALIDATION_FAILED`; there is no invented `FORM_CHANGED` conflict. Supporting edits after publication or detecting stale content when IDs/constraints remain valid requires a separately confirmed versioning design (§12 review item R3).
+Loading the form does not reserve a submission or freeze round availability. If a round closes while the student is filling it in, the transaction-time state check returns `409 RESOURCE_CONFLICT` with `reason: ROUND_CLOSED`, with no writes. Current policy permits question edits require open drafts with the Task51 per-question exception ([permission matrix](../security/permission-matrix.md#3-permission-matrix)); no form version/ETag/precondition token is defined for this POST. Always validate against the current stored question set. If that set changed and an answer is now invalid or required data is missing, use the existing `400 VALIDATION_FAILED`; there is no invented `FORM_CHANGED` conflict. Supporting edits after publication or detecting stale content when IDs/constraints remain valid requires a separately confirmed versioning design (§12 review item R3).
 
 #### Success response
 
@@ -627,6 +627,19 @@ Conflict `reason` values, in check order:
 For example, a duplicate uses `status: 409`, `code: RESOURCE_CONFLICT`, and `reason: APPLICATION_ALREADY_EXISTS`, with the shared `type`, `title`, `instance`, and `traceId` fields. Do not expose another applicant's identity or any stored answers/links in error bodies. No numeric rate limit is introduced by this contract; any future limiter must follow the shared `429`/`Retry-After` policy before deployment.
 
 Clients must not retry a `4xx` response unchanged. After a lost response or a `5xx`, retrying is safe without an idempotency key because the one-application-per-round rule prevents a second application. The earlier attempt may still have committed, so when such a retry returns `409`, check the applicant's history (US-04) before telling the student that nothing was submitted; `APPLICATION_ALREADY_EXISTS` means the application exists.
+
+### Task51: answered screening questions (US-08)
+
+Implementation update 2026-11-04, pending team/reviewer acceptance. Session, CSRF, effective committee, Active/term, ownership and self-review checks remain in force.
+
+- `PUT/DELETE /api/v1/rounds/{roundId}/questions/{questionId}` check `application_answers` for that exact question after acquiring the parent round lock. Any persisted answer blocks the target with `409 RESOURCE_CONFLICT`, root `reason: QUESTION_HAS_ANSWERS`, and safe detail `Question has answers`. Rejection changes no question, answer, application, history or round version. A missing/wrong-round question still uses 404.
+- Existing unanswered questions in an open DRAFT (`publication_status = DRAFT`, `closed_at IS NULL`) can be edited/deleted even when another question has answers. This explicit Task51 request is a limited exception to the old round-wide no-applications guard. PUBLISHED/CLOSED remain blocked. Creating new questions and replacing the entire round still require no applications.
+- `PUT .../questions/order` still takes the complete ID list. US-08 BR-05/BR-07 fix answered questions' numeric `displayOrder`; only unanswered rows move into available positions. An impossible layout fails atomically with the same reason. Gaps are valid; without answered questions the result is `1..n`. Deleting an unanswered question never shifts an answered row.
+- `PUT /api/v1/clubs/{clubId}/rounds/{roundId}` deletes/recreates every old question ID. Any answer in that round blocks replacement with the same reason, including `questions: []`. Existing version/permission checks keep their precedence.
+- Existing question/full-round writes keep `FOR UPDATE` on the parent round; submission holds `FOR SHARE` on the same row until answers commit. Assignment/club/round lock order is unchanged. No new migration or DTO fields are introduced.
+- The question page shows the specific edit/delete alert, keeps the row/modal data, and clears a stale success toast before a write. Other 409 reasons keep the existing fallback. See [test evidence, examples and reviewer commands](../testing/task51-answered-question-lock.md).
+
+The mixed-DRAFT exception needs team review against the older Task74/T74-D09 baseline; it does not enable live form changes after publication or claim approval.
 
 ## 12. Round application form (Task42)
 
@@ -725,7 +738,7 @@ GET checks session/account → ID → verified student → visible resource → 
 | Rule / design input | Repository evidence |
 |---|---|
 | Authenticated student, required answers, HTTPS links, one submission per round, server-side time check, atomic writes | [US-03](../stories/sprint1/US-03.md), AC-01–06 and BR-01–11; existing §11 decisions dated 2026-10-19. |
-| Student/club Active, Student rights for Committee/Admin, no role override; question edits only on drafts without applications | [Permission matrix](../security/permission-matrix.md), §§1–3; this policy takes precedence over older unresolved wording in stories. The Task42 requester confirmed the form-read account/student/window policy on 2026-10-20; Task74 records that action for PO/team review without claiming approval. |
+| Student/club Active, Student rights for Committee/Admin, no role override; question edits require open drafts with the Task51 per-question exception | [Permission matrix](../security/permission-matrix.md), §§1–3; this policy takes precedence over older unresolved wording in stories. The Task42 requester confirmed the form-read account/student/window policy on 2026-10-20; Task74 records that action for PO/team review without claiming approval. |
 | Text-only questions, stable question identity, required flag, display order | [US-08](../stories/sprint1/US-08.md); [ApplicationQuestionService](../../backend/src/main/java/com/tu/clubhub/recruitment/service/ApplicationQuestionService.java) uses `questionText`, `isRequired`, and `displayOrder`; its committee-only read must not be reused as applicant authorization. |
 | Real persisted types/constraints | [V1 migration](../../backend/src/main/resources/db/migration/V1__init_schema.sql): `recruitment_rounds`, `application_questions`, `applications`, `application_answers`, `application_links`, `application_status_history`; [ERD](../database/TU-ClubHub-ERD-Updated.dbml). Questions have `max_length`, no question-type/options/file columns. |
 | Round fields | [RecruitmentRound](../../backend/src/main/java/com/tu/clubhub/recruitment/domain/RecruitmentRound.java); [rounds.openapi.yaml](rounds.openapi.yaml) for management semantics. No full internal schema is referenced by form responses. |
