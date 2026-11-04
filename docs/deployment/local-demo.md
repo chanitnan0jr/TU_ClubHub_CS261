@@ -108,7 +108,7 @@ After seeding, all of this works in the browser (`dev`, `TU_AUTH_MODE=mock`, pas
 2. Edit the club at `/clubs/3/edit`.
 3. Create a round at `/clubs/3/rounds/new` (or the home page button): opening time in the past, closing time in the future, a confirmation deadline after closing, and the questions in the form. Click **บันทึกและเผยแพร่**. A draft cannot be published later from the UI yet.
 4. Open `/clubs/3`: the round appears with an apply button.
-5. Log out, log in as `applicant-demo`, click **สมัครเข้าร่วมชมรมนี้**, fill in the form, review and submit. The dialog shows the application number and `SUBMITTED`.
+5. Log out, log in as `applicant-demo`, click **สมัครเข้าร่วมชมรมนี้**, fill in the form, review and submit. The app navigates automatically to the responsive result page, which shows the application number and `SUBMITTED`.
 
 `student-demo` cannot apply to its own club (it is already a member). The application history page (US-04) is not built yet.
 

@@ -25,7 +25,7 @@ Components without a route yet:
 |---|---|
 | Authentication | `AuthContext` calls the `csrf`, `login`, `me`, and `logout` endpoints under `/api/v1/auth`, sending cookies and CSRF for writes. |
 | Recruitment round form | `RecruitmentRoundForm` is routed at `/clubs/:clubId/rounds/new` (below). Editing an existing round is not wired, because the backend has no round list or get yet. |
-| Application form | `DynamicApplicationForm` loads the form and questions from the application-form API, validates and submits to the real submission API, and shows a success dialog. The US-04 history route is currently a clear placeholder. No file uploads are supported by the API contract; document links are HTTPS URLs. |
+| Application form | `DynamicApplicationForm` loads the form and questions from `GET /api/v1/rounds/{roundId}/application-form`, validates and submits to the real submission API, then navigates to `/clubs/:clubId/rounds/:roundId/apply/result` with the submission receipt. The US-04 history route is currently a clear placeholder. No file uploads are supported by the API contract; document links are HTTPS URLs. |
 | Club profile form | `src/ClubProfileForm.tsx` is not used by any route. |
 
 `/dashboard/**` and `/profile` are forwarded by the backend but have no frontend screen.
@@ -65,4 +65,4 @@ There are no `typecheck` or `test:run` scripts. CI runs lint, `npm test`, and bu
 
 Club profile updates use `ClubUpdateRequestDto`; category/tags are read-only, and blank optional values are sent as `null`. Public profile and open-round responses have their own DTOs; `ClubDetailData` is built from them in `clubService.ts`.
 
-Application submission uses `motivation`, `answers[]`, and `links[]` from API Contract §11. The actual form route requires the backend application-form endpoint and posts to the implemented submission endpoint. The success dialog can navigate to `/profile/applications`, but the destination remains a placeholder until the US-04 history API and list UI are implemented.
+Application submission uses `motivation`, `answers[]`, and `links[]` from API Contract §11. The actual form route loads questions from the implemented backend application-form endpoint and posts to the submission endpoint. After a successful submission, the responsive result screen links to `/profile/applications`; that destination remains a placeholder until the US-04 history API and list UI are implemented.
