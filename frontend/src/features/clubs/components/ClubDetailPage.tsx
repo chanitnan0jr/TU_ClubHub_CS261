@@ -118,7 +118,7 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
     <div className="flex flex-col gap-6 pb-12">
       <Breadcrumbs
         items={[
-          { label: 'สำรวจชมรม' },
+          { label: 'สำรวจชมรม', to: '/' },
           ...(club.category ? [{ label: club.category }] : []),
           { label: club.name },
         ]}

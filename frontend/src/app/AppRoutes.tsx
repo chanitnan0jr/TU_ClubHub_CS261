@@ -4,6 +4,7 @@ import ApplicationResultRoutePage from "../pages/ApplicationResultRoutePage";
 import ClubDetailRoutePage from "../pages/ClubDetailRoutePage";
 import ClubEditRoutePage from "../pages/ClubEditRoutePage";
 import ClubManageRoutePage from "../pages/ClubManageRoutePage";
+import ClubSearchPage from "../pages/ClubSearchPage";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
 import MyApplicationsPage from "../pages/MyApplicationsPage";
@@ -20,7 +21,9 @@ import RequireAuth from "./RequireAuth";
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/" element={<ClubSearchPage />} />
+      <Route path="/clubs" element={<ClubSearchPage />} />
+      <Route path="/dashboard" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/open-calls" element={<OpenCallsPage />} />
       <Route path="/clubs/:clubId" element={<ClubDetailRoutePage />} />

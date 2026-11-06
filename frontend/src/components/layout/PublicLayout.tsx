@@ -28,8 +28,8 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const assignments = user?.activeCommitteeAssignments ?? [];
-  // One club goes straight to its workspace; the home page lists several.
-  const myClubsPath = assignments.length === 1 ? `/clubs/${assignments[0].clubId}/manage` : '/';
+  // One club goes straight to its workspace; the dashboard page lists several.
+  const myClubsPath = assignments.length === 1 ? `/clubs/${assignments[0].clubId}/manage` : '/dashboard';
   const loginPath = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
 
   return (
@@ -64,9 +64,17 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             className={`${menuOpen ? 'flex' : 'hidden'} absolute inset-x-0 top-16 flex-col gap-2 border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:static sm:flex sm:flex-row sm:items-center sm:gap-3 sm:border-0 sm:p-0 sm:shadow-none`}
           >
             <nav aria-label="เมนูหลัก" className="flex flex-col gap-1 sm:flex-row">
+              <NavLink to="/" end className={navLinkClass}>
+                สำรวจชมรม
+              </NavLink>
               <NavLink to="/open-calls" className={navLinkClass}>
                 รอบที่เปิดรับ
               </NavLink>
+              {isAuthenticated && (
+                <NavLink to="/me/applications" className={navLinkClass}>
+                  ใบสมัครของฉัน
+                </NavLink>
+              )}
               {assignments.length > 0 && (
                 <NavLink to={myClubsPath} end className={navLinkClass}>
                   ชมรมที่ฉันดูแล
