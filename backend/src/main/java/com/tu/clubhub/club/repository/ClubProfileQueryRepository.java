@@ -68,7 +68,8 @@ public class ClubProfileQueryRepository {
     ) {
         return jdbcTemplate.query(
                 """
-                SELECT id, title AS name, opens_at, closes_at, closed_at
+                SELECT id, title AS name, description, opens_at, closes_at, closed_at,
+                       results_scheduled_at
                 FROM recruitment_rounds
                 WHERE club_id = ?
                   AND publication_status = 'PUBLISHED'
@@ -77,9 +78,11 @@ public class ClubProfileQueryRepository {
                 (rs, rowNum) -> new PublicRecruitmentRoundDto(
                         rs.getString("id"),
                         rs.getString("name"),
+                        rs.getString("description"),
                         toInstant(rs.getTimestamp("opens_at")),
                         toInstant(rs.getTimestamp("closes_at")),
-                        toInstant(rs.getTimestamp("closed_at"))
+                        toInstant(rs.getTimestamp("closed_at")),
+                        toInstant(rs.getTimestamp("results_scheduled_at"))
                 ),
                 clubId
         );
@@ -99,7 +102,7 @@ public class ClubProfileQueryRepository {
         OffsetDateTime evaluationTime = OffsetDateTime.ofInstant(now, java.time.ZoneOffset.UTC);
         return jdbcTemplate.query(
                 """
-                SELECT id, title AS name, opens_at, closes_at
+                SELECT id, title AS name, description, opens_at, closes_at, results_scheduled_at
                 FROM recruitment_rounds
                 WHERE club_id = ?
                   AND publication_status = 'PUBLISHED'
@@ -112,8 +115,10 @@ public class ClubProfileQueryRepository {
                 (rs, rowNum) -> new OpenPublicRecruitmentRoundDto(
                         rs.getString("id"),
                         rs.getString("name"),
+                        rs.getString("description"),
                         toInstant(rs.getObject("opens_at", OffsetDateTime.class)),
-                        toInstant(rs.getObject("closes_at", OffsetDateTime.class))
+                        toInstant(rs.getObject("closes_at", OffsetDateTime.class)),
+                        toInstant(rs.getObject("results_scheduled_at", OffsetDateTime.class))
                 ),
                 clubId,
                 evaluationTime,

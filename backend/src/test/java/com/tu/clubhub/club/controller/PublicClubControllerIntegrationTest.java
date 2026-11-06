@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -62,6 +63,8 @@ import org.springframework.transaction.annotation.Transactional;
 class PublicClubControllerIntegrationTest {
 
     private static final Instant NOW = Instant.parse("2026-10-18T12:00:00Z");
+    private static final String ROUND_DETAILS = "รายละเอียดรอบ\nคุณสมบัติ: ทุกคณะ";
+    private static final String ELIGIBILITY_TEXT = "Internal eligibility configuration";
 
     @Autowired
     private MockMvc mockMvc;
@@ -147,16 +150,36 @@ class PublicClubControllerIntegrationTest {
                 .andExpect(jsonPath("$.items[*].id", contains(publishedId.toString())))
                 .andExpect(jsonPath("$.items[*].id", not(hasItem(draftId.toString()))))
                 .andExpect(jsonPath("$.items[0].name").value("Public recruitment"))
-                .andExpect(jsonPath("$.items[0].keys()",
-                        containsInAnyOrder("id", "name", "opensAt", "closesAt")))
+                .andExpect(jsonPath("$.items[0].keys()", containsInAnyOrder(
+                        "id", "name", "description", "opensAt", "closesAt", "resultsScheduledAt")))
+                .andExpect(jsonPath("$.items[0].description").value(ROUND_DETAILS))
                 .andExpect(jsonPath("$.items[0].opensAt").value(opensAt.toString()))
                 .andExpect(jsonPath("$.items[0].closesAt").value(closesAt.toString()))
+                .andExpect(jsonPath("$.items[0].resultsScheduledAt").value(nullValue()))
                 .andExpect(jsonPath("$.page.keys()",
                         containsInAnyOrder("number", "size", "totalElements", "totalPages")))
                 .andExpect(jsonPath("$.page.number").value(0))
                 .andExpect(jsonPath("$.page.size").value(20))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andExpect(jsonPath("$.page.totalPages").value(1));
+    }
+
+    @Test
+    void roundDetailsAndResultsScheduleArePublicButEligibilityTextIsNot() throws Exception {
+        Instant closesAt = NOW.plusSeconds(60);
+        Instant resultsAt = closesAt.plusSeconds(3600);
+        Long roundId = insertRound(activeClubId, "Scheduled round", "PUBLISHED",
+                NOW.minusSeconds(60), closesAt, null);
+        jdbc.update("UPDATE recruitment_rounds SET results_scheduled_at = ? WHERE id = ?",
+                OffsetDateTime.ofInstant(resultsAt, ZoneOffset.UTC), roundId);
+
+        String body = getRounds(activeClubId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id", contains(roundId.toString())))
+                .andExpect(jsonPath("$.items[0].description").value(ROUND_DETAILS))
+                .andExpect(jsonPath("$.items[0].resultsScheduledAt").value(resultsAt.toString()))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertFalse(body.contains(ELIGIBILITY_TEXT), "eligibility_text must stay private");
     }
 
     @Test
@@ -537,11 +560,10 @@ class PublicClubControllerIntegrationTest {
                     (club_id, title, academic_year, semester, description, eligibility_text,
                      opens_at, closes_at, confirmation_deadline, publication_status,
                      published_at, closed_at, created_by)
-                VALUES (?, ?, 2569, 1, 'Internal round configuration', 'Internal eligibility configuration',
-                        ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, 2569, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """, Long.class,
-                clubId, title, opens, closes, closes.plusDays(1), publicationStatus,
+                clubId, title, ROUND_DETAILS, ELIGIBILITY_TEXT, opens, closes, closes.plusDays(1), publicationStatus,
                 "DRAFT".equals(publicationStatus) ? null : opens, closed, userId);
     }
 
