@@ -17,6 +17,8 @@ import { QuestionInputRow } from './QuestionInputRow';
 
 interface RecruitmentRoundFormProps {
   initialValues?: Partial<RecruitmentRoundFormInput>;
+  /** "edit" saves a draft in place with one button; publishing is done from the round list. */
+  mode?: 'create' | 'edit';
   onSubmit: (data: RecruitmentRoundFormInput, isDraft: boolean) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
@@ -49,6 +51,7 @@ const withQuestionOrder = (
 
 export const RecruitmentRoundForm = ({
   initialValues,
+  mode = 'create',
   onSubmit,
   onCancel,
   isLoading = false,
@@ -63,6 +66,12 @@ export const RecruitmentRoundForm = ({
   });
 
   const [errors, setErrors] = useState<FormValidationError>({});
+
+  // A round being edited may use a year outside the default range; keep it selectable.
+  const yearOptions =
+    initialValues?.academicYear && !academicYearOptions.includes(initialValues.academicYear)
+      ? [...academicYearOptions, initialValues.academicYear].sort((a, b) => a - b)
+      : academicYearOptions;
 
   const updateField = <K extends keyof RecruitmentRoundFormInput>(
     field: K,
@@ -166,7 +175,7 @@ export const RecruitmentRoundForm = ({
                   onChange={(e) => updateField('academicYear', Number(e.target.value))}
                   className={inputClass(Boolean(errors.academicYear))}
                 >
-                  {academicYearOptions.map((year) => (
+                  {yearOptions.map((year) => (
                     <option key={year} value={year}>
                       {year}
                     </option>
@@ -303,21 +312,34 @@ export const RecruitmentRoundForm = ({
           <Button variant="ghost" onClick={onCancel} disabled={isLoading} className="w-full sm:w-auto">
             ยกเลิก
           </Button>
-          <Button
-            onClick={() => handleSubmit(true)}
-            disabled={isLoading}
-            className="w-full sm:w-auto"
-          >
-            {isLoading ? 'กำลังบันทึก...' : 'บันทึกเป็นฉบับร่าง'}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => handleSubmit(false)}
-            loading={isLoading}
-            className="w-full sm:w-auto"
-          >
-            {isLoading ? 'กำลังบันทึก...' : 'บันทึกและเผยแพร่'}
-          </Button>
+          {mode === 'edit' ? (
+            <Button
+              variant="primary"
+              onClick={() => handleSubmit(true)}
+              loading={isLoading}
+              className="w-full sm:w-auto"
+            >
+              {isLoading ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={() => handleSubmit(true)}
+                disabled={isLoading}
+                className="w-full sm:w-auto"
+              >
+                {isLoading ? 'กำลังบันทึก...' : 'บันทึกเป็นฉบับร่าง'}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => handleSubmit(false)}
+                loading={isLoading}
+                className="w-full sm:w-auto"
+              >
+                {isLoading ? 'กำลังบันทึก...' : 'บันทึกและเผยแพร่'}
+              </Button>
+            </>
+          )}
         </div>
       </form>
     </div>
