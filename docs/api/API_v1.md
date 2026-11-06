@@ -4,7 +4,7 @@
 |---|---|
 | Version | `v1` |
 | Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.2.0), `rounds.openapi.yaml` (v1.1.0), and `task75-sprint2-design.md` |
-| Last updated | 2026-11-04 |
+| Last updated | 2026-11-06 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
@@ -23,6 +23,7 @@ Initial source review on 2026-10-19; application POST status updated on 2026-10-
 |---|---|---|
 | Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout | Login/account/logout connected |
 | `GET /api/v1/public/clubs/{id}` and `.../{id}/recruitment-rounds` | Implemented; active clubs and currently open rounds from DB | Club detail still uses mock data and is not mounted |
+| `GET /api/v1/public/recruitment-rounds` (Open Call Board) | Implemented; open rounds across all active clubs | `/open-calls` page pending |
 | `GET /api/v1/clubs/{clubId}` | Contract-only; no handler | Editor client calls this missing endpoint |
 | `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard | Editor/client exist but are not mounted |
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
@@ -40,7 +41,7 @@ The foundation contract covers:
 - Session-based authentication through the TU Authentication API.
 - CSRF token bootstrap for browser requests.
 - The current user's minimal account identity.
-- Public club profiles and currently open recruitment rounds for active clubs.
+- Public club profiles and currently open recruitment rounds for active clubs, per club and across all clubs (Open Call Board).
 - Application submission with answers and document links, including database persistence, as defined in [section 11](#11-application-submission).
 - Applicant-facing form schemas and the read policy in [section 12](#12-round-application-form-task42).
 - A minimal health endpoint for operations.
@@ -79,7 +80,7 @@ Collection APIs must be paginated. Unless a feature needs a different documented
 }
 ```
 
-Only return sort fields explicitly supported by the endpoint. The public recruitment-round endpoint uses this collection wrapper.
+Only return sort fields explicitly supported by the endpoint. Both public recruitment-round endpoints use this collection wrapper.
 
 ## 3. Authentication, session, and CSRF
 
@@ -187,7 +188,7 @@ An upstream timeout or outage must never result in a successful login or an auto
 
 ### Public club API
 
-The following read-only endpoints are public and do not require a session cookie or CSRF token. Both return data only for a club whose `clubs.status` is `ACTIVE`. An unknown or inactive club returns the same `404 CLUB_NOT_FOUND` response to avoid disclosing whether an inactive club exists. The `id` path parameter is a decimal string for a positive signed 64-bit database `bigint`, matching the project's wire convention. Non-decimal values and values outside the supported integer range return `400 INVALID_RESOURCE_ID`.
+The following read-only endpoints are public and do not require a session cookie or CSRF token. They return data only for clubs whose `clubs.status` is `ACTIVE`. For the two per-club endpoints, an unknown or inactive club returns the same `404 CLUB_NOT_FOUND` response to avoid disclosing whether an inactive club exists. The `id` path parameter is a decimal string for a positive signed 64-bit database `bigint`, matching the project's wire convention. Non-decimal values and values outside the supported integer range return `400 INVALID_RESOURCE_ID`.
 
 #### `GET /api/v1/public/clubs/{id}`
 
@@ -228,9 +229,39 @@ Returns a paginated `items`/`page` collection of public recruitment round summar
 }
 ```
 
-For non-empty pages, each item contains only `id`, `name`, `opensAt`, and `closesAt`. `name` is the public display name for the round (mapped from `recruitment_rounds.title`). The contract uses the standard zero-based `page` and `size` parameters (default `0` and `20`, maximum size `100`). Timestamps are `TIMESTAMPTZ` instants serialized as ISO 8601 UTC values ending in `Z`. The implementation samples one backend `Clock.instant()` for both the page query and count. Deployment must keep host clocks synchronized; no clock-skew allowance is defined.
+For non-empty pages, each item contains only `id`, `name`, `description`, `opensAt`, `closesAt`, and `resultsScheduledAt`. `name` is the public display name for the round (mapped from `recruitment_rounds.title`). `description` holds the round details and applicant qualifications written by the committee; it is plain text that clients must escape. `resultsScheduledAt` is the planned results announcement instant, or `null` when none is scheduled. The round's separate eligibility text is not exposed. Items are ordered by `opensAt`, then `id`. The contract uses the standard zero-based `page` and `size` parameters (default `0` and `20`, maximum size `100`). Timestamps are `TIMESTAMPTZ` instants serialized as ISO 8601 UTC values ending in `Z`. The implementation samples one backend `Clock.instant()` for both the page query and count. Deployment must keep host clocks synchronized; no clock-skew allowance is defined.
 
-Both endpoints use the shared `application/problem+json` `Problem` error format for `400 INVALID_RESOURCE_ID`, `404 CLUB_NOT_FOUND`, `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`. Neither endpoint returns `401` or `403` because both are public reads.
+Both per-club endpoints use the shared `application/problem+json` `Problem` error format for `400 INVALID_RESOURCE_ID`, `404 CLUB_NOT_FOUND`, `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`. Invalid `page`/`size` on the rounds list returns `400 VALIDATION_FAILED`. Neither endpoint returns `401` or `403` because both are public reads.
+
+#### `GET /api/v1/public/recruitment-rounds`
+
+The Open Call Board (US-07 AC-03): one paginated `items`/`page` collection of every round that is open right now across all `ACTIVE` clubs. It uses exactly the same open rule as `GET /api/v1/public/clubs/{id}/recruitment-rounds`, so a round appears here only when it also appears in its own club's list. Draft, cancelled, not-yet-open, expired, and manually closed rounds never appear, and no round of an inactive club appears.
+
+Items are ordered by `closesAt` ascending (soonest deadline first), then `id` ascending, so pages are stable. Each item carries the same round fields as the per-club list plus a `club` summary that links to `GET /api/v1/public/clubs/{id}`:
+
+```json
+{
+  "items": [
+    {
+      "id": "50001",
+      "name": "Academic Year 2026",
+      "description": "Open to all faculties. Bring a short portfolio link if you have one.",
+      "opensAt": "2026-10-01T00:00:00Z",
+      "closesAt": "2026-10-31T16:59:59Z",
+      "resultsScheduledAt": "2026-11-07T09:00:00Z",
+      "club": {
+        "id": "20001",
+        "name": "Example Club",
+        "imageUrl": "https://images.example.org/clubs/20001.png",
+        "category": { "id": "30001", "name": "Technology" }
+      }
+    }
+  ],
+  "page": { "number": 0, "size": 20, "totalElements": 1, "totalPages": 1 }
+}
+```
+
+`club.imageUrl` is `null` when the club has no logo; the client shows its own fallback image. `page` and `size` follow the [collection convention](#collection-convention) (default `0` and `20`, `size` from `1` to `100`); a negative `page`, an out-of-range `size`, or a non-integer value returns `400 VALIDATION_FAILED` with the parameter name in `fieldErrors`. No open rounds returns `200 OK` with empty `items` and zero totals; a page past the end returns empty `items` with unchanged totals. Items and totals use one evaluation instant per request. Responses carry `Cache-Control` with `no-store` because the list changes as rounds open and close. Other errors are `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`; there is no `401`, `403`, or `404`.
 
 ### `GET /api/v1/clubs/{clubId}`
 
@@ -270,9 +301,11 @@ Returns a public club profile without requiring login. `clubId` is a decimal str
     {
       "id": "50001",
       "name": "Academic Year 2026",
+      "description": "Open to all faculties. Bring a short portfolio link if you have one.",
       "opensAt": "2026-10-01T00:00:00Z",
       "closesAt": "2026-10-31T16:59:59Z",
-      "closedAt": null
+      "closedAt": null,
+      "resultsScheduledAt": null
     }
   ]
 }
