@@ -26,6 +26,10 @@ class SpaRoutingIntegrationTest {
 				.andExpect(status().isOk())
 				.andExpect(forwardedUrl("/index.html"));
 
+		mockMvc.perform(get("/open-calls"))
+				.andExpect(status().isOk())
+				.andExpect(forwardedUrl("/index.html"));
+
 		mockMvc.perform(get("/clubs"))
 				.andExpect(status().isOk())
 				.andExpect(forwardedUrl("/index.html"));

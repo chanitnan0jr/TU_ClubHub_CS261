@@ -13,6 +13,7 @@ public class SpaForwardController {
 
 	@GetMapping(value = {
 			"/login",
+			"/open-calls",
 			"/clubs",
 			"/clubs/**",
 			"/profile",

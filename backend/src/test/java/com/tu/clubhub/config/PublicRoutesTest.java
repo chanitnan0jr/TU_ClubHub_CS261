@@ -73,6 +73,14 @@ class PublicRoutesTest {
     }
 
     @Test
+    void openCallsSpaRouteIsExactGetOnly() {
+        assertTrue(matches("GET", "/open-calls"));
+
+        assertFalse(matches("POST", "/open-calls"));
+        assertFalse(matches("GET", "/open-calls/123"));
+    }
+
+    @Test
     void onlyExactHealthGetRouteIsPublic() {
         assertTrue(matches("GET", "/actuator/health"));
 

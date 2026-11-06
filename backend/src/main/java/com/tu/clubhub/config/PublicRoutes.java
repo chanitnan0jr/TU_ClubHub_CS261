@@ -25,6 +25,7 @@ final class PublicRoutes {
 
             // Existing SPA routes.
             get("/login"),
+            get("/open-calls"),
             get("/clubs/**"),
             get("/profile"),
             get("/dashboard/**"),
