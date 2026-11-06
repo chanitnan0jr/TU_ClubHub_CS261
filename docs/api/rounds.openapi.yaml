@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: TU ClubHub Recruitment Rounds API
-  version: 1.1.0
+  version: 1.2.0
   description: >-
     US-07/US-08. Committee-only management API, separate from existing public
     recruitment-rounds API. No physical DELETE; CLOSE/CANCEL retain applications.

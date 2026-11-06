@@ -3,7 +3,7 @@
 | Property | Value |
 |---|---|
 | Version | `v1` |
-| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.2.0), `rounds.openapi.yaml` (v1.1.0), and `task75-sprint2-design.md` |
+| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.3.0), `rounds.openapi.yaml` (v1.2.0), and `task75-sprint2-design.md` |
 | Last updated | 2026-11-06 |
 | Audience | Frontend and backend developers |
 
@@ -498,8 +498,8 @@ Calling that replay a logical read does not define a new GET endpoint or waive C
 Following the Task74 System Analysis handoff, the complete Sprint 2 technical contracts, OpenAPI schemas, RFC 7807 `409 RESOURCE_CONFLICT` `reason` vocabulary, database locking & expiry worker design, and frontend UI wireframes/status mappings are specified in:
 
 - **Master System Design Document:** [`docs/architecture/task75-sprint2-design.md`](../architecture/task75-sprint2-design.md)
-- **Primary OpenAPI 3.1 Specification (`v1.2.0`):** [`docs/api/openapi.yaml`](openapi.yaml)
-- **Recruitment Rounds OpenAPI 3.0.3 Specification (`v1.1.0`):** [`docs/api/rounds.openapi.yaml`](rounds.openapi.yaml)
+- **Primary OpenAPI 3.1 Specification (`v1.3.0`):** [`docs/api/openapi.yaml`](openapi.yaml)
+- **Recruitment Rounds OpenAPI 3.0.3 Specification (`v1.2.0`):** [`docs/api/rounds.openapi.yaml`](rounds.openapi.yaml)
 
 | Sprint 2 Feature / Task | Specified Endpoint(s) | Primary OpenAPI Schema(s) |
 |---|---|---|
