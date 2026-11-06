@@ -75,6 +75,26 @@ Use Docker Engine/Desktop with Compose V2. Run from the repository root:
 
 Migrations create the schema without demo clubs, memberships, or committee assignments. Login provisions a local user and, for TU student accounts, a student profile from the TU status; it grants no memberships or committee permissions. Club detail, club editing, and question management are routed in the main app (see the [frontend guide](frontend/README.md)); the round and application forms are not. See the [local guide](docs/deployment/local-demo.md) for Compose options and resets.
 
+### Mock accounts for local testing
+
+With `SPRING_PROFILES_ACTIVE=dev` and `TU_AUTH_MODE=mock`, only these accounts can log in. Both use the password `tu-clubhub-demo`:
+
+| Username | Role after `scripts/seed-dev-data.sh` | Use it to test |
+|---|---|---|
+| `student-demo` | Student, `USER`, president of ชมรมเขียนโปรแกรม (`/clubs/3` on a fresh seed) | Committee pages: club profile, recruitment rounds, screening questions |
+| `applicant-demo` | Student, `USER`, member of no club | Applying to a club (`student-demo` cannot apply to its own club) |
+
+The other seeded users, including `seed_admin`, are data only and cannot log in. To test a different role, change a mock account with `scripts/dev-role.sh` (dev only; log in once with the account first so its user row exists):
+
+```sh
+scripts/dev-role.sh list                                  # every account with its system and committee roles
+scripts/dev-role.sh admin applicant-demo                  # system role ADMIN, e.g. for the admin dashboard
+scripts/dev-role.sh user applicant-demo                   # back to USER
+scripts/dev-role.sh committee applicant-demo 1 PRESIDENT  # committee member of club 1 (COMMITTEE is the default)
+```
+
+After `admin` or `user`, log out and in again: the session keeps the role it had at login. Committee roles apply on the next page load. Like the seed script, it uses `DB_CONTAINER`, `POSTGRES_USER` and `POSTGRES_DB` when set.
+
 ### Standalone Local Development
 
 Use Java 21 and Node 22.14+ on the Node 22 line. Start PostgreSQL from the root:
