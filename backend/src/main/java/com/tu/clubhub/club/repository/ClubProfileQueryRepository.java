@@ -14,6 +14,7 @@ import com.tu.clubhub.club.dto.ClubResponseDto.ClubTagDto;
 import com.tu.clubhub.club.dto.ClubResponseDto.PublicRecruitmentRoundDto;
 import com.tu.clubhub.club.dto.OpenPublicRecruitmentRoundDto;
 import com.tu.clubhub.club.dto.PublicClubCategoryDto;
+import com.tu.clubhub.club.dto.PublicClubTagDto;
 import com.tu.clubhub.club.dto.PublicOpenCallDto;
 
 @Repository
@@ -81,6 +82,22 @@ public class ClubProfileQueryRepository {
                         rs.getString("name")
                 ),
                 clubId
+        );
+    }
+
+    /** Every club category, ordered by name then id (public list). */
+    public List<PublicClubCategoryDto> findAllCategories() {
+        return jdbcTemplate.query(
+                "SELECT id, name FROM club_categories ORDER BY name, id",
+                (rs, rowNum) -> new PublicClubCategoryDto(rs.getString("id"), rs.getString("name"))
+        );
+    }
+
+    /** Every interest tag, ordered by name then id (public list). */
+    public List<PublicClubTagDto> findAllTags() {
+        return jdbcTemplate.query(
+                "SELECT id, name FROM tags ORDER BY name, id",
+                (rs, rowNum) -> new PublicClubTagDto(rs.getString("id"), rs.getString("name"))
         );
     }
 

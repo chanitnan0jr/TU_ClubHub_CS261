@@ -1,6 +1,9 @@
 package com.tu.clubhub.club.controller;
 
+import com.tu.clubhub.club.dto.PublicClubCategoryDto;
 import com.tu.clubhub.club.dto.PublicClubProfileDto;
+import com.tu.clubhub.club.dto.PublicClubTagDto;
+import com.tu.clubhub.club.dto.PublicItemListDto;
 import com.tu.clubhub.club.dto.PublicOpenCallPageDto;
 import com.tu.clubhub.club.dto.PublicRecruitmentRoundPageDto;
 import com.tu.clubhub.club.service.PublicClubService;
@@ -19,6 +22,16 @@ public class PublicClubController {
 
     public PublicClubController(PublicClubService publicClubService) {
         this.publicClubService = publicClubService;
+    }
+
+    @GetMapping("/club-categories")
+    public ResponseEntity<PublicItemListDto<PublicClubCategoryDto>> listCategories() {
+        return ResponseEntity.ok(publicClubService.listCategories());
+    }
+
+    @GetMapping("/interest-tags")
+    public ResponseEntity<PublicItemListDto<PublicClubTagDto>> listTags() {
+        return ResponseEntity.ok(publicClubService.listTags());
     }
 
     @GetMapping("/clubs/{id}")

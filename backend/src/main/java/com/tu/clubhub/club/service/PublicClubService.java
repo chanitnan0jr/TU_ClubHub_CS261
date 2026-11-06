@@ -13,6 +13,7 @@ import com.tu.clubhub.club.dto.OpenPublicRecruitmentRoundDto;
 import com.tu.clubhub.club.dto.PublicClubCategoryDto;
 import com.tu.clubhub.club.dto.PublicClubProfileDto;
 import com.tu.clubhub.club.dto.PublicClubTagDto;
+import com.tu.clubhub.club.dto.PublicItemListDto;
 import com.tu.clubhub.club.dto.PublicOpenCallDto;
 import com.tu.clubhub.club.dto.PublicOpenCallPageDto;
 import com.tu.clubhub.club.dto.PublicPageMetadataDto;
@@ -104,6 +105,16 @@ public class PublicClubService {
         long totalElements = profileQueryRepository.countOpenCalls(now);
 
         return new PublicOpenCallPageDto(items, pageMetadata(page, size, totalElements));
+    }
+
+    @Transactional(readOnly = true)
+    public PublicItemListDto<PublicClubCategoryDto> listCategories() {
+        return new PublicItemListDto<>(profileQueryRepository.findAllCategories());
+    }
+
+    @Transactional(readOnly = true)
+    public PublicItemListDto<PublicClubTagDto> listTags() {
+        return new PublicItemListDto<>(profileQueryRepository.findAllTags());
     }
 
     private static PublicPageMetadataDto pageMetadata(int page, int size, long totalElements) {
