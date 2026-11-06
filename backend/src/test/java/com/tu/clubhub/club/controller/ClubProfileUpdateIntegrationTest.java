@@ -234,6 +234,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล มหาวิทยาลัยธรรมศาสตร์ (Updated)",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมสำหรับผู้รักในเสียงดนตรีและศิลปะการแสดงร่วมสมัย",
                   "objectives": "เพื่อส่งเสริมทักษะดนตรีสากลและสร้างสรรค์กิจกรรมดนตรีในมหาวิทยาลัย"
                 }
@@ -261,8 +263,9 @@ class ClubProfileUpdateIntegrationTest {
             assertEquals("ชมรมดนตรีสากล มหาวิทยาลัยธรรมศาสตร์ (Updated)", club.getName());
             assertEquals("ชมรมสำหรับผู้รักในเสียงดนตรีและศิลปะการแสดงร่วมสมัย", club.getDescription());
             assertEquals("เพื่อส่งเสริมทักษะดนตรีสากลและสร้างสรรค์กิจกรรมดนตรีในมหาวิทยาลัย", club.getObjectives());
-            // Immutable fields
+            // The request resends the current category
             assertEquals(categoryId, club.getCategoryId());
+            // Immutable fields
             assertEquals("ACTIVE", club.getStatus());
             assertEquals("UNIVERSITY", club.getAffiliationLevel());
             assertEquals("องค์การนักศึกษามหาวิทยาลัยธรรมศาสตร์", club.getAffiliationName());
@@ -283,6 +286,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมสำหรับผู้รักเสียงดนตรี",
                   "imageUrl": "https://cdn.tuclubhub.com/clubs/41/logo.png",
                   "bannerUrl": "https://cdn.tuclubhub.com/clubs/41/banner-2026.jpg"
@@ -317,6 +322,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมดนตรีสากล",
                   "imageUrl": "http://example.com/logo.png"
                 }
@@ -339,6 +346,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมดนตรีสากล",
                   "imageUrl": "ftp://example.com/logo.png"
                 }
@@ -359,6 +368,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมดนตรีสากล",
                   "imageUrl": "https://admin:secret@images.com/logo.png"
                 }
@@ -379,6 +390,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมดนตรีสากล",
                   "bannerUrl": "ht!tp://not-a-valid-url"
                 }
@@ -407,6 +420,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมสำหรับผู้รักในเสียงดนตรี",
                   "facebookUrl": "https://www.facebook.com/tuorchestra",
                   "instagramUrl": "https://instagram.com/tu_orchestra",
@@ -431,6 +446,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมสำหรับผู้รักเสียงดนตรี",
                   "facebookUrl": "https://phishing-facebook.com/tuorchestra"
                 }
@@ -452,6 +469,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมสำหรับผู้รักเสียงดนตรี",
                   "instagramUrl": "https://twitter.com/tuorchestra"
                 }
@@ -473,6 +492,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมสำหรับผู้รักเสียงดนตรี",
                   "facebookUrl": "https://facebook.com:8443/tuorchestra"
                 }
@@ -493,6 +514,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "ชมรมสำหรับผู้รักเสียงดนตรี",
                   "contactEmail": "club@"
                 }
@@ -519,6 +542,8 @@ class ClubProfileUpdateIntegrationTest {
         private final String validPayload = """
             {
               "name": "ชมรมดนตรีสากล",
+              "categoryId": "1",
+              "tagIds": ["1"],
               "description": "ชมรมดนตรีสากล"
             }
             """;
@@ -590,7 +615,7 @@ class ClubProfileUpdateIntegrationTest {
                                     admin, null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")))))
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"name\": \"Admin Edit\", \"description\": \"x\"}"))
+                            .content("{\"name\": \"Admin Edit\", \"description\": \"x\", \"categoryId\": \"1\", \"tagIds\": []}"))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
 
@@ -613,7 +638,7 @@ class ClubProfileUpdateIntegrationTest {
                             .with(authentication(authFor(committeeAccount)))
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"name\": \"Revoked Edit\", \"description\": \"x\"}"))
+                            .content("{\"name\": \"Revoked Edit\", \"description\": \"x\", \"categoryId\": \"1\", \"tagIds\": []}"))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
 
@@ -643,6 +668,8 @@ class ClubProfileUpdateIntegrationTest {
         private final String validPayload = """
             {
               "name": "ชมรมดนตรีสากล",
+              "categoryId": "1",
+              "tagIds": ["1"],
               "description": "ชมรมดนตรีสากล"
             }
             """;
@@ -698,6 +725,8 @@ class ClubProfileUpdateIntegrationTest {
             String payload = """
                 {
                   "name": "ชมรมดนตรีสากล",
+                  "categoryId": "1",
+                  "tagIds": ["1"],
                   "description": "คำอธิบายชมรม",
                   "objectives": null,
                   "contactUrl": null,
@@ -731,7 +760,7 @@ class ClubProfileUpdateIntegrationTest {
             assertNull(club.getInstagramUrl());
             assertNull(club.getImageUrl());
             assertNull(club.getBannerUrl());
-            // Immutable fields preserved
+            // Required category resent unchanged; immutable status preserved
             assertEquals(categoryId, club.getCategoryId());
             assertEquals("ACTIVE", club.getStatus());
         }

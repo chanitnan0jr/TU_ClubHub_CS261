@@ -191,8 +191,9 @@ class CommitteeRevocationConcurrencyIntegrationTest {
 		return jdbc.queryForObject("SELECT name FROM clubs WHERE id = ?", String.class, clubId);
 	}
 
-	private static ClubUpdateRequestDto request(String name) {
-		return new ClubUpdateRequestDto(name, "Club", null, null, null, null, null, null, null);
+	private ClubUpdateRequestDto request(String name) {
+		return new ClubUpdateRequestDto(name, "Club", null, null, null, null, null, null, null,
+				categoryId.toString(), List.of());
 	}
 
 	private static void await(CountDownLatch latch) {

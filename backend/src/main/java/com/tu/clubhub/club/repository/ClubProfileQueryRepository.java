@@ -4,7 +4,11 @@ import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -98,6 +102,40 @@ public class ClubProfileQueryRepository {
         return jdbcTemplate.query(
                 "SELECT id, name FROM tags ORDER BY name, id",
                 (rs, rowNum) -> new PublicClubTagDto(rs.getString("id"), rs.getString("name"))
+        );
+    }
+
+    public boolean categoryExists(Long categoryId) {
+        Boolean exists = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM club_categories WHERE id = ?)",
+                Boolean.class,
+                categoryId
+        );
+        return Boolean.TRUE.equals(exists);
+    }
+
+    /** Returns the subset of the given tag ids that exist. */
+    public Set<Long> findExistingTagIds(Collection<Long> tagIds) {
+        if (tagIds.isEmpty()) {
+            return Set.of();
+        }
+        String placeholders = String.join(", ", Collections.nCopies(tagIds.size(), "?"));
+        return new HashSet<>(jdbcTemplate.queryForList(
+                "SELECT id FROM tags WHERE id IN (" + placeholders + ")",
+                Long.class,
+                tagIds.toArray()
+        ));
+    }
+
+    /**
+     * Replaces the club's tag set. Runs in the caller's transaction, so a later
+     * failure rolls the tags back together with the profile update.
+     */
+    public void replaceClubTags(Long clubId, Collection<Long> tagIds) {
+        jdbcTemplate.update("DELETE FROM club_tags WHERE club_id = ?", clubId);
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO club_tags (club_id, tag_id) VALUES (?, ?)",
+                tagIds.stream().map(tagId -> new Object[] {clubId, tagId}).toList()
         );
     }
 

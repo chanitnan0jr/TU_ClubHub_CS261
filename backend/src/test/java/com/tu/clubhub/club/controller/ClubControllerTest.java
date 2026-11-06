@@ -34,7 +34,9 @@ class ClubControllerTest {
     private static final String BODY = """
             {
               "name": "Music Club",
-              "description": "A club for music lovers"
+              "description": "A club for music lovers",
+              "categoryId": "1",
+              "tagIds": []
             }
             """;
 
@@ -157,6 +159,8 @@ class ClubControllerTest {
                                 {
                                   "name": "Music Club",
                                   "description": "Music",
+                                  "categoryId": "1",
+                                  "tagIds": [],
                                   "contactEmail": "club@"
                                 }
                                 """))

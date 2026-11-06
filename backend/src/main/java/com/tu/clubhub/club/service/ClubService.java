@@ -2,7 +2,10 @@ package com.tu.clubhub.club.service;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -22,6 +25,8 @@ import com.tu.clubhub.committee.security.ClubSecurity;
 
 @Service
 public class ClubService {
+
+    private static final int MAX_TAGS = 10;
 
     private final Validator validator;
     private final ClubRepository clubRepository;
@@ -55,9 +60,15 @@ public class ClubService {
 
         validateUpdateRequest(request);
 
-        Club club = clubRepository.findById(clubId)
+        // ล็อกแถวชมรม ให้คำขอแก้ไขพร้อมกัน (รวมชุดแท็ก) ทำทีละคำขอ
+        Club club = clubRepository.findByIdForUpdate(clubId)
                 .orElseThrow(ClubNotFoundException::new);
 
+        Long categoryId = Long.valueOf(request.categoryId());
+        List<Long> tagIds = request.tagIds().stream().map(Long::valueOf).toList();
+        validateReferences(categoryId, tagIds);
+
+        club.setCategoryId(categoryId);
         club.setName(request.name());
         club.setDescription(request.description());
         club.setObjectives(request.objectives());
@@ -69,8 +80,30 @@ public class ClubService {
         club.setBannerUrl(request.bannerUrl());
 
         Club savedClub = clubRepository.save(club);
+        // Same transaction as the profile update: any later failure rolls back both.
+        profileQueryRepository.replaceClubTags(clubId, tagIds);
 
         return toResponse(savedClub);
+    }
+
+    // หมวดหมู่และแท็กต้องมีอยู่จริง (ตรวจหลังรูปแบบ id ผ่านแล้ว)
+    private void validateReferences(Long categoryId, List<Long> tagIds) {
+        Map<String, String> errors = new LinkedHashMap<>();
+
+        if (!profileQueryRepository.categoryExists(categoryId)) {
+            errors.put("categoryId", "Category does not exist");
+        }
+
+        Set<Long> existingTagIds = profileQueryRepository.findExistingTagIds(tagIds);
+        for (int i = 0; i < tagIds.size(); i++) {
+            if (!existingTagIds.contains(tagIds.get(i))) {
+                errors.put("tagIds[" + i + "]", "Tag does not exist");
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            throw new ClubValidationException(errors);
+        }
     }
 
     // รวมข้อมูลสำหรับส่งกลับผ่าน API
@@ -141,8 +174,53 @@ public class ClubService {
                 errors
         );
 
+        validateCategoryId(request.categoryId(), errors);
+        validateTagIds(request.tagIds(), errors);
+
         if (!errors.isEmpty()) {
             throw new ClubValidationException(errors);
+        }
+    }
+
+    private static void validateCategoryId(String value, Map<String, String> errors) {
+        if (value == null) {
+            errors.put("categoryId", "Category is required");
+        } else if (!isPositiveId(value)) {
+            errors.put("categoryId", "Must be a positive decimal identifier");
+        }
+    }
+
+    private static void validateTagIds(List<String> values, Map<String, String> errors) {
+        if (values == null) {
+            errors.put("tagIds", "Tags are required");
+            return;
+        }
+        if (values.size() > MAX_TAGS) {
+            errors.put("tagIds", "At most " + MAX_TAGS + " tags are allowed");
+            return;
+        }
+
+        Set<Long> seen = new HashSet<>();
+        for (int i = 0; i < values.size(); i++) {
+            String value = values.get(i);
+            if (value == null || !isPositiveId(value)) {
+                errors.put("tagIds[" + i + "]", "Must be a positive decimal identifier");
+            } else if (!seen.add(Long.valueOf(value))) {
+                errors.put("tagIds[" + i + "]", "Duplicate tag id");
+            }
+        }
+    }
+
+    // ตัวเลขฐานสิบบวก ไม่มีเลขศูนย์นำหน้า และไม่เกินขนาด Long (ตาม PositiveBigintId)
+    private static boolean isPositiveId(String value) {
+        if (!value.matches("[1-9][0-9]{0,18}")) {
+            return false;
+        }
+        try {
+            Long.parseLong(value);
+            return true;
+        } catch (NumberFormatException exception) {
+            return false;
         }
     }
 
@@ -232,7 +310,8 @@ public class ClubService {
 
         public ClubValidationException(Map<String, String> fieldErrors) {
             super("Club profile validation failed");
-            this.fieldErrors = Map.copyOf(fieldErrors);
+            // Keep insertion order so fieldErrors are returned in a stable order.
+            this.fieldErrors = Collections.unmodifiableMap(new LinkedHashMap<>(fieldErrors));
         }
 
         public Map<String, String> getFieldErrors() {

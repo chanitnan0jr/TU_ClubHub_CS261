@@ -2,6 +2,7 @@ package com.tu.clubhub.club.service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import com.tu.clubhub.club.domain.Club;
 import com.tu.clubhub.club.dto.ClubResponseDto.ClubCategoryDto;
@@ -75,7 +76,9 @@ class ClubServiceTest {
                 null,
                 email,
                 imageUrl,
-                null
+                null,
+                "1",
+                List.of("2")
         );
     }
 
@@ -171,9 +174,12 @@ class ClubServiceTest {
 
         Club club = mock(Club.class);
 
-        when(clubRepository.findById(41L))
+        when(clubRepository.findByIdForUpdate(41L))
                 .thenReturn(Optional.of(club));
         when(clubRepository.save(club)).thenReturn(club);
+        when(profileQueryRepository.categoryExists(1L)).thenReturn(true);
+        when(profileQueryRepository.findExistingTagIds(List.of(2L)))
+                .thenReturn(Set.of(2L));
 
         when(club.getId()).thenReturn(41L);
         when(club.getCategoryId()).thenReturn(1L);
@@ -206,14 +212,15 @@ class ClubServiceTest {
         verify(club).setContactEmail(data.contactEmail());
         verify(club).setImageUrl(data.imageUrl());
         verify(club).setBannerUrl(data.bannerUrl());
+        verify(club).setCategoryId(1L);
 
         // ไม่แก้ฟิลด์ที่ API ไม่อนุญาต
-        verify(club, never()).setCategoryId(any());
         verify(club, never()).setStatus(any());
         verify(club, never()).setAffiliationLevel(any());
         verify(club, never()).setAffiliationName(any());
 
         verify(clubRepository).save(club);
+        verify(profileQueryRepository).replaceClubTags(41L, List.of(2L));
 
         // ตรวจข้อมูลที่ประกอบเป็น Response
         assertEquals("41", response.id());
@@ -250,7 +257,7 @@ class ClubServiceTest {
     void missingClubShouldNotSave() {
         var data = request(null, null, null);
 
-        when(clubRepository.findById(999L))
+        when(clubRepository.findByIdForUpdate(999L))
                 .thenReturn(Optional.empty());
 
         assertThrows(

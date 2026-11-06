@@ -1,11 +1,17 @@
 package com.tu.clubhub.club.dto;
 
+import java.util.List;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/** Writable club profile fields. Null optional values clear the stored value. */
+/**
+ * Writable club profile fields. Null optional values clear the stored value.
+ * categoryId and tagIds are required decimal-string ids; tagIds replaces the club's tag set.
+ * Their format, uniqueness, size and existence are checked in ClubService.
+ */
 public record ClubUpdateRequestDto(
 		@NotBlank(message = "Club name is required")
 		@Size(max = 200, message = "Club name must be at most 200 characters")
@@ -38,5 +44,9 @@ public record ClubUpdateRequestDto(
 
 		@Pattern(regexp = "^https://\\S+$", message = "URL must use HTTPS")
 		@Size(max = 2048, message = "URL must be at most 2048 characters")
-		String bannerUrl) {
+		String bannerUrl,
+
+		String categoryId,
+
+		List<String> tagIds) {
 }
