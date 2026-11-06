@@ -9,7 +9,7 @@
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | Member Assignment Data Model จาก Task75 |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | ariyawe krittayabunlue|
 | **Trello Card Link** | [https://trello.com/c/305vvsPC](https://trello.com/c/305vvsPC) |
 
 ---

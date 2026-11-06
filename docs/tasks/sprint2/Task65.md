@@ -9,7 +9,7 @@
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task74–75 (Permission Matrix) และ Seed Data จาก Task55 |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | ariyawe krittayabunlue|
 | **Trello Card Link** | [https://trello.com/c/f990dC8q](https://trello.com/c/f990dC8q) |
 
 ---

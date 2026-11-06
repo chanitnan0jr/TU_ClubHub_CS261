@@ -9,7 +9,7 @@
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (QA Lead) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task52 (Backend API) และ Task53 (Frontend Form) |
 | **SDLC Labels** | 4. Testing & QA |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | Sirawich Kridatikanwut, boom boom|
 | **Trello Card Link** | [https://trello.com/c/JzyJS9c6](https://trello.com/c/JzyJS9c6) |
 
 ---
