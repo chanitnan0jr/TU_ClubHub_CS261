@@ -3,6 +3,7 @@ package com.tu.clubhub.recruitment.service;
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import com.tu.clubhub.committee.security.ClubSecurity;
 import com.tu.clubhub.recruitment.domain.RecruitmentRound;
+import com.tu.clubhub.recruitment.dto.RoundPageResponse;
 import com.tu.clubhub.recruitment.dto.RoundResponse;
 import com.tu.clubhub.recruitment.dto.RoundWriteRequest;
 import com.tu.clubhub.recruitment.repository.RecruitmentRoundRepository;
@@ -17,6 +18,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class RecruitmentRoundService {
@@ -44,6 +47,47 @@ public class RecruitmentRoundService {
 
         requireCommittee(clubId);
         validateRequest(request);
+    }
+
+    /** All of the club's rounds, drafts included, minus those the caller applied to. */
+    @Transactional(readOnly = true)
+    public RoundPageResponse listRounds(
+            Long clubId,
+            String publicationStatus,
+            int page,
+            int size) {
+
+        requireCommittee(clubId);
+        Long viewerId = currentUserId();
+
+        long total = repository.countForCommittee(
+                clubId, viewerId, publicationStatus);
+        List<RecruitmentRound> rounds = repository.findForCommittee(
+                clubId, viewerId, publicationStatus, page, size);
+        Map<Long, List<RoundResponse.Question>> questions =
+                repository.findQuestionsByRound(
+                        rounds.stream().map(RecruitmentRound::id).toList());
+
+        List<RoundResponse> items = rounds.stream()
+                .map(round -> RoundResponse.from(
+                        round, questions.getOrDefault(round.id(), List.of())))
+                .toList();
+
+        return new RoundPageResponse(
+                items, page, size, total, (int) ((total + size - 1) / size));
+    }
+
+    @Transactional(readOnly = true)
+    public RoundResponse getRound(Long clubId, Long roundId) {
+        requireCommittee(clubId);
+        requireRoundId(roundId);
+
+        RecruitmentRound round = repository.find(clubId, roundId)
+                .orElseThrow(RecruitmentRoundService::roundNotFound);
+
+        requireNotApplicant(roundId);
+
+        return RoundResponse.from(round, repository.findQuestions(roundId));
     }
 
     @Transactional
@@ -265,9 +309,13 @@ public class RecruitmentRoundService {
 
     private RecruitmentRound findRound(Long clubId, Long roundId) {
         return repository.findForUpdate(clubId, roundId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Recruitment round not found in this club"));
+                .orElseThrow(RecruitmentRoundService::roundNotFound);
+    }
+
+    private static ResponseStatusException roundNotFound() {
+        return new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Recruitment round not found in this club");
     }
 
     private RoundResponse describe(Long clubId, Long roundId) {
