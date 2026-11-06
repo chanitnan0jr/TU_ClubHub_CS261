@@ -100,17 +100,18 @@ Select these services explicitly: enabling the profile without a service list al
    ```
    It checks health, pages, the API and database, a mock login, and that PostgreSQL listens on loopback only, and exits non-zero on any failure.
 
-### US-03 Demo Walkthrough (application submission)
+### Sprint 1 Demo Walkthrough
 
 After seeding, all of this works in the browser (`dev`, `TU_AUTH_MODE=mock`, password `tu-clubhub-demo`):
 
-1. Log in as `student-demo`, the president of ชมรมเขียนโปรแกรม (`/clubs/3` on a fresh seed).
-2. Edit the club at `/clubs/3/edit`.
-3. Create a round at `/clubs/3/rounds/new` (or the home page button): opening time in the past, closing time in the future, a confirmation deadline after closing, and the questions in the form. Click **บันทึกและเผยแพร่**. A draft cannot be published later from the UI yet.
-4. Open `/clubs/3`: the round appears with an apply button.
-5. Log out, log in as `applicant-demo`, click **สมัครเข้าร่วมชมรมนี้**, fill in the form, review and submit. The app navigates automatically to the responsive result page, which shows the application number and `SUBMITTED`.
+1. Log in as `student-demo`. The home page lists **ชมรมที่ฉันดูแล**: ชมรมเขียนโปรแกรม (`/clubs/3` on a fresh seed). Open it to reach the committee overview at `/clubs/3/manage`.
+2. **โปรไฟล์ชมรม** (`/clubs/3/edit`): change the description, the category, the tags and the image URLs (HTTPS, previewed live), then save. **ดูหน้าโปรไฟล์สาธารณะ** shows the change straight away.
+3. **จัดการรอบรับสมัคร** (`/clubs/3/rounds`) → **สร้างรอบรับสมัคร**: opening time in the past, closing time in the future, a confirmation deadline after closing, and the questions. Save it as a draft, use **แก้ไข** to change it, then **เผยแพร่**.
+4. Open **รอบที่เปิดรับ** (`/open-calls`): the round is listed with its club, details and deadline. `/clubs/3` shows the same round with its details and results date.
+5. Log out, log in as `applicant-demo`, click **สมัคร** on the board, fill in the form, review and submit. The result page shows the application number and `SUBMITTED`.
+6. Log back in as `student-demo`, open `/clubs/3/rounds` and click **ปิดรับสมัคร** on the round. It disappears from `/open-calls`, and opening its application form now answers `ROUND_CLOSED`.
 
-`student-demo` cannot apply to its own club (it is already a member). The application history page (US-04) is not built yet.
+`student-demo` cannot apply to its own club (it is already a member). The application history page (US-04) and application review (US-09) are Sprint 2 work.
 
 ---
 
