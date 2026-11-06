@@ -126,8 +126,11 @@ export interface PublicClubProfile {
 export interface PublicOpenRound {
   id: string;
   name: string;
+  // Round details and qualifications; plain text that may contain line breaks.
+  description: string;
   opensAt: string;
   closesAt: string;
+  resultsScheduledAt: string | null;
 }
 
 export interface PublicOpenRoundPage {
@@ -143,8 +146,10 @@ export interface PublicOpenRoundPage {
 export interface RecruitmentRoundData {
   id: string;
   title: string;
+  description: string;
   opensAt: string;
   closesAt: string;
+  resultsScheduledAt: string | null;
 }
 
 export interface ClubDetailData {

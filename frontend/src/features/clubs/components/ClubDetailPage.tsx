@@ -5,9 +5,10 @@ import { formatThaiDateTime } from '../../../lib/format';
 import { Breadcrumbs } from '../../../components/ui/Breadcrumbs';
 import { Button } from '../../../components/ui/Button';
 import { EmptyState } from '../../../components/ui/EmptyState';
-import { CalendarDaysIcon, ExternalLinkIcon, ImageIcon } from '../../../components/ui/icons';
+import { CalendarDaysIcon, ClipboardCheckIcon, ExternalLinkIcon } from '../../../components/ui/icons';
 import { SectionCard } from '../../../components/ui/SectionCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
+import { ClubLogo } from './ClubLogo';
 import { GuestLoginModal } from './GuestLoginModal';
 
 interface ClubDetailPageProps {
@@ -18,9 +19,6 @@ interface ClubDetailPageProps {
   // Routes an authenticated student to the selected round's application form.
   onNavigateToApplication?: (roundId: string) => void;
 }
-
-// รูป Cover สำรอง กรณีที่ชมรมไม่มีรูปหรือโหลดรูปไม่ขึ้น
-const DEFAULT_COVER_IMAGE = 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&q=80&w=1200';
 
 const formatPeriod = (round: RecruitmentRoundData) =>
   `${formatThaiDateTime(round.opensAt)} – ${formatThaiDateTime(round.closesAt)}`;
@@ -100,8 +98,8 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
   }
 
   const { club } = result;
-  const coverSrc =
-    club.bannerUrl && club.bannerUrl !== failedCover ? club.bannerUrl : DEFAULT_COVER_IMAGE;
+  // No banner, or it failed to load: show the local placeholder, never an external image.
+  const coverSrc = club.bannerUrl && club.bannerUrl !== failedCover ? club.bannerUrl : null;
   const emailUrl = club.contacts.email ? `mailto:${club.contacts.email}` : '';
   const hasContacts = Boolean(
     club.contacts.website || club.contacts.facebook || club.contacts.instagram || emailUrl,
@@ -129,27 +127,21 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
       {/* Cover image with fallback, logo and title */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="aspect-[3/1] min-h-32 w-full bg-slate-200">
-          <img
-            src={coverSrc}
-            onError={() => setFailedCover(coverSrc)}
-            alt={club.name}
-            className="size-full object-cover"
-          />
+          {coverSrc ? (
+            <img
+              src={coverSrc}
+              onError={() => setFailedCover(coverSrc)}
+              alt={club.name}
+              className="size-full object-cover"
+            />
+          ) : (
+            <div className="size-full bg-linear-to-br from-tu-maroon-100 via-tu-maroon-50 to-slate-100" />
+          )}
         </div>
 
         <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-end sm:px-7">
           <div className="-mt-10 size-20 shrink-0 rounded-xl border border-slate-200 bg-white p-1 sm:-mt-12 sm:size-24">
-            {club.imageUrl ? (
-              <img
-                src={club.imageUrl}
-                alt={`โลโก้ ${club.name}`}
-                className="size-full rounded-lg object-cover"
-              />
-            ) : (
-              <div className="flex size-full items-center justify-center rounded-lg bg-tu-maroon-50 text-tu-maroon">
-                <ImageIcon className="size-8" />
-              </div>
-            )}
+            <ClubLogo src={club.imageUrl} clubName={club.name} />
           </div>
           <div className="min-w-0">
             {club.category && (
@@ -213,6 +205,23 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
                       {formatPeriod(round)}
                     </span>
                   </p>
+                  {round.resultsScheduledAt && (
+                    <p className="flex items-start gap-2 text-sm text-slate-700">
+                      <ClipboardCheckIcon className="mt-0.5 size-4 text-slate-500" />
+                      <span>
+                        <span className="font-medium text-slate-900">กำหนดประกาศผล: </span>
+                        {formatThaiDateTime(round.resultsScheduledAt)}
+                      </span>
+                    </p>
+                  )}
+                  {round.description.trim() && (
+                    <div className="rounded-lg bg-slate-50 px-4 py-3">
+                      <h4 className="text-sm font-medium text-slate-900">รายละเอียด/คุณสมบัติ</h4>
+                      <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-700">
+                        {round.description}
+                      </p>
+                    </div>
+                  )}
                   <Button
                     disabled={!applicationAvailable}
                     onClick={() => handleApplyClick(round)}
