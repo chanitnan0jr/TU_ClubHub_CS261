@@ -155,6 +155,65 @@ class ClubServiceTest {
         assertTrue(error.getFieldErrors().containsKey("facebookUrl"));
     }
 
+    private static ClubUpdateRequestDto withIds(String categoryId, List<String> tagIds) {
+        return new ClubUpdateRequestDto("Music Club", "A club for music lovers",
+                null, null, null, null, null, null, null, categoryId, tagIds);
+    }
+
+    @Test
+    void categoryAndTagsAreRequired() {
+        var error = assertThrows(ClubValidationException.class,
+                () -> service.validateUpdateRequest(withIds(null, null)));
+
+        assertEquals("Category is required", error.getFieldErrors().get("categoryId"));
+        assertEquals("Tags are required", error.getFieldErrors().get("tagIds"));
+    }
+
+    @Test
+    void malformedIdsShouldFail() {
+        var error = assertThrows(ClubValidationException.class,
+                () -> service.validateUpdateRequest(withIds("01", java.util.Arrays.asList(
+                        "abc", null, "-1", "9223372036854775808", "3"))));
+
+        assertEquals("Must be a positive decimal identifier", error.getFieldErrors().get("categoryId"));
+        for (int i = 0; i < 4; i++) {
+            assertEquals("Must be a positive decimal identifier",
+                    error.getFieldErrors().get("tagIds[" + i + "]"));
+        }
+        assertFalse(error.getFieldErrors().containsKey("tagIds[4]"));
+    }
+
+    @Test
+    void repeatedAndTooManyTagsShouldFail() {
+        var repeated = assertThrows(ClubValidationException.class,
+                () -> service.validateUpdateRequest(withIds("1", List.of("2", "3", "2"))));
+        assertEquals(List.of("tagIds[2]"), List.copyOf(repeated.getFieldErrors().keySet()));
+
+        var tooMany = assertThrows(ClubValidationException.class,
+                () -> service.validateUpdateRequest(withIds("1",
+                        List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"))));
+        assertEquals("At most 10 tags are allowed", tooMany.getFieldErrors().get("tagIds"));
+
+        assertDoesNotThrow(() -> service.validateUpdateRequest(withIds("1",
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))));
+    }
+
+    @Test
+    void unknownReferencesShouldFailWithoutWriting() {
+        Club club = mock(Club.class);
+        when(clubRepository.findByIdForUpdate(41L)).thenReturn(Optional.of(club));
+        when(profileQueryRepository.categoryExists(1L)).thenReturn(false);
+        when(profileQueryRepository.findExistingTagIds(List.of(2L))).thenReturn(Set.of());
+
+        var error = assertThrows(ClubValidationException.class,
+                () -> service.updateClub(41L, request(null, null, null)));
+
+        assertEquals(List.of("categoryId", "tagIds[0]"), List.copyOf(error.getFieldErrors().keySet()));
+        verify(club, never()).setName(any());
+        verify(clubRepository, never()).save(any(Club.class));
+        verify(profileQueryRepository, never()).replaceClubTags(any(), any());
+    }
+
     @Test
     void optionalFieldsCanBeNull() {
         var data = request(null, null, null);
