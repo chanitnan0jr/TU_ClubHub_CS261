@@ -207,20 +207,18 @@ paths:
     get:
       tags: [Authentication]
       operationId: getCurrentUser
-      x-implementation-status: partial
-      x-sprint2-extensions-status: pending-task79
-      summary: Get the authenticated user's real-time account identity and effective committee assignments
+      x-implementation-status: implemented
+      summary: Get the authenticated user's current role, student status, and effective committee assignments
       description: >-
-        Baseline user.id and user.role are implemented; Sprint 2 extensions
-        studentStatus and activeCommitteeAssignments are specified for Task79.
-        The returned role, studentStatus, and activeCommitteeAssignments are for UI
-        presentation and route guarding only; the backend rechecks authorization on
-        every request. Expired sessions return 401 AUTHENTICATION_REQUIRED.
-        Task79 requires reading the current ACTIVE account, global role, student
-        profile status, and currently effective committee assignments directly from
-        the database on every call rather than trusting stale session authorities.
-        A suspended account returns 403 ACCOUNT_NOT_ALLOWED and its session is
-        invalidated.
+        Returns the signed-in account as it is stored now, not as it was at sign-in:
+        role, studentStatus, and activeCommitteeAssignments are read again on every
+        call, so a role change, appointment, revocation, or term end shows on the
+        next call without signing in again (Task79). These fields are for UI
+        presentation and route guarding only; every protected operation still
+        checks permission itself. A missing or expired session returns 401
+        AUTHENTICATION_REQUIRED. A suspended account, or a session whose account no
+        longer exists, returns 403 ACCOUNT_NOT_ALLOWED; a suspended account's
+        session is also invalidated.
       security:
         - SessionCookie: []
       responses:
@@ -235,18 +233,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CurrentUserResponse'
-              example:
-                user:
-                  id: '10001'
-                  role: USER
-                  studentStatus: ACTIVE
-                  activeCommitteeAssignments:
-                    - clubId: '20001'
-                      clubName: Example Club
-                      permissionRole: PRESIDENT
-                      positionName: Club President
-                      startsAt: '2026-07-31T17:00:00Z'
-                      endsAt: '2027-07-31T17:00:00Z'
+              examples:
+                committeeMember:
+                  summary: Student who currently manages one club
+                  value:
+                    user:
+                      id: '10001'
+                      role: USER
+                      studentStatus: ACTIVE
+                      activeCommitteeAssignments:
+                        - clubId: '20001'
+                          clubName: Example Club
+                          permissionRole: PRESIDENT
+                          positionName: Club President
+                          startsAt: '2026-07-31T17:00:00Z'
+                          endsAt: '2027-07-31T17:00:00Z'
+                noAssignments:
+                  summary: Student with no effective committee assignment
+                  value:
+                    user:
+                      id: '10002'
+                      role: USER
+                      studentStatus: ACTIVE
+                      activeCommitteeAssignments: []
+                nonStudent:
+                  summary: Account without a student profile
+                  value:
+                    user:
+                      id: '10003'
+                      role: ADMIN
+                      studentStatus: null
+                      activeCommitteeAssignments: []
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2813,15 +2830,19 @@ components:
           type: [string, 'null']
           enum: [ACTIVE, INACTIVE, GRADUATED, UNKNOWN, null]
           description: >-
-            Optional real-time student status projected from student_profiles when
-            available (Task79). Null for non-student accounts (e.g., ADMIN without
-            a student profile).
+            Stored student status, refreshed at each TU sign-in; only ACTIVE grants
+            student or committee rights. Null when the account has no student
+            profile (for example, a non-student account). Always present in
+            GET /api/v1/auth/me; the login response omits it (Task79).
         activeCommitteeAssignments:
           type: array
           description: >-
-            Real-time list of active committee memberships for the authenticated user,
-            used by the frontend to toggle Committee Workspace and club edit CTAs
-            without relogin (Task79).
+            Every committee assignment that grants committee rights at the time of
+            the call, across all clubs, ordered by clubName. Empty when there are
+            none. Use it to show Committee Workspace entries and club edit actions
+            without signing in again. A user can have more than one entry for a
+            club when assignments overlap. Always present in GET /api/v1/auth/me;
+            the login response omits it (Task79).
           items:
             $ref: '#/components/schemas/ActiveCommitteeAssignmentSummary'
     ActiveCommitteeAssignmentSummary:
@@ -2829,28 +2850,36 @@ components:
       additionalProperties: false
       required: [clubId, clubName, permissionRole, positionName, startsAt, endsAt]
       description: >-
-        Effective committee membership projected from club_committee_assignments
-        where status = 'ACTIVE' and starts_at <= now and (ends_at is null or
-        ends_at > now), joined with clubs.status = 'ACTIVE' (Task79).
+        One assignment that currently grants committee rights in a club. It is
+        listed only while the same rule that authorizes committee operations holds:
+        the assignment is not revoked and its term has started and not ended
+        (startsAt <= server time < endsAt), the user's membership in the club has
+        started, is active and has not ended, the account and student status are
+        ACTIVE, and the club is ACTIVE (Task79).
       properties:
         clubId:
           type: string
           pattern: '^[0-9]+$'
+          description: Club the assignment is for; use it as {clubId} in committee paths.
         clubName:
           type: string
           maxLength: 200
         permissionRole:
           type: string
           enum: [COMMITTEE, PRESIDENT]
+          description: Committee rights level; PRESIDENT also allows president-only actions.
         positionName:
-          type: [string, 'null']
+          type: string
           maxLength: 100
+          description: Display title of the position, for example Club President. It grants no rights by itself.
         startsAt:
           type: string
           format: date-time
+          description: Start of the term (inclusive).
         endsAt:
-          type: [string, 'null']
+          type: string
           format: date-time
+          description: End of the term (exclusive); from this instant the entry is no longer listed.
     ClubDetail:
       type: object
       required: [id, categoryId, name, description, objectives, contactUrl, facebookUrl, instagramUrl, contactEmail, affiliationLevel, affiliationName, imageUrl, bannerUrl, status, category, tags, recruitmentRounds]
