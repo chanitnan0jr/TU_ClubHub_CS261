@@ -14,7 +14,8 @@ class PublicRoutesTest {
                 "/api/v1/public/club-categories",
                 "/api/v1/public/interest-tags",
                 "/api/v1/public/clubs/123",
-                "/api/v1/public/clubs/123/recruitment-rounds"
+                "/api/v1/public/clubs/123/recruitment-rounds",
+                "/api/v1/public/recruitment-rounds"
         }) {
             assertTrue(matches("GET", path), path);
         }
@@ -30,7 +31,8 @@ class PublicRoutesTest {
                     "/api/v1/public/club-categories",
                     "/api/v1/public/interest-tags",
                     "/api/v1/public/clubs/123",
-                    "/api/v1/public/clubs/123/recruitment-rounds"
+                    "/api/v1/public/clubs/123/recruitment-rounds",
+                    "/api/v1/public/recruitment-rounds"
             }) {
                 assertFalse(
                         matches(method, path),
@@ -51,6 +53,7 @@ class PublicRoutesTest {
                 "/api/v1/me/applications",
                 "/api/v1/admin/dashboard/stats",
                 "/api/v1/public/clubs/123/applications",
+                "/api/v1/public/recruitment-rounds/123",
                 "/api/v1/public/unknown",
                 "/api/v1/new-endpoint"
         }) {

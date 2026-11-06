@@ -2,6 +2,7 @@ package com.tu.clubhub.club.controller;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
@@ -13,6 +14,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -498,6 +500,162 @@ class PublicClubControllerIntegrationTest {
                         .with(user("test-user"))
                         .with(csrf()))
                 .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    void openCallBoardListsOnlyRoundsOpenNowInActiveClubs() throws Exception {
+        hideOtherClubs();
+        Long laterId = insertRound(activeClubId, "Closes later", "PUBLISHED",
+                NOW.minusSeconds(60), NOW.plusSeconds(120), null);
+        Long soonerId = insertRound(otherClubId, "Closes sooner", "PUBLISHED",
+                NOW.minusSeconds(60), NOW.plusSeconds(60), null);
+        insertRound(activeClubId, "Draft", "DRAFT", NOW.minusSeconds(60), NOW.plusSeconds(60), null);
+        insertRound(activeClubId, "Cancelled", "CANCELLED", NOW.minusSeconds(60), NOW.plusSeconds(60), null);
+        insertRound(activeClubId, "Not yet open", "PUBLISHED", NOW.plusSeconds(1), NOW.plusSeconds(60), null);
+        insertRound(activeClubId, "Closes exactly now", "PUBLISHED", NOW.minusSeconds(60), NOW, null);
+        insertRound(activeClubId, "Past", "PUBLISHED", NOW.minusSeconds(120), NOW.minusSeconds(1), null);
+        insertRound(activeClubId, "Manually closed", "PUBLISHED",
+                NOW.minusSeconds(60), NOW.plusSeconds(60), NOW.minusSeconds(1));
+        insertRound(inactiveClubId, "Inactive club", "PUBLISHED", NOW.minusSeconds(60), NOW.plusSeconds(60), null);
+
+        // Anonymous request: no cookie and no security test user.
+        String body = getOpenCalls()
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(jsonPath("$.keys()", containsInAnyOrder("items", "page")))
+                .andExpect(jsonPath("$.items[*].id", contains(soonerId.toString(), laterId.toString())))
+                .andExpect(jsonPath("$.items[0].keys()", containsInAnyOrder("id", "name", "description",
+                        "opensAt", "closesAt", "resultsScheduledAt", "club")))
+                .andExpect(jsonPath("$.items[0].name").value("Closes sooner"))
+                .andExpect(jsonPath("$.items[0].description").value(ROUND_DETAILS))
+                .andExpect(jsonPath("$.items[0].opensAt").value(NOW.minusSeconds(60).toString()))
+                .andExpect(jsonPath("$.items[0].closesAt").value(NOW.plusSeconds(60).toString()))
+                .andExpect(jsonPath("$.items[0].resultsScheduledAt").value(nullValue()))
+                .andExpect(jsonPath("$.items[0].club.keys()",
+                        containsInAnyOrder("id", "name", "imageUrl", "category")))
+                .andExpect(jsonPath("$.items[0].club.id").value(otherClubId.toString()))
+                .andExpect(jsonPath("$.items[1].club.id").value(activeClubId.toString()))
+                .andExpect(jsonPath("$.items[1].club.name").value(activeClubName))
+                .andExpect(jsonPath("$.items[1].club.imageUrl").value("https://example.org/logo.png"))
+                .andExpect(jsonPath("$.items[1].club.category.keys()", containsInAnyOrder("id", "name")))
+                .andExpect(jsonPath("$.items[1].club.category.id").value(categoryId.toString()))
+                .andExpect(jsonPath("$.items[1].club.category.name").value(categoryName))
+                .andExpect(jsonPath("$.page.number").value(0))
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.page.totalElements").value(2))
+                .andExpect(jsonPath("$.page.totalPages").value(1))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertFalse(body.contains(ELIGIBILITY_TEXT), "eligibility_text must stay private");
+
+        // Same caching headers as the per-club public rounds list.
+        String perClubCacheControl = getRounds(activeClubId).andReturn().getResponse().getHeader("Cache-Control");
+        getOpenCalls().andExpect(header().string("Cache-Control", perClubCacheControl));
+    }
+
+    @Test
+    void openCallBoardDropsRoundsOfClubThatBecomesInactive() throws Exception {
+        hideOtherClubs();
+        Long roundId = insertRound(activeClubId, "Open round", "PUBLISHED",
+                NOW.minusSeconds(60), NOW.plusSeconds(60), null);
+        getOpenCalls()
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id", contains(roundId.toString())));
+
+        assertEquals(1, jdbc.update("UPDATE clubs SET status = 'INACTIVE' WHERE id = ?", activeClubId));
+        mockMvc.perform(get("/api/v1/public/clubs/{id}", activeClubId))
+                .andExpect(status().isNotFound());
+        getOpenCalls()
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.page.totalElements").value(0))
+                .andExpect(jsonPath("$.page.totalPages").value(0));
+    }
+
+    @Test
+    void openCallBoardOrdersByClosingTimeThenIdWithStablePages() throws Exception {
+        hideOtherClubs();
+        long[] closesOffsets = {300, 100, 200, 100, 300};
+        List<Long> ids = new ArrayList<>();
+        for (int number = 0; number < closesOffsets.length; number++) {
+            Long clubId = number % 2 == 0 ? activeClubId : otherClubId;
+            ids.add(insertRound(clubId, "Round " + number, "PUBLISHED",
+                    NOW.minusSeconds(60), NOW.plusSeconds(closesOffsets[number]), null));
+        }
+        // closesAt ascending, then id ascending for equal deadlines.
+        List<String> expectedIds = List.of(ids.get(1), ids.get(3), ids.get(2), ids.get(0), ids.get(4))
+                .stream().map(Object::toString).toList();
+
+        List<String> allIds = new ArrayList<>();
+        for (int page = 0; page < 3; page++) {
+            String body = getOpenCalls(page, 2)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.page.number").value(page))
+                    .andExpect(jsonPath("$.page.size").value(2))
+                    .andExpect(jsonPath("$.page.totalElements").value(5))
+                    .andExpect(jsonPath("$.page.totalPages").value(3))
+                    .andReturn().getResponse().getContentAsString();
+            allIds.addAll(JsonPath.read(body, "$.items[*].id"));
+        }
+        assertEquals(expectedIds, allIds, "Pages follow closesAt then id without gaps or repeats");
+
+        getOpenCalls(3, 2)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.page.totalElements").value(5))
+                .andExpect(jsonPath("$.page.totalPages").value(3));
+    }
+
+    @Test
+    void openCallBoardReturnsEmptyPageWhenNothingIsOpen() throws Exception {
+        hideOtherClubs();
+        insertRound(activeClubId, "Future only", "PUBLISHED", NOW.plusSeconds(1), NOW.plusSeconds(60), null);
+        getOpenCalls()
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.page.number").value(0))
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.page.totalElements").value(0))
+                .andExpect(jsonPath("$.page.totalPages").value(0));
+    }
+
+    @ParameterizedTest(name = "open calls page={0}, size={1}")
+    @CsvSource({"-1, 20, page", "0, 0, size", "0, -1, size", "0, 101, size",
+            "2147483648, 20, page", "0, abc, size"})
+    void openCallBoardRejectsInvalidPagination(String page, String size, String field) throws Exception {
+        mockMvc.perform(get("/api/v1/public/recruitment-rounds").param("page", page).param("size", size))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.instance").value("/api/v1/public/recruitment-rounds"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value(field));
+    }
+
+    @Test
+    void openCallBoardIsReadOnly() throws Exception {
+        mockMvc.perform(post("/api/v1/public/recruitment-rounds").with(csrf()))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/public/recruitment-rounds").with(user("test-user")).with(csrf()))
+                .andExpect(status().isMethodNotAllowed());
+    }
+
+    /**
+     * The board is global and this database is shared with seed data and other test classes.
+     * Hide every other club inside this test's rolled-back transaction so totals are exact.
+     */
+    private void hideOtherClubs() {
+        jdbc.update("UPDATE clubs SET status = 'INACTIVE' WHERE id NOT IN (?, ?, ?)",
+                activeClubId, otherClubId, inactiveClubId);
+    }
+
+    private ResultActions getOpenCalls() throws Exception {
+        return mockMvc.perform(get("/api/v1/public/recruitment-rounds"));
+    }
+
+    private ResultActions getOpenCalls(int page, int size) throws Exception {
+        return mockMvc.perform(get("/api/v1/public/recruitment-rounds")
+                .param("page", Integer.toString(page)).param("size", Integer.toString(size)));
     }
 
     private ResultActions getRounds(Long clubId) throws Exception {
