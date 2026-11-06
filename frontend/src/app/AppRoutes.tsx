@@ -7,6 +7,7 @@ import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
 import MyApplicationsPage from "../pages/MyApplicationsPage";
 import NotFoundPage from "../pages/NotFoundPage";
+import OpenCallsPage from "../pages/OpenCallsPage";
 import QuestionManagementRoutePage from "../pages/QuestionManagementRoutePage";
 import RoundCreateRoutePage from "../pages/RoundCreateRoutePage";
 import RequireAuth from "./RequireAuth";
@@ -18,6 +19,7 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/open-calls" element={<OpenCallsPage />} />
       <Route path="/clubs/:clubId" element={<ClubDetailRoutePage />} />
       <Route
         path="/clubs/:clubId/rounds/:roundId/apply"
