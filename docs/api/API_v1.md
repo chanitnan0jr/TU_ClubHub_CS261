@@ -21,13 +21,14 @@ Initial source review on 2026-10-19; application POST status updated on 2026-10-
 
 | API | Backend status | Frontend status |
 |---|---|---|
-| Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout | Login/account/logout connected |
+| Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout; `me` returns `studentStatus` and `activeCommitteeAssignments` read on every call | Login/account/logout connected; committee pages do not read assignments yet |
 | `GET /api/v1/public/clubs/{id}` and `.../{id}/recruitment-rounds` | Implemented; active clubs and currently open rounds from DB | Club detail still uses mock data and is not mounted |
 | `GET /api/v1/public/recruitment-rounds` (Open Call Board) | Implemented; open rounds across all active clubs | `/open-calls` page pending |
 | `GET /api/v1/clubs/{clubId}` | Contract-only; no handler | Editor client calls this missing endpoint |
 | `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard | Editor/client exist but are not mounted |
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
-| Committee round `GET` list/detail and `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
+| Committee round `GET` list/detail (`listRounds`, `getRound`) | Implemented with the round-write committee guard and self-review filter; see rounds contract | Pending |
+| Round `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
 | `GET /api/v1/rounds/{roundId}/application-form` (§12) | Implemented with the Task42-confirmed account/student/window policy; PO/team review pending | Form prototype only |
 | `POST /api/v1/rounds/{roundId}/applications` (§11) | Implemented: transactional service, HTTP handler, shared Problem errors, session/CSRF; see [Task45 verification](../testing/task45-concurrency-and-rollback.md) | No submission client |
 | `/actuator/health` | Implemented | Operational endpoint |
@@ -40,7 +41,7 @@ The foundation contract covers:
 
 - Session-based authentication through the TU Authentication API.
 - CSRF token bootstrap for browser requests.
-- The current user's minimal account identity.
+- The current user's account identity, student status, and effective committee assignments.
 - Public club profiles and currently open recruitment rounds for active clubs, per club and across all clubs (Open Call Board).
 - Application submission with answers and document links, including database persistence, as defined in [section 11](#11-application-submission).
 - Applicant-facing form schemas and the read policy in [section 12](#12-round-application-form-task42).
@@ -154,7 +155,7 @@ After TU verification succeeds, the backend creates a local `users` row on first
 
 ### `GET /api/v1/auth/me`
 
-Returns the authenticated user's minimal account identity. It returns `401 AUTHENTICATION_REQUIRED` when no authenticated session exists or its idle/absolute lifetime has expired. Under the adopted policy, a currently suspended account returns `403 ACCOUNT_NOT_ALLOWED` and its session is invalidated. Read the current global role from the database. The response is a UI hint only; the backend still performs authorization for each operation. Committee privileges are assignments scoped to a club and term, not a global user role. The permission matrix records the remaining account/role revalidation work.
+Returns the authenticated account as it is stored now. `role`, `studentStatus`, and `activeCommitteeAssignments` are read from the database on every call, not from the session, so a role change, appointment, revocation, or term end shows on the next call without a new login (Task79). It returns `401 AUTHENTICATION_REQUIRED` when no authenticated session exists or its idle/absolute lifetime has expired. A currently suspended account returns `403 ACCOUNT_NOT_ALLOWED` and its session is invalidated; a session whose account no longer exists also gets `403 ACCOUNT_NOT_ALLOWED`. The response is a UI hint only; the backend still performs authorization for each operation. Committee privileges are assignments scoped to a club and term, not a global user role.
 
 **`200 OK`** with `Cache-Control: no-store`.
 
@@ -162,12 +163,29 @@ Returns the authenticated user's minimal account identity. It returns `401 AUTHE
 {
   "user": {
     "id": "10001",
-    "role": "USER"
+    "role": "USER",
+    "studentStatus": "ACTIVE",
+    "activeCommitteeAssignments": [
+      {
+        "clubId": "20001",
+        "clubName": "Example Club",
+        "permissionRole": "PRESIDENT",
+        "positionName": "Club President",
+        "startsAt": "2026-07-31T17:00:00Z",
+        "endsAt": "2027-07-31T17:00:00Z"
+      }
+    ]
   }
 }
 ```
 
-`role` is `USER` or `ADMIN`. Student eligibility is defined by the permission matrix, but normalized TU student status is not included in this response until its integration and response contract are implemented. Do not infer student or committee access from `role`.
+| Field | Meaning |
+|---|---|
+| `role` | `USER` or `ADMIN`. Do not infer student or committee access from it. |
+| `studentStatus` | `ACTIVE`, `INACTIVE`, `GRADUATED`, or `UNKNOWN`, refreshed at each TU login; `null` when the account has no student profile. Only `ACTIVE` grants student or committee rights. |
+| `activeCommitteeAssignments` | Assignments that grant committee rights at the time of the call, in every club, ordered by club name; `[]` when there are none. An entry is listed only while the committee authorization rule in [§7](#7-authorization-rules) holds: the assignment is unrevoked and `startsAt <= now < endsAt`, the membership has started and not ended, and the account, student status, and club are all Active. Two overlapping assignments in one club give two entries. |
+
+`permissionRole` is `COMMITTEE` or `PRESIDENT`; `positionName` is a display title and grants nothing. The login response carries only `id` and `role`; call `/me` for the other fields.
 
 ### `POST /api/v1/auth/logout`
 
@@ -445,7 +463,7 @@ The table includes new APIs and unfinished parts of existing contracts. Define m
 | US-04 | Applicant application list/detail/history | Owner-only access and hiding unpublished results/internal notes are decided; section 11 reserves `GET /api/v1/me/applications` and `GET /api/v1/me/applications/{applicationId}`; define response/status mapping |
 | US-05 | Confirm or decline an offer | User decisions record retry, opposite-action conflict, transaction-time checks and rejection of all prior target membership rows for fresh confirmation; define operation/DTOs and implement publication/atomicity/concurrency |
 | US-06 | Club profile editing extensions | Pending GET integration, category/tag writes, and concurrent update policy; PUT already exists |
-| US-07 | Recruitment management completion | GET list/detail and CANCEL from rounds.openapi.yaml remain pending; define cancellation reason and complete permission checks |
+| US-07 | Recruitment management completion | Committee GET list/detail are implemented; CANCEL from rounds.openapi.yaml remains pending; define cancellation reason and its PRESIDENT check |
 | US-08 | Recruitment question integration | Round POST/PUT and per-question list/create/update/delete/reorder APIs exist, and the question-management page uses them; Task51 permits editing/deleting unanswered existing questions in mixed open drafts while answered content/positions stay fixed; adding questions and full replacement still require no applications; PUBLISHED/CLOSED remain locked; define future question versioning separately |
 | US-09 | Committee application review | Scope, privacy boundaries, and self-review are decided in the matrix; current story remains read-only; decision/publication need separate implementation work |
 | Selection-results Draft | Explicit review action, internal decisions and result publication | See [selection-results-draft.md](../stories/sprint2/selection-results-draft.md); the user confirmed ชนิตว์นันท์ as Owner of the two Draft Stories. FE/BE owners remain to be assigned; temporary IDs, team review, operation paths/DTOs/audit design and handlers remain pending |

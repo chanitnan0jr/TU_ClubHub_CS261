@@ -40,7 +40,7 @@ Dependency versions are recorded in [frontend/package.json](frontend/package.jso
 | [Commit rules](COMMIT_RULES.md) | Conventional Commit format and project commit guidance |
 | [API v1 contract](docs/api/API_v1.md) | Shared endpoint, session, CSRF, response, and error conventions |
 | [Main OpenAPI specification](docs/api/openapi.yaml) | Authentication, clubs, health, the application form and submission, plus the pending Sprint 2 contracts |
-| [Recruitment OpenAPI specification](docs/api/rounds.openapi.yaml) | Round/question writes plus pending committee reads and cancellation |
+| [Recruitment OpenAPI specification](docs/api/rounds.openapi.yaml) | Round/question writes and committee reads, plus pending cancellation |
 | [System architecture](docs/architecture/system-architecture.md) | System boundaries, modules, security, workflows, and deployment target |
 | [Sprint 2 Task74 artefacts](docs/architecture/task74-sprint2-analysis.md) | Draft review packet linking the business flow, state machine, permissions, rule index, decisions, Story/AC traceability, QA scenarios, and approval checklist |
 | [Permission matrix](docs/security/permission-matrix.md) | Adopted Student, Club Committee, and Admin permissions; Active status, term dates, self-review, and implementation gaps |
