@@ -1,4 +1,7 @@
 import { Link, useParams } from "react-router";
+import CommitteeLayout from "../components/layout/CommitteeLayout";
+import { buttonClass } from "../components/ui/classes";
+import { ExternalLinkIcon } from "../components/ui/icons";
 import { ClubEditFormContainer } from "../features/clubs/components/ClubEditFormContainer";
 import { isValidId } from "../lib/ids";
 import NotFoundPage from "./NotFoundPage";
@@ -9,13 +12,19 @@ export default function ClubEditRoutePage() {
   if (!isValidId(clubId)) return <NotFoundPage />;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="mx-auto mb-4 max-w-2xl">
-        <Link to={`/clubs/${clubId}`} className="text-sm font-semibold text-red-700 hover:underline">
-          ← กลับหน้าชมรม
+    <CommitteeLayout
+      clubId={clubId}
+      title="จัดการข้อมูลโปรไฟล์ชมรม"
+      description="ข้อมูลในหน้านี้จะแสดงบนหน้าชมรมสาธารณะ"
+      breadcrumbs={[{ label: "โปรไฟล์ชมรม" }]}
+      actions={
+        <Link to={`/clubs/${clubId}`} className={buttonClass("secondary")}>
+          <ExternalLinkIcon className="size-4" />
+          ดูหน้าชมรมสาธารณะ
         </Link>
-      </div>
+      }
+    >
       <ClubEditFormContainer clubId={clubId} />
-    </div>
+    </CommitteeLayout>
   );
 }

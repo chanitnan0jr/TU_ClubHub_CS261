@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 
 interface DeleteQuestionModalProps {
   isOpen: boolean;
@@ -16,53 +17,29 @@ export const DeleteQuestionModal: React.FC<DeleteQuestionModalProps> = ({
 }) => {
   const [isChecked, setIsChecked] = useState(false);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl flex flex-col gap-5">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-600 text-2xl">
-          🗑️
-        </div>
-
-        <div className="text-center">
-          <h3 className="text-xl font-bold text-slate-900">ยืนยันการลบคำถามคัดเลือก?</h3>
-        </div>
-
-        <p className="text-xs sm:text-sm text-slate-600 leading-relaxed text-center sm:text-left">
-          ลบได้เฉพาะคำถามที่ยังไม่มีคำตอบในรอบฉบับร่างที่ยังไม่ปิด โดยข้อมูลคำตอบและตำแหน่งของข้อที่มีคำตอบแล้วจะคงเดิม คุณต้องการดำเนินการต่อหรือไม่?
-        </p>
-
-        <label className="flex items-start gap-3 p-3 rounded-xl border border-rose-300 bg-rose-50/50 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isChecked}
-            onChange={(e) => setIsChecked(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-rose-400 text-rose-600 focus:ring-rose-500"
-          />
-          <span className="text-xs sm:text-sm font-medium text-slate-700">
-            ข้าพเจ้ายืนยันว่าต้องการลบคำถามนี้
-          </span>
-        </label>
-
-        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-11 w-full sm:w-auto px-6 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            ยกเลิก
-          </button>
-          <button
-            type="button"
-            disabled={!isChecked || isDeleting}
-            onClick={onConfirmDelete}
-            className="h-11 w-full sm:w-auto px-6 rounded-xl bg-rose-600 text-sm font-semibold text-white hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed shadow-sm"
-          >
-            {isDeleting ? 'กำลังลบ...' : 'ยืนยันลบคำถาม'}
-          </button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      open={isOpen}
+      tone="danger"
+      title="ยืนยันการลบคำถามคัดเลือก?"
+      description="ลบได้เฉพาะคำถามที่ยังไม่มีคำตอบในรอบฉบับร่างที่ยังไม่ปิด โดยข้อมูลคำตอบและตำแหน่งของข้อที่มีคำตอบแล้วจะคงเดิม คุณต้องการดำเนินการต่อหรือไม่?"
+      confirmLabel={isDeleting ? 'กำลังลบ...' : 'ยืนยันลบคำถาม'}
+      busy={isDeleting}
+      confirmDisabled={!isChecked}
+      onConfirm={onConfirmDelete}
+      onCancel={onClose}
+    >
+      <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3">
+        <input
+          type="checkbox"
+          checked={isChecked}
+          onChange={(e) => setIsChecked(e.target.checked)}
+          className="mt-0.5 size-4 accent-red-700"
+        />
+        <span className="text-sm font-medium text-slate-800">
+          ข้าพเจ้ายืนยันว่าต้องการลบคำถามนี้
+        </span>
+      </label>
+    </ConfirmDialog>
   );
 };

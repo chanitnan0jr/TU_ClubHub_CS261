@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import CommitteeLayout from "../components/layout/CommitteeLayout";
 import { createRound, publishRound } from "../features/recruitment/api/roundApi";
 import { RecruitmentRoundForm } from "../features/recruitment/components/RecruitmentRoundForm";
 import type { RecruitmentRoundFormInput } from "../features/recruitment/types/recruitment";
@@ -45,12 +46,21 @@ export default function RoundCreateRoutePage() {
   };
 
   return (
-    <RecruitmentRoundForm
-      clubName={`ชมรมรหัส ${clubId}`}
-      onSubmit={handleSubmit}
-      onCancel={() => navigate(`/clubs/${clubId}`)}
-      isLoading={isSaving}
-      submitError={submitError}
-    />
+    <CommitteeLayout
+      clubId={clubId}
+      title="สร้างรอบรับสมัคร"
+      description="ระบุข้อมูลรอบ กำหนดการ และคำถามคัดเลือก แล้วบันทึกเป็นฉบับร่างหรือเผยแพร่"
+      breadcrumbs={[
+        { label: "จัดการรอบรับสมัคร", to: `/clubs/${clubId}/rounds` },
+        { label: "สร้างรอบใหม่" },
+      ]}
+    >
+      <RecruitmentRoundForm
+        onSubmit={handleSubmit}
+        onCancel={() => navigate(`/clubs/${clubId}`)}
+        isLoading={isSaving}
+        submitError={submitError}
+      />
+    </CommitteeLayout>
   );
 }

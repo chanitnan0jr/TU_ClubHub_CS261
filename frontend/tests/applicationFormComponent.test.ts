@@ -300,7 +300,8 @@ test('review uses available profile data and masks the student code', async () =
     )
     fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
 
-    assert.equal(screen.getAllByText('ผู้สมัครทดสอบ').length, 3)
+    // The account name in the top bar now comes from PublicLayout, outside this component.
+    assert.equal(screen.getAllByText('ผู้สมัครทดสอบ').length, 1)
     assert.ok(screen.getByText('66••••••67'))
     assert.ok(screen.getByText('student@example.edu'))
     assert.ok(screen.getByText('คณะทดสอบ'))

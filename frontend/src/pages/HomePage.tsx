@@ -1,24 +1,30 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import LoadingScreen from "../app/LoadingScreen";
+import PublicLayout from "../components/layout/PublicLayout";
+import { buttonClass, inputClass as fieldInputClass } from "../components/ui/classes";
 import { useAuth } from "../features/auth/AuthContext";
 import Login from "../features/auth/Login";
 import { isValidId } from "../lib/ids";
 
-const inputClass =
-  "mt-1 block w-full rounded-lg border border-gray-300 p-2 text-sm shadow-sm";
-const linkButtonClass =
-  "rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-transparent";
+const inputClass = `mt-1.5 ${fieldInputClass()}`;
+const linkButtonClass = buttonClass("secondary");
 
 export default function HomePage() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const [clubId, setClubId] = useState("");
   const [roundId, setRoundId] = useState("");
 
   if (isLoading) return <LoadingScreen />;
 
-  if (!isAuthenticated || !user) return <Login />;
+  if (!isAuthenticated || !user) {
+    return (
+      <PublicLayout>
+        <Login />
+      </PublicLayout>
+    );
+  }
 
   const clubOk = isValidId(clubId);
   const roundOk = isValidId(roundId);
@@ -26,22 +32,22 @@ export default function HomePage() {
   const handleSubmit = (e: FormEvent) => e.preventDefault();
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-xl text-center">
-        <h1 className="text-2xl font-bold text-red-700">ยินดีต้อนรับสู่ TU ClubHub</h1>
-        <div className="text-left bg-gray-50 p-4 rounded-lg space-y-2 border">
+    <PublicLayout>
+      <div className="mx-auto w-full max-w-md space-y-6 rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">ยินดีต้อนรับสู่ TU ClubHub</h1>
+        <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           <p><strong>ID ผู้ใช้:</strong> {user.id}</p>
           <p><strong>สิทธิ์ (Role):</strong> {user.role}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3 text-left">
-          <h2 className="text-sm font-bold text-gray-800">ไปยังหน้าของชมรม</h2>
-          <p className="text-xs text-gray-500">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <h2 className="text-base font-semibold text-slate-900">ไปยังหน้าของชมรม</h2>
+          <p className="text-sm text-slate-600">
             ระบบยังไม่มีรายการชมรมและรอบของคุณ จึงต้องระบุรหัส (ตัวเลข) เอง
           </p>
 
           <div>
-            <label htmlFor="home-club-id" className="block text-xs font-medium text-gray-700">
+            <label htmlFor="home-club-id" className="block text-sm font-medium text-slate-800">
               รหัสชมรม
             </label>
             <input
@@ -82,7 +88,7 @@ export default function HomePage() {
           </div>
 
           <div>
-            <label htmlFor="home-round-id" className="block text-xs font-medium text-gray-700">
+            <label htmlFor="home-round-id" className="block text-sm font-medium text-slate-800">
               รหัสรอบรับสมัคร
             </label>
             <input
@@ -104,18 +110,11 @@ export default function HomePage() {
             จัดการคำถามคัดเลือก
           </button>
 
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-600">
             หน้าแก้ไขโปรไฟล์และจัดการคำถามใช้ได้เฉพาะกรรมการของชมรมนั้น
           </p>
         </form>
-
-        <button
-          onClick={logout}
-          className="w-full px-4 py-2 font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-        >
-          ออกจากระบบ
-        </button>
       </div>
-    </div>
+    </PublicLayout>
   );
 }

@@ -1,4 +1,5 @@
 import { Navigate, useLocation, useParams } from 'react-router';
+import PublicLayout from '../components/layout/PublicLayout';
 import {
   ApplicationSuccessPage,
 } from '../features/applications/components/DynamicApplicationForm';
@@ -58,11 +59,13 @@ export default function ApplicationResultRoutePage() {
   }
 
   return (
-    <ApplicationSuccessPage
-      clubId={clubId}
-      club={location.state.club}
-      form={location.state.form}
-      receipt={location.state.receipt}
-    />
+    <PublicLayout>
+      <ApplicationSuccessPage
+        clubId={clubId}
+        club={location.state.club}
+        form={location.state.form}
+        receipt={location.state.receipt}
+      />
+    </PublicLayout>
   );
 }
