@@ -4,7 +4,7 @@
 |---|---|
 | **Task ID** | `Task63` |
 | **Feature Code** | `CLUB-02` |
-| **สถานะบน Trello** | `Doing` (In Review — PR #71) |
+| **สถานะบน Trello** | `Done` (Merged in PR #71) |
 | **ผู้รับผิดชอบ (Owner)** | ภูบดี (FE1 - Frontend Engineer) |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task62 (Club Search API) และ UI Wireframe จาก Task75 |
@@ -51,4 +51,4 @@
 - [x] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
 - [x] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
 - [x] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
-- [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ
+- [x] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ
