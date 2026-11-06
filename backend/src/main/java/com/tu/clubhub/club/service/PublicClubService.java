@@ -13,6 +13,9 @@ import com.tu.clubhub.club.dto.OpenPublicRecruitmentRoundDto;
 import com.tu.clubhub.club.dto.PublicClubCategoryDto;
 import com.tu.clubhub.club.dto.PublicClubProfileDto;
 import com.tu.clubhub.club.dto.PublicClubTagDto;
+import com.tu.clubhub.club.dto.PublicItemListDto;
+import com.tu.clubhub.club.dto.PublicOpenCallDto;
+import com.tu.clubhub.club.dto.PublicOpenCallPageDto;
 import com.tu.clubhub.club.dto.PublicPageMetadataDto;
 import com.tu.clubhub.club.dto.PublicRecruitmentRoundPageDto;
 import com.tu.clubhub.club.repository.ClubProfileQueryRepository;
@@ -86,12 +89,37 @@ public class PublicClubService {
         List<OpenPublicRecruitmentRoundDto> items =
                 profileQueryRepository.findOpenPublicRounds(club.getId(), now, size, offset);
         long totalElements = profileQueryRepository.countOpenPublicRounds(club.getId(), now);
-        long totalPages = totalElements == 0 ? 0 : (totalElements + size - 1) / size;
 
-        return new PublicRecruitmentRoundPageDto(
-                items,
-                new PublicPageMetadataDto(page, size, totalElements, totalPages)
-        );
+        return new PublicRecruitmentRoundPageDto(items, pageMetadata(page, size, totalElements));
+    }
+
+    /** Open Call Board: rounds open now across every ACTIVE club, soonest deadline first. */
+    @Transactional(readOnly = true)
+    public PublicOpenCallPageDto getOpenCalls(int page, int size) {
+        validatePage(page, size);
+
+        // One instant is shared by both the page query and total count.
+        Instant now = clock.instant();
+        long offset = (long) page * size;
+        List<PublicOpenCallDto> items = profileQueryRepository.findOpenCalls(now, size, offset);
+        long totalElements = profileQueryRepository.countOpenCalls(now);
+
+        return new PublicOpenCallPageDto(items, pageMetadata(page, size, totalElements));
+    }
+
+    @Transactional(readOnly = true)
+    public PublicItemListDto<PublicClubCategoryDto> listCategories() {
+        return new PublicItemListDto<>(profileQueryRepository.findAllCategories());
+    }
+
+    @Transactional(readOnly = true)
+    public PublicItemListDto<PublicClubTagDto> listTags() {
+        return new PublicItemListDto<>(profileQueryRepository.findAllTags());
+    }
+
+    private static PublicPageMetadataDto pageMetadata(int page, int size, long totalElements) {
+        long totalPages = totalElements == 0 ? 0 : (totalElements + size - 1) / size;
+        return new PublicPageMetadataDto(page, size, totalElements, totalPages);
     }
 
     private Club findActiveClub(Long id) {

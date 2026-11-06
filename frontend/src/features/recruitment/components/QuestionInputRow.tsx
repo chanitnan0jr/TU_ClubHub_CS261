@@ -1,3 +1,6 @@
+import { Button } from '../../../components/ui/Button';
+import { inputClass } from '../../../components/ui/classes';
+import { ArrowDownIcon, ArrowUpIcon, XIcon } from '../../../components/ui/icons';
 import type { ScreeningQuestionInput } from '../types/recruitment';
 
 interface QuestionInputRowProps {
@@ -23,63 +26,67 @@ export const QuestionInputRow = ({
   isLast,
   disabled = false,
 }: QuestionInputRowProps) => {
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-bold text-gray-500 w-5">{index + 1}</span>
-        <div className="flex shrink-0 flex-col gap-1">
-          <button
-            type="button"
-            onClick={() => onMove(index, 'up')}
-            disabled={disabled || isFirst}
-            aria-label={`เลื่อนคำถามที่ ${index + 1} ขึ้น`}
-            title="เลื่อนขึ้น"
-            className="inline-flex size-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            onClick={() => onMove(index, 'down')}
-            disabled={disabled || isLast}
-            aria-label={`เลื่อนคำถามที่ ${index + 1} ลง`}
-            title="เลื่อนลง"
-            className="inline-flex size-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            ↓
-          </button>
-        </div>
-        <input
-          type="text"
-          value={question.questionText}
-          onChange={(e) => onChangeText(index, e.target.value)}
-          placeholder="ระบุข้อความคำถามคัดเลือก..."
-          disabled={disabled}
-          className="h-[44px] min-w-0 flex-1 rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-        />
-        <button
-          type="button"
-          onClick={() => onRemove(index)}
-          disabled={disabled}
-          className="h-[44px] w-[44px] inline-flex items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-          title="ลบคำถาม"
-        >
-          ✕
-        </button>
-      </div>
+  const inputId = `round-question-${index}`;
 
-      <div className="flex items-center justify-between pl-8">
-        <label className="inline-flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer">
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <label htmlFor={inputId} className="text-sm font-medium text-slate-800">
+        คำถามที่ {index + 1}
+      </label>
+      <input
+        id={inputId}
+        type="text"
+        value={question.questionText}
+        onChange={(e) => onChangeText(index, e.target.value)}
+        placeholder="ระบุข้อความคำถามคัดเลือก..."
+        disabled={disabled}
+        className={inputClass()}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-slate-800">
           <input
             type="checkbox"
             checked={question.isRequired}
             onChange={() => onToggleRequired(index)}
             disabled={disabled}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="size-4 accent-tu-maroon"
           />
           จำเป็นต้องตอบ
+          <span className="text-slate-600">· คำตอบแบบข้อความ</span>
         </label>
-        <span className="text-xs text-gray-400">คำตอบแบบข้อความ</span>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onMove(index, 'up')}
+            disabled={disabled || isFirst}
+            aria-label={`เลื่อนคำถามที่ ${index + 1} ขึ้น`}
+            title="เลื่อนขึ้น"
+          >
+            <ArrowUpIcon />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onMove(index, 'down')}
+            disabled={disabled || isLast}
+            aria-label={`เลื่อนคำถามที่ ${index + 1} ลง`}
+            title="เลื่อนลง"
+          >
+            <ArrowDownIcon />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onRemove(index)}
+            disabled={disabled}
+            aria-label={`ลบคำถามที่ ${index + 1}`}
+            title="ลบคำถาม"
+          >
+            <XIcon />
+          </Button>
+        </div>
       </div>
     </div>
   );

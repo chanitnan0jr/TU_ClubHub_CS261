@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Button } from '../../../components/ui/Button';
+import { EmptyState } from '../../../components/ui/EmptyState';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CircleAlertIcon,
+  CircleCheckIcon,
+  InfoIcon,
+  PencilIcon,
+  TrashIcon,
+  XIcon,
+} from '../../../components/ui/icons';
 import { AddQuestionModal } from './AddQuestionModal';
 import { EditQuestionModal } from './EditQuestionModal';
 import { DeleteQuestionModal } from './DeleteQuestionModal';
@@ -14,22 +25,22 @@ import {
 } from '../api/questionApi';
 import { ApiError, describeApiError } from '../../../lib/api';
 
-// The questions endpoints answer 409 with an English detail and no reason, and the
-// backend only allows writes while the round is an open draft with no applications.
+// Preserve the existing fallback for other 409 conflicts; use the documented reason for answered questions.
 const NOT_EDITABLE_MESSAGE =
   'ไม่สามารถแก้ไขคำถามได้ในสถานะปัจจุบัน: แก้ไขได้เฉพาะรอบที่ยังเป็นฉบับร่าง ยังไม่ปิด และยังไม่มีผู้สมัคร (คำถามที่มีคำตอบแล้วลบไม่ได้) หรือมีผู้แก้ไขพร้อมกัน กรุณารีเฟรชแล้วลองใหม่';
 
 const describeWriteError = (err: unknown, fallback: string) =>
   err instanceof ApiError && err.status === 409
-    ? NOT_EDITABLE_MESSAGE
+    ? err.reason === 'QUESTION_HAS_ANSWERS'
+      ? 'ไม่สามารถแก้ไขหรือลบคำถามนี้ได้ เนื่องจากมีผู้สมัครตอบคำถามแล้ว'
+      : NOT_EDITABLE_MESSAGE
     : describeApiError(err, fallback);
 
 interface QuestionManagementPageProps {
-  clubId: string;
   roundId: string;
 }
 
-export const QuestionManagementPage = ({ clubId, roundId }: QuestionManagementPageProps) => {
+export const QuestionManagementPage = ({ roundId }: QuestionManagementPageProps) => {
   const [reloadKey, setReloadKey] = useState<number>(0);
   const [loaded, setLoaded] = useState<{ key: string; questions: ScreeningQuestion[] } | null>(null);
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(null);
@@ -93,6 +104,8 @@ export const QuestionManagementPage = ({ clubId, roundId }: QuestionManagementPa
     failureFallback: string,
   ) => {
     setIsBusy(true);
+    clearTimeout(toastTimer.current);
+    setToastMessage(null);
     setErrorMessage(null);
     try {
       await action();
@@ -164,16 +177,14 @@ export const QuestionManagementPage = ({ clubId, roundId }: QuestionManagementPa
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-16">
+    <div className="flex flex-col gap-6 pb-8">
       {/* Success Toast */}
       {toastMessage && (
         <div
           role="status"
-          className="fixed top-5 right-5 z-50 flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-200 px-5 py-4 text-emerald-800 text-sm font-semibold shadow-lg"
+          className="fixed left-4 right-4 top-5 z-50 flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800 shadow-lg sm:left-auto sm:right-5 sm:max-w-md"
         >
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-white text-xs">
-            ✓
-          </span>
+          <CircleCheckIcon className="size-5" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -182,158 +193,129 @@ export const QuestionManagementPage = ({ clubId, roundId }: QuestionManagementPa
       {errorMessage && (
         <div
           role="alert"
-          className="fixed top-5 right-5 z-[60] max-w-md flex items-center justify-between gap-3 rounded-xl bg-rose-50 border border-rose-200 px-5 py-4 text-rose-800 text-sm font-semibold shadow-lg"
+          className="fixed left-4 right-4 top-5 z-[60] flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 py-2 pl-5 pr-2 text-sm font-semibold text-red-800 shadow-lg sm:left-auto sm:right-5 sm:max-w-md"
         >
           <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rose-600 text-white text-xs font-bold">
-              ✕
-            </span>
+            <CircleAlertIcon className="size-5" />
             <span>{errorMessage}</span>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setErrorMessage(null)}
-            className="text-rose-500 hover:text-rose-700 ml-4 font-bold"
             aria-label="ปิดข้อความแจ้งข้อผิดพลาด"
           >
-            ✕
-          </button>
+            <XIcon />
+          </Button>
         </div>
       )}
 
-      <div className="bg-white border-b border-slate-200 px-6 py-4 shadow-sm">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-rose-600 flex items-center justify-center text-white font-bold text-sm">
-              TU
-            </div>
-            <span className="font-bold text-slate-800 text-lg">ClubHub</span>
-          </div>
-          <span className="text-xs text-slate-500">พื้นที่ผู้ดูแลชมรม</span>
+      <p className="flex items-start gap-2 rounded-lg bg-slate-100 px-3 py-2.5 text-sm text-slate-700">
+        <InfoIcon className="mt-0.5 size-4 text-slate-600" />
+        <span>
+          แก้ไขและลบได้เฉพาะคำถามที่ยังไม่มีคำตอบ ในรอบฉบับร่างที่ยังไม่ปิด การจัดลำดับต้องคงตำแหน่งข้อที่มีคำตอบ และเพิ่มคำถามได้เมื่อยังไม่มีใบสมัคร
+        </span>
+      </p>
+
+      {questions === null && loadError === null && (
+        <p className="text-sm text-slate-600">กำลังโหลดคำถามคัดเลือก...</p>
+      )}
+
+      {loadError !== null && (
+        <div
+          role="alert"
+          className="flex flex-col items-start gap-3 rounded-xl border border-red-200 bg-white p-6"
+        >
+          <p className="text-sm font-semibold text-red-800">{loadError}</p>
+          <Button variant="primary" onClick={() => setReloadKey((key) => key + 1)}>
+            ลองใหม่
+          </Button>
         </div>
-      </div>
+      )}
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 flex flex-col gap-6">
-        <div>
-          <div className="text-xs text-slate-500 mb-1">
-            <Link to={`/clubs/${clubId}`} className="hover:underline">
-              ชมรม {clubId}
-            </Link>{' '}
-            / รอบรับสมัคร {roundId} /{' '}
-            <span className="text-slate-800 font-medium">คำถามคัดเลือก</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">คำถามคัดเลือก</h1>
-          <p className="text-xs text-slate-500">
-            คำถามที่ผู้สมัครต้องตอบในแบบฟอร์มสมัครของรอบนี้ เรียงตามลำดับที่แสดง
-          </p>
-          <p className="text-xs text-slate-500 mt-1">
-            เพิ่ม แก้ไข ลบ และจัดลำดับได้เฉพาะรอบที่ยังเป็นฉบับร่าง ยังไม่ปิด และยังไม่มีผู้สมัคร
-          </p>
-        </div>
+      {questions !== null && (
+        <div className="flex flex-col gap-4">
+          {questions.length === 0 && (
+            <EmptyState headingLevel={2} title="ยังไม่มีคำถามคัดเลือกในรอบนี้" />
+          )}
 
-        {questions === null && loadError === null && (
-          <p className="text-sm text-slate-500">กำลังโหลดคำถามคัดเลือก...</p>
-        )}
+          {questions.map((q, index) => (
+            <article
+              key={q.id}
+              className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                  <span>คำถามที่ {index + 1}</span>
+                  {q.isRequired && (
+                    <span className="rounded-full bg-tu-maroon-50 px-2 py-0.5 text-xs font-medium text-tu-maroon">
+                      จำเป็นต้องตอบ
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={isBusy || index === 0}
+                    onClick={() => handleMove(index, -1)}
+                    title="เลื่อนขึ้น"
+                    aria-label={`เลื่อนคำถามที่ ${index + 1} ขึ้น`}
+                  >
+                    <ArrowUpIcon />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={isBusy || index === questions.length - 1}
+                    onClick={() => handleMove(index, 1)}
+                    title="เลื่อนลง"
+                    aria-label={`เลื่อนคำถามที่ ${index + 1} ลง`}
+                  >
+                    <ArrowDownIcon />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={isBusy}
+                    onClick={() => setEditingQuestion(q)}
+                    title="แก้ไขคำถาม"
+                    aria-label={`แก้ไขคำถามที่ ${index + 1}`}
+                  >
+                    <PencilIcon />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={isBusy}
+                    onClick={() => setDeletingQuestion(q)}
+                    title="ลบคำถาม"
+                    aria-label={`ลบคำถามที่ ${index + 1}`}
+                  >
+                    <TrashIcon />
+                  </Button>
+                </div>
+              </div>
 
-        {loadError !== null && (
-          <div
-            role="alert"
-            className="bg-white p-6 rounded-2xl border border-rose-200 flex flex-col items-start gap-3"
+              <p className="whitespace-pre-line text-sm font-semibold text-slate-900">
+                {q.questionText}
+              </p>
+
+              <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                พื้นที่สำหรับคำตอบของผู้สมัคร
+              </div>
+            </article>
+          ))}
+
+          <Button
+            disabled={isBusy}
+            onClick={() => setIsAdding(true)}
+            className="w-full border-dashed"
           >
-            <p className="text-sm font-semibold text-rose-800">{loadError}</p>
-            <button
-              type="button"
-              onClick={() => setReloadKey((key) => key + 1)}
-              className="h-10 px-5 rounded-xl bg-rose-600 hover:bg-rose-700 text-sm font-semibold text-white"
-            >
-              ลองใหม่
-            </button>
-          </div>
-        )}
-
-        {questions !== null && (
-          <div className="flex flex-col gap-4">
-            {questions.length === 0 && (
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 text-sm text-slate-500 text-center">
-                ยังไม่มีคำถามคัดเลือกในรอบนี้
-              </div>
-            )}
-
-            {questions.map((q, index) => (
-              <div
-                key={q.id}
-                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-3"
-              >
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-                    <span>คำถามที่ {index + 1}</span>
-                    {q.isRequired && <span className="text-rose-600 font-bold">จำเป็นต้องตอบ</span>}
-                  </div>
-                  <div className="flex items-center gap-1 text-slate-400">
-                    <button
-                      type="button"
-                      disabled={isBusy || index === 0}
-                      onClick={() => handleMove(index, -1)}
-                      className="p-1.5 hover:text-slate-600 hover:bg-slate-100 rounded-lg text-sm disabled:opacity-30 disabled:hover:bg-transparent"
-                      title="เลื่อนขึ้น"
-                      aria-label={`เลื่อนคำถามที่ ${index + 1} ขึ้น`}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isBusy || index === questions.length - 1}
-                      onClick={() => handleMove(index, 1)}
-                      className="p-1.5 hover:text-slate-600 hover:bg-slate-100 rounded-lg text-sm disabled:opacity-30 disabled:hover:bg-transparent"
-                      title="เลื่อนลง"
-                      aria-label={`เลื่อนคำถามที่ ${index + 1} ลง`}
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => setEditingQuestion(q)}
-                      className="p-1.5 hover:text-slate-600 hover:bg-slate-100 rounded-lg text-sm disabled:opacity-50"
-                      title="แก้ไขคำถาม"
-                      aria-label={`แก้ไขคำถามที่ ${index + 1}`}
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => setDeletingQuestion(q)}
-                      className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-sm disabled:opacity-50"
-                      title="ลบคำถาม"
-                      aria-label={`ลบคำถามที่ ${index + 1}`}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-
-                <p className="font-bold text-slate-800 text-sm p-1 whitespace-pre-line">
-                  {q.questionText}
-                </p>
-
-                <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-400">
-                  พื้นที่สำหรับคำตอบของผู้สมัคร
-                </div>
-              </div>
-            ))}
-
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={() => setIsAdding(true)}
-              className="flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed border-rose-300 text-rose-600 text-sm font-bold hover:bg-rose-50 transition-colors disabled:opacity-50"
-            >
-              + เพิ่มคำถามคัดเลือก
-            </button>
-          </div>
-        )}
-      </div>
+            + เพิ่มคำถามคัดเลือก
+          </Button>
+        </div>
+      )}
 
       {isAdding && (
         <AddQuestionModal

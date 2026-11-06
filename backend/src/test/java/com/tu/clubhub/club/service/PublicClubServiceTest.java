@@ -20,6 +20,7 @@ import com.tu.clubhub.club.domain.Club;
 import com.tu.clubhub.club.dto.ClubResponseDto.ClubCategoryDto;
 import com.tu.clubhub.club.dto.ClubResponseDto.ClubTagDto;
 import com.tu.clubhub.club.dto.OpenPublicRecruitmentRoundDto;
+import com.tu.clubhub.club.dto.PublicOpenCallDto;
 import com.tu.clubhub.club.repository.ClubProfileQueryRepository;
 import com.tu.clubhub.club.repository.ClubRepository;
 import com.tu.clubhub.club.service.ClubService.ClubNotFoundException;
@@ -117,6 +118,25 @@ class PublicClubServiceTest {
                 () -> service.getOpenRecruitmentRounds("7", 0, 101));
     }
 
+    @Test
+    void openCallsShareOneInstantAndPaginationRulesWithoutClubLookup() {
+        queries.total = 11L;
+        var page = service.getOpenCalls(2, 5);
+        assertEquals(3L, page.page().totalPages());
+        assertEquals(11L, page.page().totalElements());
+        assertEquals(10L, queries.offset);
+        assertEquals(1, clockReads.get());
+        assertEquals(NOW, queries.pageNow);
+        assertEquals(NOW, queries.countNow);
+        assertEquals(0, lookups.get());
+
+        int clockReadsBefore = clockReads.get();
+        assertThrows(ClubValidationException.class, () -> service.getOpenCalls(-1, 5));
+        assertThrows(ClubValidationException.class, () -> service.getOpenCalls(0, 0));
+        assertThrows(ClubValidationException.class, () -> service.getOpenCalls(0, 101));
+        assertEquals(clockReadsBefore, clockReads.get(), "Invalid paging is rejected before querying");
+    }
+
     private static void setId(Club club, Long id) throws Exception {
         Field field = Club.class.getDeclaredField("id");
         field.setAccessible(true);
@@ -147,6 +167,17 @@ class PublicClubServiceTest {
         }
 
         @Override public long countOpenPublicRounds(Long clubId, Instant now) {
+            this.countNow = now;
+            return total;
+        }
+
+        @Override public List<PublicOpenCallDto> findOpenCalls(Instant now, int size, long offset) {
+            this.pageNow = now;
+            this.offset = offset;
+            return List.of();
+        }
+
+        @Override public long countOpenCalls(Instant now) {
             this.countNow = now;
             return total;
         }

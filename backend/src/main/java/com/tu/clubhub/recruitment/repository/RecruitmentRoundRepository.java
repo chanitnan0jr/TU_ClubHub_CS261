@@ -5,6 +5,7 @@ import com.tu.clubhub.recruitment.dto.QuestionInput;
 import com.tu.clubhub.recruitment.dto.RoundResponse;
 import com.tu.clubhub.recruitment.dto.RoundWriteRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
@@ -12,7 +13,11 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Repository
@@ -41,6 +46,76 @@ public class RecruitmentRoundRepository {
                 clubId,
                 roundId
         ).stream().findFirst();
+    }
+
+    /** Unlocked read for committee GETs. */
+    public Optional<RecruitmentRound> find(Long clubId, Long roundId) {
+        return jdbcTemplate.query(
+                "SELECT * FROM recruitment_rounds WHERE club_id = ? AND id = ?",
+                this::mapRow,
+                clubId,
+                roundId
+        ).stream().findFirst();
+    }
+
+    /**
+     * The club's rounds in any state, newest first. Rounds the viewer has applied to, in any
+     * application status, are left out before paging and counting (self-review rule).
+     */
+    public List<RecruitmentRound> findForCommittee(
+            Long clubId,
+            Long viewerId,
+            String publicationStatus,
+            int page,
+            int size) {
+
+        List<Object> args = new ArrayList<>();
+        String scope = committeeScope(clubId, viewerId, publicationStatus, args);
+        args.add(size);
+        args.add((long) page * size);
+
+        return jdbcTemplate.query(
+                "SELECT r.* " + scope + """
+                ORDER BY r.created_at DESC, r.id DESC
+                LIMIT ? OFFSET ?
+                """,
+                this::mapRow,
+                args.toArray());
+    }
+
+    public long countForCommittee(
+            Long clubId,
+            Long viewerId,
+            String publicationStatus) {
+
+        List<Object> args = new ArrayList<>();
+        String scope = committeeScope(clubId, viewerId, publicationStatus, args);
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) " + scope, Long.class, args.toArray());
+
+        return count == null ? 0 : count;
+    }
+
+    private static String committeeScope(
+            Long clubId,
+            Long viewerId,
+            String publicationStatus,
+            List<Object> args) {
+
+        args.add(clubId);
+        args.add(viewerId);
+        String scope = """
+                FROM recruitment_rounds r
+                WHERE r.club_id = ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM applications a
+                      WHERE a.round_id = r.id AND a.applicant_id = ?)
+                """;
+        if (publicationStatus == null) {
+            return scope;
+        }
+        args.add(publicationStatus);
+        return scope + "  AND r.publication_status = ?\n";
     }
 
     public Long createRound(
@@ -147,6 +222,12 @@ public class RecruitmentRoundRepository {
                 request.version());
     }
 
+    public boolean hasQuestionAnswers(Long roundId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM application_answers WHERE round_id = ?)
+                """, Boolean.class, roundId));
+    }
+
     public boolean hasApplications(Long roundId) {
         Long count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM applications WHERE round_id = ?",
@@ -175,13 +256,39 @@ public class RecruitmentRoundRepository {
                 WHERE round_id = ?
                 ORDER BY display_order, id
                 """,
-                (rs, rowNum) -> new RoundResponse.Question(
-                        rs.getString("id"),
-                        rs.getString("prompt"),
-                        rs.getBoolean("is_required"),
-                        rs.getInt("display_order"),
-                        rs.getInt("max_length")),
+                (rs, rowNum) -> question(rs),
                 roundId);
+    }
+
+    /** Questions of several rounds in one query, keyed by round ID, each in display order. */
+    public Map<Long, List<RoundResponse.Question>> findQuestionsByRound(List<Long> roundIds) {
+        Map<Long, List<RoundResponse.Question>> byRound = new HashMap<>();
+        if (roundIds.isEmpty()) {
+            return byRound;
+        }
+
+        String placeholders = String.join(",", Collections.nCopies(roundIds.size(), "?"));
+        jdbcTemplate.query("""
+                SELECT round_id, id, prompt, is_required, display_order, max_length
+                FROM application_questions
+                WHERE round_id IN (%s)
+                ORDER BY round_id, display_order, id
+                """.formatted(placeholders),
+                (RowCallbackHandler) rs -> byRound
+                        .computeIfAbsent(rs.getLong("round_id"), id -> new ArrayList<>())
+                        .add(question(rs)),
+                roundIds.toArray());
+
+        return byRound;
+    }
+
+    private static RoundResponse.Question question(ResultSet rs) throws SQLException {
+        return new RoundResponse.Question(
+                rs.getString("id"),
+                rs.getString("prompt"),
+                rs.getBoolean("is_required"),
+                rs.getInt("display_order"),
+                rs.getInt("max_length"));
     }
 
     public void deleteQuestions(Long roundId) {

@@ -6,6 +6,8 @@ import java.time.Instant;
 public record OpenPublicRecruitmentRoundDto(
         String id,
         String name,
+        String description,
         Instant opensAt,
-        Instant closesAt) {
+        Instant closesAt,
+        Instant resultsScheduledAt) {
 }

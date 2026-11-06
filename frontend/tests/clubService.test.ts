@@ -21,7 +21,14 @@ const profile = {
 }
 
 const rounds = {
-  items: [{ id: '5', name: 'รอบ 1', opensAt: '2026-10-01T00:00:00Z', closesAt: '2026-11-01T00:00:00Z' }],
+  items: [{
+    id: '5',
+    name: 'รอบ 1',
+    description: 'เปิดรับทุกคณะ\nไม่ต้องมีประสบการณ์',
+    opensAt: '2026-10-01T00:00:00Z',
+    closesAt: '2026-11-01T00:00:00Z',
+    resultsScheduledAt: '2026-11-07T09:00:00Z',
+  }],
   page: { number: 0, size: 20, totalElements: 1, totalPages: 1 },
 }
 
@@ -40,7 +47,14 @@ test('maps the public profile and rounds without inventing missing fields', () =
     email: 'club@example.org',
   })
   assert.deepEqual(club.rounds, [
-    { id: '5', title: 'รอบ 1', opensAt: '2026-10-01T00:00:00Z', closesAt: '2026-11-01T00:00:00Z' },
+    {
+      id: '5',
+      title: 'รอบ 1',
+      description: 'เปิดรับทุกคณะ\nไม่ต้องมีประสบการณ์',
+      opensAt: '2026-10-01T00:00:00Z',
+      closesAt: '2026-11-01T00:00:00Z',
+      resultsScheduledAt: '2026-11-07T09:00:00Z',
+    },
   ])
   assert.equal(club.roundsUnavailable, false)
 })

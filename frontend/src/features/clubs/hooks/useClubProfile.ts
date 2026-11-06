@@ -1,20 +1,27 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getClubProfile, updateClubProfile } from '../api/clubApi';
+import { getClubProfile, listClubCategories, listInterestTags } from '../api/clubApi';
 import { describeApiError } from '../../../lib/api';
-import type { ClubResponseDto, ClubUpdateRequestDto } from '../types/club';
+import type { ClubOption, ClubResponseDto } from '../types/club';
 
+/** Everything the profile editor needs before it can show the form. */
+export interface ClubProfileEditData {
+  profile: ClubResponseDto;
+  categories: ClubOption[];
+  tags: ClubOption[];
+}
+
+/** Loads the club's public profile with the category and tag lists; no data on failure. */
 export const useClubProfile = (clubId: string) => {
-  const [data, setData] = useState<ClubResponseDto | null>(null);
+  const [data, setData] = useState<ClubProfileEditData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [requestedClubId, setRequestedClubId] = useState(clubId);
   const [reloadCount, setReloadCount] = useState(0);
 
   // Reset during render, not in the effect, when the route switches to another club.
   if (clubId !== requestedClubId) {
     setRequestedClubId(clubId);
+    setData(null);
     setIsLoading(true);
     setErrorMessage(null);
   }
@@ -23,9 +30,9 @@ export const useClubProfile = (clubId: string) => {
   useEffect(() => {
     if (!clubId) return;
     let current = true;
-    getClubProfile(clubId)
-      .then((profile) => {
-        if (current) setData(profile);
+    Promise.all([getClubProfile(clubId), listClubCategories(), listInterestTags()])
+      .then(([profile, categories, tags]) => {
+        if (current) setData({ profile, categories: categories.items, tags: tags.items });
       })
       .catch((err: unknown) => {
         if (current) setErrorMessage(describeApiError(err, 'เกิดข้อผิดพลาดในการโหลดข้อมูล'));
@@ -38,40 +45,11 @@ export const useClubProfile = (clubId: string) => {
     };
   }, [clubId, reloadCount]);
 
-  const fetchProfile = useCallback(() => {
-    if (!clubId) return;
+  const refetch = useCallback(() => {
     setIsLoading(true);
     setErrorMessage(null);
     setReloadCount((count) => count + 1);
-  }, [clubId]);
+  }, []);
 
-  const handleUpdate = async (updateData: ClubUpdateRequestDto) => {
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    try {
-      const updatedProfile = await updateClubProfile(clubId, updateData);
-      setData(updatedProfile);
-      setSuccessMessage('อัปเดตข้อมูลชมรมสำเร็จเรียบร้อย');
-    } catch (err: unknown) {
-      setErrorMessage(describeApiError(err, 'ไม่สามารถอัปเดตข้อมูลได้'));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return {
-    data,
-    isLoading,
-    isSubmitting,
-    errorMessage,
-    successMessage,
-    handleUpdate,
-    refetch: fetchProfile,
-    clearAlerts: () => {
-      setErrorMessage(null);
-      setSuccessMessage(null);
-    },
-  };
+  return { data, isLoading, errorMessage, refetch };
 };

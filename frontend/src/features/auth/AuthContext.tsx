@@ -2,9 +2,26 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
 import { apiRequest, describeApiError, resetAuthFailureNotification, subscribeAuthFailures } from "../../lib/api";
 
+// ActiveCommitteeAssignmentSummary in docs/api/openapi.yaml.
+export type ActiveCommitteeAssignment = {
+  clubId: string;
+  clubName: string;
+  permissionRole: "COMMITTEE" | "PRESIDENT";
+  positionName: string | null;
+  startsAt: string;
+  endsAt: string | null;
+};
+
 export type User = {
   id: string;
   role: "USER" | "STUDENT" | "CLUB_COMMITTEE" | "ADMIN" | string;
+  displayName?: string | null;
+  studentCode?: string | null;
+  email?: string | null;
+  facultyName?: string | null;
+  studentStatus?: string | null;
+  // Missing until /auth/me sends it; an empty list means no committee role.
+  activeCommitteeAssignments?: ActiveCommitteeAssignment[];
 };
 
 type AuthContextType = {

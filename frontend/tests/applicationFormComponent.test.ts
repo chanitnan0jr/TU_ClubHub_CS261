@@ -27,10 +27,18 @@ dom.window.scrollTo = () => {}
 const { cleanup, fireEvent, render, screen, waitFor } = await import(
   '@testing-library/react'
 )
-const { MemoryRouter } = await import('react-router')
+const { MemoryRouter, Route, Routes, useLocation } = await import('react-router')
+const { AuthProvider } = await import('../src/features/auth/AuthContext.tsx')
 const { DynamicApplicationForm } = await import(
   '../src/features/applications/components/DynamicApplicationForm.tsx'
 )
+const { default: ApplicationResultRoutePage } = await import(
+  '../src/pages/ApplicationResultRoutePage.tsx'
+)
+
+function CurrentPath() {
+  return createElement('output', { 'data-testid': 'current-path' }, useLocation().pathname)
+}
 
 const applicationForm = {
   round: {
@@ -71,10 +79,14 @@ const club = {
   tags: [],
 }
 
-function applicationApiStub(postDelay = 0) {
+function applicationApiStub(
+  postDelay = 0,
+  authUser = { id: 'user-001', role: 'STUDENT' },
+) {
   let submissions = 0
   const stub = stubFetch((request) => {
     if (request.url === '/api/v1/auth/csrf') return csrfResponse()
+    if (request.url === '/api/v1/auth/me') return json({ user: authUser })
     if (request.url === '/api/v1/rounds/70001/application-form') {
       return json(applicationForm)
     }
@@ -110,11 +122,31 @@ const renderApplication = () =>
   render(
     createElement(
       MemoryRouter,
-      null,
-      createElement(DynamicApplicationForm, {
-        clubId: '20001',
-        roundId: '70001',
-      }),
+      { initialEntries: ['/clubs/20001/rounds/70001/apply'] },
+      createElement(
+        AuthProvider,
+        null,
+        createElement(
+          React.Fragment,
+          null,
+          createElement(
+            Routes,
+            null,
+            createElement(Route, {
+              path: '/clubs/:clubId/rounds/:roundId/apply',
+              element: createElement(DynamicApplicationForm, {
+                clubId: '20001',
+                roundId: '70001',
+              }),
+            }),
+            createElement(Route, {
+              path: '/clubs/:clubId/rounds/:roundId/apply/result',
+              element: createElement(ApplicationResultRoutePage),
+            }),
+          ),
+          createElement(CurrentPath),
+        ),
+      ),
     ),
   )
 
@@ -126,12 +158,50 @@ test('application form loads dynamic questions and validates required fields', a
       await screen.findByLabelText(/เหตุใดจึงสนใจเข้าร่วมกิจกรรมของชมรม/),
     )
     assert.equal(screen.getAllByRole('textbox').length, 2)
+    assert.ok(screen.getByRole('heading', { name: 'ข้อมูลผู้สมัคร' }))
 
     fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
     assert.match(
       screen.getByRole('alert').textContent ?? '',
-      /ยังส่งใบสมัครไม่ได้/,
+      /กรุณาตรวจสอบข้อมูลที่จำเป็น/,
     )
+    assert.ok(
+      screen.getByRole('link', { name: 'เหตุผลที่สนใจเข้าร่วมชมรม' }),
+    )
+    assert.ok(screen.getByRole('link', { name: 'คำถามข้อ 1' }))
+    assert.equal(stub.getSubmissionCount(), 0)
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
+test('invalid document URLs show the application form validation message', async () => {
+  const stub = applicationApiStub()
+  try {
+    renderApplication()
+    fireEvent.change(
+      await screen.findByLabelText(/เหตุผลที่สนใจเข้าร่วมชมรมนี้/),
+      { target: { value: 'อยากร่วมทำกิจกรรมอาสา' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(/เหตุใดจึงสนใจเข้าร่วมกิจกรรมของชมรม/),
+      { target: { value: 'อยากช่วยพัฒนาชุมชน' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มลิงก์เอกสาร/ }))
+    fireEvent.change(screen.getByLabelText(/ชื่อ\/คำอธิบายเอกสาร/), {
+      target: { value: 'ผลงาน' },
+    })
+    fireEvent.change(screen.getByLabelText(/URL ลิงก์เอกสาร/), {
+      target: { value: 'not-a-url' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
+
+    assert.match(
+      screen.getByText(/กรุณาระบุ URL HTTPS ที่ถูกต้อง/).textContent ?? '',
+      /URL HTTPS/,
+    )
+    assert.equal(screen.getByLabelText(/URL ลิงก์เอกสาร/).getAttribute('aria-invalid'), 'true')
     assert.equal(stub.getSubmissionCount(), 0)
   } finally {
     cleanup()
@@ -162,11 +232,79 @@ test('successful submission shows spinner, prevents duplicate submit, and displa
     assert.ok(screen.getByText('กำลังส่งใบสมัคร...'))
 
     await waitFor(() => {
-      assert.ok(screen.getByRole('dialog'))
+      assert.ok(screen.getByRole('heading', { name: 'ผลการส่งใบสมัคร' }))
     })
-    assert.ok(screen.getByText('ส่งใบสมัครสำเร็จ'))
+    assert.equal(
+      screen.getByTestId('current-path').textContent,
+      '/clubs/20001/rounds/70001/apply/result',
+    )
+    assert.ok(screen.getByRole('heading', { name: 'ส่งใบสมัครสำเร็จเรียบร้อยแล้ว!' }))
     assert.ok(screen.getByText(/เลขที่ใบสมัคร 90001/))
+    assert.equal(
+      screen.getByRole('link', { name: 'ไปยังประวัติการสมัคร' }).getAttribute('href'),
+      '/profile/applications',
+    )
     assert.equal(stub.getSubmissionCount(), 1)
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
+test('review shows missing profile fields without inventing applicant data', async () => {
+  const stub = applicationApiStub()
+  try {
+    renderApplication()
+    fireEvent.change(
+      await screen.findByLabelText(/เหตุผลที่สนใจเข้าร่วมชมรมนี้/),
+      { target: { value: 'อยากร่วมทำกิจกรรมอาสา' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(/เหตุใดจึงสนใจเข้าร่วมกิจกรรมของชมรม/),
+      { target: { value: 'อยากช่วยพัฒนาชุมชน' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
+
+    assert.ok(screen.getByRole('heading', { name: 'ข้อมูลผู้สมัคร' }))
+    assert.equal(screen.getAllByText('ยังไม่มีข้อมูลจากระบบ').length, 4)
+    assert.ok(screen.getByText('ยืนยันตัวตนผ่านบัญชีที่เข้าสู่ระบบแล้ว'))
+    assert.ok(screen.getByRole('checkbox'))
+    assert.equal(
+      screen.getByRole('button', { name: 'ยืนยันและส่งใบสมัคร' }).hasAttribute('disabled'),
+      true,
+    )
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
+test('review uses available profile data and masks the student code', async () => {
+  const stub = applicationApiStub(0, {
+    id: 'user-002',
+    role: 'STUDENT',
+    displayName: 'ผู้สมัครทดสอบ',
+    studentCode: '6601234567',
+    email: 'student@example.edu',
+    facultyName: 'คณะทดสอบ',
+  })
+  try {
+    renderApplication()
+    fireEvent.change(
+      await screen.findByLabelText(/เหตุผลที่สนใจเข้าร่วมชมรมนี้/),
+      { target: { value: 'อยากร่วมทำกิจกรรมอาสา' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(/เหตุใดจึงสนใจเข้าร่วมกิจกรรมของชมรม/),
+      { target: { value: 'อยากช่วยพัฒนาชุมชน' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
+
+    // The account name in the top bar now comes from PublicLayout, outside this component.
+    assert.equal(screen.getAllByText('ผู้สมัครทดสอบ').length, 1)
+    assert.ok(screen.getByText('66••••••67'))
+    assert.ok(screen.getByText('student@example.edu'))
+    assert.ok(screen.getByText('คณะทดสอบ'))
   } finally {
     cleanup()
     stub.restore()

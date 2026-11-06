@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router';
 import type { RecruitmentRoundData } from '../types/club';
 import { fetchClubDetail, type ClubDetailResult } from '../services/clubService';
 import { formatThaiDateTime } from '../../../lib/format';
+import { Breadcrumbs } from '../../../components/ui/Breadcrumbs';
+import { Button } from '../../../components/ui/Button';
+import { EmptyState } from '../../../components/ui/EmptyState';
+import { CalendarDaysIcon, ClipboardCheckIcon, ExternalLinkIcon } from '../../../components/ui/icons';
+import { SectionCard } from '../../../components/ui/SectionCard';
+import { StatusBadge } from '../../../components/ui/StatusBadge';
+import { ClubLogo } from './ClubLogo';
 import { GuestLoginModal } from './GuestLoginModal';
 
 interface ClubDetailPageProps {
@@ -60,10 +66,13 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
 
   if (result === null) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center text-slate-500 font-sans text-sm">
-        <div className="flex items-center gap-3 bg-white px-6 py-4 rounded-2xl shadow-sm border border-slate-200">
-          <span className="animate-spin text-xl">⏳</span>
-          <span className="font-semibold text-slate-700">กำลังโหลดข้อมูลชมรม...</span>
+      <div className="flex items-center justify-center py-24">
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-6 py-4 text-sm">
+          <span
+            aria-hidden="true"
+            className="size-5 animate-spin rounded-full border-2 border-slate-300 border-t-tu-maroon"
+          />
+          <span className="font-medium text-slate-700">กำลังโหลดข้อมูลชมรม...</span>
         </div>
       </div>
     );
@@ -71,370 +80,221 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
 
   if (result.status === 'not-found') {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center text-slate-500 font-sans text-sm">
-        ไม่พบข้อมูลชมรม
+      <div className="mx-auto max-w-xl py-8">
+        <EmptyState headingLevel={1} title="ไม่พบข้อมูลชมรม" />
       </div>
     );
   }
 
   if (result.status === 'error') {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-3 text-slate-500 font-sans text-sm px-4 text-center">
+      <div className="flex flex-col items-center justify-center gap-4 px-4 py-24 text-center text-sm text-slate-700">
         <p role="alert">{result.message}</p>
-        <button
-          type="button"
-          onClick={() => setReloadKey((key) => key + 1)}
-          className="h-9 px-4 rounded-xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-xs font-bold transition-all shadow-sm"
-        >
+        <Button variant="primary" onClick={() => setReloadKey((key) => key + 1)}>
           ลองใหม่
-        </button>
+        </Button>
       </div>
     );
   }
 
   const { club } = result;
-  const coverSrc = club.bannerUrl && club.bannerUrl !== failedCover ? club.bannerUrl : undefined;
+  // No banner, or it failed to load: show the local placeholder, never an external image.
+  const coverSrc = club.bannerUrl && club.bannerUrl !== failedCover ? club.bannerUrl : null;
   const emailUrl = club.contacts.email ? `mailto:${club.contacts.email}` : '';
   const hasContacts = Boolean(
     club.contacts.website || club.contacts.facebook || club.contacts.instagram || emailUrl,
   );
   const firstRound = club.rounds[0];
+  const applyLabel = applicationAvailable ? 'สมัครเข้าร่วมชมรมนี้' : 'ระบบรับใบสมัครยังไม่เปิดใช้งาน';
 
-  const applyButtonClass =
-    'w-full rounded-2xl bg-[#C81E3D] hover:bg-[#A01830] active:scale-[0.99] text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2 disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed disabled:active:scale-100';
-
-  const contactLinkClass =
-    'p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between hover:bg-slate-100/80 transition-colors group';
+  const contactLinks = [
+    { label: 'เว็บไซต์', href: club.contacts.website, external: true },
+    { label: 'Facebook', href: club.contacts.facebook, external: true },
+    { label: 'Instagram', href: club.contacts.instagram, external: true },
+    { label: 'Email', href: emailUrl, external: false },
+  ].filter((link) => link.href);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans pb-24">
-      {/* Header Bar */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 px-4 sm:px-8 py-3 shadow-sm">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-xl bg-[#C81E3D] flex items-center justify-center text-white font-black text-xs shadow-sm">
-              TU
-            </div>
-            <span className="font-extrabold text-slate-900 text-base tracking-tight">
-              ClubHub
-            </span>
-          </div>
+    <div className="flex flex-col gap-6 pb-12">
+      <Breadcrumbs
+        items={[
+          { label: 'สำรวจชมรม', to: '/' },
+          ...(club.category ? [{ label: club.category }] : []),
+          { label: club.name },
+        ]}
+      />
 
-          <Link
-            to="/"
-            className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:text-sm"
-          >
-            สำรวจชมรม
-          </Link>
-
-          <div>
-            {isLoggedIn ? (
-              <div className="flex items-center gap-2 bg-slate-100 px-3.5 py-1.5 rounded-full text-xs font-bold text-slate-700">
-                <span className="h-6 w-6 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-[11px] font-black">
-                  👤
-                </span>
-                <span>เข้าสู่ระบบแล้ว</span>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={onRequestLogin}
-                className="h-9 px-4 rounded-xl bg-[#C81E3D] hover:bg-[#A01830] text-white text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1.5"
-              >
-                <span>เข้าสู่ระบบ</span>
-                <span>➔</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="max-w-6xl mx-auto px-4 pt-4 sm:pt-6 flex flex-col gap-5">
-        {/* Breadcrumb */}
-        <div className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
-          <span>สำรวจชมรม</span>
-          {club.category && (
-            <>
-              <span>&gt;</span>
-              <span className="text-rose-700 font-semibold">{club.category}</span>
-            </>
+      {/* Cover image with fallback, logo and title */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="aspect-[3/1] min-h-32 w-full bg-slate-200">
+          {coverSrc ? (
+            <img
+              src={coverSrc}
+              onError={() => setFailedCover(coverSrc)}
+              alt={club.name}
+              className="size-full object-cover"
+            />
+          ) : (
+            <div className="size-full bg-linear-to-br from-tu-maroon-100 via-tu-maroon-50 to-slate-100" />
           )}
         </div>
 
-        {/* Club cover */}
-        <div className="relative rounded-3xl overflow-hidden bg-white border border-slate-200/80 shadow-sm">
-          <div className={`h-48 sm:h-72 w-full relative overflow-hidden ${coverSrc ? 'bg-slate-800' : 'bg-gradient-to-br from-rose-100 via-rose-50 to-orange-50'}`}>
-            {coverSrc && (
-              <>
-                <img
-                  src={coverSrc}
-                  onError={() => setFailedCover(coverSrc)}
-                  alt={club.name}
-                  className="w-full h-full object-cover opacity-85"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-              </>
-            )}
+        <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-end sm:px-7">
+          <div className="-mt-10 size-20 shrink-0 rounded-xl border border-slate-200 bg-white p-1 sm:-mt-12 sm:size-24">
+            <ClubLogo src={club.imageUrl} clubName={club.name} />
           </div>
-
-          <div className="p-5 sm:p-7 pt-0 relative flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 -mt-10 sm:-mt-14 relative z-10">
-              <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-3xl bg-white p-1 shadow-lg border border-slate-100 shrink-0">
-                {club.imageUrl ? (
-                  <img
-                    src={club.imageUrl}
-                    alt={`โลโก้ ${club.name}`}
-                    className="h-full w-full rounded-2xl object-cover"
-                  />
-                ) : (
-                  <div className="h-full w-full rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 text-3xl font-bold">
-                    🌱
-                  </div>
-                )}
-              </div>
-              <div className="pt-1 sm:pt-12">
-                {club.category && (
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md bg-rose-50 text-rose-700 text-[11px] font-bold border border-rose-100">
-                      {club.category}
-                    </span>
-                  </div>
-                )}
-                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1.5 tracking-tight">
-                  {club.name}
-                </h1>
-                {club.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2.5">
-                    {club.tags.map((tag, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-medium border border-slate-200/60"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="min-w-0">
+            {club.category && (
+              <span className="inline-flex rounded-md bg-tu-maroon-50 px-2 py-0.5 text-xs font-medium text-tu-maroon">
+                {club.category}
+              </span>
+            )}
+            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              {club.name}
+            </h1>
+            {club.tags.length > 0 && (
+              <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="แท็กของชมรม">
+                {club.tags.map((tag, idx) => (
+                  <li
+                    key={idx}
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700"
+                  >
+                    {tag}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
+      </div>
 
-        {/* Content Layout Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-          <div className="lg:col-span-2 flex flex-col gap-5">
-            <section className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-2">
-              <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <span className="text-rose-500">📌</span>
-                <span>เกี่ยวกับชมรม</span>
-              </h2>
-              <p className="text-xs text-slate-600 leading-relaxed pt-1 whitespace-pre-line">
-                {club.description}
-              </p>
-            </section>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+        <div className="flex flex-col gap-6 lg:col-span-2">
+          <SectionCard title="เกี่ยวกับชมรม">
+            <p className="whitespace-pre-line text-sm leading-7 text-slate-700">{club.description}</p>
+          </SectionCard>
 
-            {club.objectives && (
-              <section className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-2">
-                <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <span className="text-rose-500">❤️</span>
-                  <span>วัตถุประสงค์ของชมรม</span>
-                </h2>
-                <p className="text-xs text-slate-600 leading-relaxed pt-1 whitespace-pre-line">
-                  {club.objectives}
-                </p>
-              </section>
-            )}
+          {club.objectives && (
+            <SectionCard title="วัตถุประสงค์ของชมรม">
+              <p className="whitespace-pre-line text-sm leading-7 text-slate-700">{club.objectives}</p>
+            </SectionCard>
+          )}
 
-            <section className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h2 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <span className="text-rose-500">📅</span>
-                  <span>รอบรับสมัครที่เปิดรับสมัครในขณะนี้</span>
-                </h2>
-                {club.rounds.length > 0 && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-extrabold flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-                    <span>LIVE</span>
-                  </span>
-                )}
-              </div>
-
-              {club.roundsUnavailable ? (
-                <div
-                  role="alert"
-                  className="p-8 rounded-2xl border border-amber-100 bg-amber-50 flex flex-col items-center text-center gap-2"
-                >
-                  <h4 className="text-sm font-bold text-amber-900">
-                    ไม่สามารถโหลดรอบรับสมัครได้ในขณะนี้
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={() => setReloadKey((key) => key + 1)}
-                    className="h-9 px-4 rounded-xl bg-white border border-amber-200 text-amber-900 text-xs font-bold hover:bg-amber-100 transition-colors"
-                  >
-                    ลองใหม่
-                  </button>
-                </div>
-              ) : club.rounds.length > 0 ? (
-                club.rounds.map((round) => (
-                  <div
-                    key={round.id}
-                    className="p-5 rounded-2xl border border-rose-100 bg-gradient-to-b from-rose-50/30 to-white flex flex-col gap-3.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200">
-                        • กำลังเปิดรับสมัคร
-                      </span>
-                    </div>
-
-                    <h3 className="text-base font-extrabold text-slate-900">{round.title}</h3>
-
-                    <div className="flex flex-col gap-2.5 text-xs text-slate-600 pt-1 border-t border-slate-100">
-                      <div className="flex items-start gap-2 pt-1">
-                        <span className="text-slate-400">📆</span>
-                        <div>
-                          <span className="font-semibold text-slate-700">ระยะเวลารับสมัคร: </span>
-                          <span>{formatPeriod(round)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={!applicationAvailable}
-                      onClick={() => handleApplyClick(round)}
-                      className={`${applyButtonClass} h-12 mt-2`}
-                    >
-                      <span>
-                        {applicationAvailable
-                          ? 'สมัครเข้าร่วมชมรมนี้'
-                          : 'ระบบรับใบสมัครยังไม่เปิดใช้งาน'}
-                      </span>
-                      {applicationAvailable && <span className="text-sm">➔</span>}
-                    </button>
-                    <p className="text-[11px] text-slate-400 text-center font-medium">
-                      {!applicationAvailable
-                        ? 'ขณะนี้ยังส่งใบสมัครผ่านระบบไม่ได้ กรุณาติดตามประกาศจากชมรม'
-                        : isLoggedIn
-                          ? '✓ คุณเข้าสู่ระบบเรียบร้อยแล้ว พร้อมสำหรับกรอกแบบฟอร์ม'
-                          : '🔒 จำเป็นต้องเข้าสู่ระบบด้วยบัญชี TU เพื่อส่งใบสมัคร'}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <div className="p-8 rounded-2xl border border-slate-100 bg-slate-50 flex flex-col items-center text-center gap-2">
-                  <span className="text-3xl">📅</span>
-                  <h4 className="text-sm font-bold text-slate-800 mt-1">ไม่มีรอบรับสมัครในขณะนี้</h4>
-                  <p className="text-xs text-slate-500 max-w-sm">
-                    ขณะนี้ชมรมยังไม่มีรอบรับสมัครที่เปิดอยู่ คุณสามารถติดตามข่าวสารผ่านช่องทางโซเชียลมีเดีย
-                  </p>
-                </div>
-              )}
-            </section>
-          </div>
-
-          <div className="flex flex-col gap-5">
-            {firstRound && (
-              <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-3.5">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 w-fit">
-                  • กำลังเปิดรับสมัคร
-                </span>
-                <div>
-                  <h3 className="text-sm font-extrabold text-slate-900">{firstRound.title}</h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    ปิดรับ {formatThaiDateTime(firstRound.closesAt)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={!applicationAvailable}
-                  onClick={() => handleApplyClick(firstRound)}
-                  className={`${applyButtonClass} h-11`}
-                >
-                  <span>
-                    {applicationAvailable
-                      ? 'สมัครเข้าร่วมชมรมนี้'
-                      : 'ระบบรับใบสมัครยังไม่เปิดใช้งาน'}
-                  </span>
-                  {applicationAvailable && <span>➔</span>}
-                </button>
-                <span className="text-[10px] text-slate-400 text-center">
-                  สำหรับนักศึกษามหาวิทยาลัยธรรมศาสตร์
-                </span>
-              </div>
-            )}
-
-            {/* ช่องทางการติดต่อ - แสดงเฉพาะช่องทางที่มีข้อมูลจริง */}
-            {hasContacts && (
-              <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col gap-3.5">
-                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <span className="text-rose-500">💬</span>
-                  <span>ช่องทางการติดต่อ</span>
+          <SectionCard title="รอบรับสมัครที่เปิดรับสมัครในขณะนี้">
+            {club.roundsUnavailable ? (
+              <div
+                role="alert"
+                className="flex flex-col items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-6 text-center"
+              >
+                <h3 className="text-sm font-semibold text-amber-900">
+                  ไม่สามารถโหลดรอบรับสมัครได้ในขณะนี้
                 </h3>
-                <p className="text-[11px] text-slate-400">พูดคุยกับเรา และติดตามกิจกรรมของชมรม</p>
-
-                <div className="flex flex-col gap-2 text-xs pt-1">
-                  {club.contacts.website && (
-                    <a
-                      href={club.contacts.website}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={contactLinkClass}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-slate-600 font-bold">🌐</span>
-                        <span className="font-semibold text-slate-700">เว็บไซต์</span>
-                      </div>
-                      <span className="text-slate-400 group-hover:text-slate-600 text-[11px]">↗</span>
-                    </a>
-                  )}
-
-                  {club.contacts.facebook && (
-                    <a
-                      href={club.contacts.facebook}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={contactLinkClass}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-blue-600 font-bold">f</span>
-                        <span className="font-semibold text-slate-700">Facebook</span>
-                      </div>
-                      <span className="text-slate-400 group-hover:text-slate-600 text-[11px]">↗</span>
-                    </a>
-                  )}
-
-                  {club.contacts.instagram && (
-                    <a
-                      href={club.contacts.instagram}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={contactLinkClass}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-pink-600 font-bold">📷</span>
-                        <span className="font-semibold text-slate-700">Instagram</span>
-                      </div>
-                      <span className="text-slate-400 group-hover:text-slate-600 text-[11px]">↗</span>
-                    </a>
-                  )}
-
-                  {emailUrl && (
-                    <a href={emailUrl} className={contactLinkClass}>
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-amber-600 font-bold">✉️</span>
-                        <span className="font-semibold text-slate-700">Email</span>
-                      </div>
-                      <span className="text-slate-400 group-hover:text-slate-600 text-[11px]">↗</span>
-                    </a>
-                  )}
-                </div>
+                <Button onClick={() => setReloadKey((key) => key + 1)}>ลองใหม่</Button>
               </div>
+            ) : club.rounds.length > 0 ? (
+              club.rounds.map((round) => (
+                <article key={round.id} className="flex flex-col gap-3 rounded-lg border border-slate-200 p-5">
+                  <div>
+                    <StatusBadge status="OPEN" />
+                  </div>
+                  <h3 className="text-base font-semibold text-slate-900">{round.title}</h3>
+                  <p className="flex items-start gap-2 text-sm text-slate-700">
+                    <CalendarDaysIcon className="mt-0.5 size-4 text-slate-500" />
+                    <span>
+                      <span className="font-medium text-slate-900">ระยะเวลารับสมัคร: </span>
+                      {formatPeriod(round)}
+                    </span>
+                  </p>
+                  {round.resultsScheduledAt && (
+                    <p className="flex items-start gap-2 text-sm text-slate-700">
+                      <ClipboardCheckIcon className="mt-0.5 size-4 text-slate-500" />
+                      <span>
+                        <span className="font-medium text-slate-900">กำหนดประกาศผล: </span>
+                        {formatThaiDateTime(round.resultsScheduledAt)}
+                      </span>
+                    </p>
+                  )}
+                  {round.description.trim() && (
+                    <div className="rounded-lg bg-slate-50 px-4 py-3">
+                      <h4 className="text-sm font-medium text-slate-900">รายละเอียด/คุณสมบัติ</h4>
+                      <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-700">
+                        {round.description}
+                      </p>
+                    </div>
+                  )}
+                  <Button
+                    disabled={!applicationAvailable}
+                    onClick={() => handleApplyClick(round)}
+                    className="mt-1 w-full sm:w-auto sm:self-start"
+                  >
+                    {applyLabel}
+                  </Button>
+                  <p className="text-xs text-slate-600">
+                    {!applicationAvailable
+                      ? 'ขณะนี้ยังส่งใบสมัครผ่านระบบไม่ได้ กรุณาติดตามประกาศจากชมรม'
+                      : isLoggedIn
+                        ? 'คุณเข้าสู่ระบบเรียบร้อยแล้ว พร้อมสำหรับกรอกแบบฟอร์ม'
+                        : 'จำเป็นต้องเข้าสู่ระบบด้วยบัญชี TU เพื่อส่งใบสมัคร'}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <EmptyState
+                icon={<CalendarDaysIcon className="size-6" />}
+                title="ไม่มีรอบรับสมัครในขณะนี้"
+                description="ขณะนี้ชมรมยังไม่มีรอบรับสมัครที่เปิดอยู่ คุณสามารถติดตามข่าวสารผ่านช่องทางโซเชียลมีเดีย"
+              />
             )}
-          </div>
+          </SectionCard>
         </div>
-      </main>
+
+        <div className="flex flex-col gap-6">
+          {firstRound && (
+            <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6">
+              <div>
+                <StatusBadge status="OPEN" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">{firstRound.title}</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  ปิดรับ {formatThaiDateTime(firstRound.closesAt)}
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                disabled={!applicationAvailable}
+                onClick={() => handleApplyClick(firstRound)}
+                className="w-full"
+              >
+                {applyLabel}
+              </Button>
+              <span className="text-center text-xs text-slate-600">
+                สำหรับนักศึกษามหาวิทยาลัยธรรมศาสตร์
+              </span>
+            </div>
+          )}
+
+          {/* ช่องทางการติดต่อ - แสดงเฉพาะช่องทางที่มีข้อมูลจริง */}
+          {hasContacts && (
+            <SectionCard title="ช่องทางการติดต่อ" description="พูดคุยกับเรา และติดตามกิจกรรมของชมรม">
+              <ul className="flex flex-col gap-2">
+                {contactLinks.map((link) => (
+                  <li key={link.label}>
+                    <a
+                      href={link.href}
+                      {...(link.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+                      className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-800 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                    >
+                      {link.label}
+                      <ExternalLinkIcon className="size-4 text-slate-500" />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
+        </div>
+      </div>
 
       <GuestLoginModal
         isOpen={showLoginModal}

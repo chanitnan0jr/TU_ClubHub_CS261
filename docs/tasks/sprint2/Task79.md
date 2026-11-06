@@ -9,7 +9,7 @@
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | Role Contract จาก Task75 (ทำก่อน Admin API Task71) |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | 34Woraphon Pupatanun|
 | **Trello Card Link** | [https://trello.com/c/RQczRQYO](https://trello.com/c/RQczRQYO) |
 
 ---

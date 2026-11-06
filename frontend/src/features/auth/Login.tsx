@@ -1,4 +1,8 @@
 import { useState, type FormEvent } from "react";
+import { Button } from "../../components/ui/Button";
+import { inputClass } from "../../components/ui/classes";
+import { Field } from "../../components/ui/Field";
+import { CircleAlertIcon } from "../../components/ui/icons";
 import { useAuth } from "./AuthContext";
 
 export default function Login() {
@@ -33,65 +37,60 @@ export default function Login() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-4 bg-gray-50">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-xl">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-red-700">TU ClubHub</h1>
-          <p className="mt-2 text-sm text-gray-500">
+    <div className="mx-auto w-full max-w-md py-4 sm:py-10">
+      <div className="flex flex-col gap-6 rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">เข้าสู่ระบบ</h1>
+          <p className="mt-1 text-sm text-slate-600">
             เข้าสู่ระบบด้วยบัญชีมหาวิทยาลัยธรรมศาสตร์
           </p>
         </div>
 
         {(error || notice) && (
-          <div role="alert" className="p-3 text-sm text-red-700 bg-red-100 rounded-lg">
-            {error || notice}
+          <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <CircleAlertIcon className="mt-0.5 size-4" />
+            <span>{error || notice}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-              รหัสนักศึกษา / TU Great ID
-            </label>
-            <input
-              id="username"
-              name="username"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="เช่น 6809617001"
-              className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Field id="username" label="รหัสนักศึกษา / TU Great ID">
+            {(control) => (
+              <input
+                {...control}
+                name="username"
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="เช่น 6809617001"
+                className={inputClass()}
+              />
+            )}
+          </Field>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              รหัสผ่าน
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="รหัสผ่านเดียวกับ TU Great App"
-              className="w-full px-4 py-2 mt-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none"
-            />
-          </div>
+          <Field id="password" label="รหัสผ่าน">
+            {(control) => (
+              <input
+                {...control}
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="รหัสผ่านเดียวกับ TU Great App"
+                className={inputClass()}
+              />
+            )}
+          </Field>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full px-4 py-3 font-semibold text-white transition-colors bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-red-400"
-          >
+          <Button type="submit" variant="primary" loading={isLoading} className="mt-2 w-full">
             {isLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
-          </button>
+          </Button>
         </form>
 
-        <p className="text-xs text-center text-gray-400">
-          *ระบบจะยืนยันตัวตนผ่าน TU Authentication API
+        <p className="text-center text-xs text-slate-600">
+          ระบบจะยืนยันตัวตนผ่าน TU Authentication API
         </p>
       </div>
     </div>

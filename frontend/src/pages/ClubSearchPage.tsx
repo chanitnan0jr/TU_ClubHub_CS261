@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { useAuth } from '../features/auth/AuthContext';
+import PublicLayout from '../components/layout/PublicLayout';
 import { searchPublicClubs } from '../features/clubs/services/publicClubSearchService';
 import type { PublicClubSearchItem } from '../features/clubs/types/publicClubSearch';
 import { apiRequest, describeApiError } from '../lib/api';
@@ -63,7 +63,6 @@ interface ClubSearchPageProps {
 }
 
 export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
-  const { isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('');
   const [recruitmentOpen, setRecruitmentOpen] = useState(false);
@@ -176,48 +175,8 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#faf8f6] text-slate-800">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-3" aria-label="TU ClubHub หน้าหลัก">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#c81e3d] text-[10px] font-black text-white shadow-sm">
-              TU
-            </span>
-            <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="text-base font-extrabold tracking-tight text-slate-900">ClubHub</span>
-              <span className="hidden text-[10px] text-slate-500 sm:inline">ระบบบริหารชมรม · มหาวิทยาลัยธรรมศาสตร์</span>
-            </span>
-          </Link>
-          {!authLoading && (
-            isAuthenticated ? (
-              <div className="flex items-center gap-3">
-                <Link to="/dashboard" className="hidden text-sm font-semibold text-slate-600 hover:text-rose-800 sm:inline">
-                  จัดการชมรม
-                </Link>
-                <Link to="/profile/applications" className="hidden text-sm font-semibold text-slate-600 hover:text-rose-800 sm:inline">
-                  ใบสมัครของฉัน
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => void logout()}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                >
-                  ออกจากระบบ
-                </button>
-              </div>
-            ) : (
-              <Link
-                to={`/login?next=${encodeURIComponent('/')}`}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-              >
-                เข้าสู่ระบบ
-              </Link>
-            )
-          )}
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-7xl px-4 pb-14 pt-8 sm:px-6 sm:pt-12 lg:px-8">
+    <PublicLayout>
+      <div className="pb-8">
         <section className="mb-8 overflow-hidden rounded-3xl bg-gradient-to-br from-[#741a35] via-[#8b1e3f] to-[#b13a5b] px-6 py-9 text-white shadow-md sm:px-10 sm:py-12">
           <p className="mb-3 text-sm font-bold tracking-wide text-rose-100">TU CLUBHUB · CLUB DIRECTORY</p>
           <h1 className="max-w-3xl text-3xl font-black leading-tight sm:text-4xl lg:text-5xl">
@@ -367,10 +326,7 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
             </button>
           </nav>
         )}
-      </main>
-      <footer className="border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-500">
-        TU ClubHub · สำรวจชมรมมหาวิทยาลัยธรรมศาสตร์
-      </footer>
-    </div>
+      </div>
+    </PublicLayout>
   );
 }

@@ -2,6 +2,7 @@ package com.tu.clubhub.club.service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import com.tu.clubhub.club.domain.Club;
 import com.tu.clubhub.club.dto.ClubResponseDto.ClubCategoryDto;
@@ -75,7 +76,9 @@ class ClubServiceTest {
                 null,
                 email,
                 imageUrl,
-                null
+                null,
+                "1",
+                List.of("2")
         );
     }
 
@@ -152,6 +155,65 @@ class ClubServiceTest {
         assertTrue(error.getFieldErrors().containsKey("facebookUrl"));
     }
 
+    private static ClubUpdateRequestDto withIds(String categoryId, List<String> tagIds) {
+        return new ClubUpdateRequestDto("Music Club", "A club for music lovers",
+                null, null, null, null, null, null, null, categoryId, tagIds);
+    }
+
+    @Test
+    void categoryAndTagsAreRequired() {
+        var error = assertThrows(ClubValidationException.class,
+                () -> service.validateUpdateRequest(withIds(null, null)));
+
+        assertEquals("Category is required", error.getFieldErrors().get("categoryId"));
+        assertEquals("Tags are required", error.getFieldErrors().get("tagIds"));
+    }
+
+    @Test
+    void malformedIdsShouldFail() {
+        var error = assertThrows(ClubValidationException.class,
+                () -> service.validateUpdateRequest(withIds("01", java.util.Arrays.asList(
+                        "abc", null, "-1", "9223372036854775808", "3"))));
+
+        assertEquals("Must be a positive decimal identifier", error.getFieldErrors().get("categoryId"));
+        for (int i = 0; i < 4; i++) {
+            assertEquals("Must be a positive decimal identifier",
+                    error.getFieldErrors().get("tagIds[" + i + "]"));
+        }
+        assertFalse(error.getFieldErrors().containsKey("tagIds[4]"));
+    }
+
+    @Test
+    void repeatedAndTooManyTagsShouldFail() {
+        var repeated = assertThrows(ClubValidationException.class,
+                () -> service.validateUpdateRequest(withIds("1", List.of("2", "3", "2"))));
+        assertEquals(List.of("tagIds[2]"), List.copyOf(repeated.getFieldErrors().keySet()));
+
+        var tooMany = assertThrows(ClubValidationException.class,
+                () -> service.validateUpdateRequest(withIds("1",
+                        List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"))));
+        assertEquals("At most 10 tags are allowed", tooMany.getFieldErrors().get("tagIds"));
+
+        assertDoesNotThrow(() -> service.validateUpdateRequest(withIds("1",
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))));
+    }
+
+    @Test
+    void unknownReferencesShouldFailWithoutWriting() {
+        Club club = mock(Club.class);
+        when(clubRepository.findByIdForUpdate(41L)).thenReturn(Optional.of(club));
+        when(profileQueryRepository.categoryExists(1L)).thenReturn(false);
+        when(profileQueryRepository.findExistingTagIds(List.of(2L))).thenReturn(Set.of());
+
+        var error = assertThrows(ClubValidationException.class,
+                () -> service.updateClub(41L, request(null, null, null)));
+
+        assertEquals(List.of("categoryId", "tagIds[0]"), List.copyOf(error.getFieldErrors().keySet()));
+        verify(club, never()).setName(any());
+        verify(clubRepository, never()).save(any(Club.class));
+        verify(profileQueryRepository, never()).replaceClubTags(any(), any());
+    }
+
     @Test
     void optionalFieldsCanBeNull() {
         var data = request(null, null, null);
@@ -171,9 +233,12 @@ class ClubServiceTest {
 
         Club club = mock(Club.class);
 
-        when(clubRepository.findById(41L))
+        when(clubRepository.findByIdForUpdate(41L))
                 .thenReturn(Optional.of(club));
         when(clubRepository.save(club)).thenReturn(club);
+        when(profileQueryRepository.categoryExists(1L)).thenReturn(true);
+        when(profileQueryRepository.findExistingTagIds(List.of(2L)))
+                .thenReturn(Set.of(2L));
 
         when(club.getId()).thenReturn(41L);
         when(club.getCategoryId()).thenReturn(1L);
@@ -206,14 +271,15 @@ class ClubServiceTest {
         verify(club).setContactEmail(data.contactEmail());
         verify(club).setImageUrl(data.imageUrl());
         verify(club).setBannerUrl(data.bannerUrl());
+        verify(club).setCategoryId(1L);
 
         // ไม่แก้ฟิลด์ที่ API ไม่อนุญาต
-        verify(club, never()).setCategoryId(any());
         verify(club, never()).setStatus(any());
         verify(club, never()).setAffiliationLevel(any());
         verify(club, never()).setAffiliationName(any());
 
         verify(clubRepository).save(club);
+        verify(profileQueryRepository).replaceClubTags(41L, List.of(2L));
 
         // ตรวจข้อมูลที่ประกอบเป็น Response
         assertEquals("41", response.id());
@@ -250,7 +316,7 @@ class ClubServiceTest {
     void missingClubShouldNotSave() {
         var data = request(null, null, null);
 
-        when(clubRepository.findById(999L))
+        when(clubRepository.findByIdForUpdate(999L))
                 .thenReturn(Optional.empty());
 
         assertThrows(

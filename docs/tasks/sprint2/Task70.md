@@ -9,7 +9,7 @@
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task69 (Member API) และ Task64 (Application Tracking UI) |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | Khem|
 | **Trello Card Link** | [https://trello.com/c/coUzzxER](https://trello.com/c/coUzzxER) |
 
 ---
