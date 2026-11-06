@@ -157,7 +157,9 @@ function ClubOverview({ clubId }: { clubId: string }) {
                         ภาค {roundTermLabel(round)} · {roundPeriodLabel(round)}
                       </p>
                     </div>
-                    <StatusBadge status={statuses[index]} />
+                    <span className="shrink-0">
+                      <StatusBadge status={statuses[index]} />
+                    </span>
                   </li>
                 ))}
               </ul>
