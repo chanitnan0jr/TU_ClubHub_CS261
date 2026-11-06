@@ -8,12 +8,12 @@ import {
 import type {
   ClubResponseDto,
   ClubUpdateRequestDto,
-} from './features/clubs/types/club'
+} from '../types/club'
 import {
   validateClubProfile,
   type ClubProfileDraft,
   type ClubProfileFieldErrors,
-} from './utils/clubProfileValidation'
+} from '../../../utils/clubProfileValidation'
 
 export type ClubProfile = ClubResponseDto
 
