@@ -48,27 +48,28 @@ function RoundPeriod({ round }: { round: Round }) {
 // and published, an open round can be closed early, and every round's questions can be viewed.
 function RoundActions({ clubId, round, status, publishable, onAction }: RowProps) {
   const base = `/clubs/${clubId}/rounds/${round.id}`;
-  const name = <span className="sr-only"> {round.title}</span>;
+  // Every row has the same buttons, so each name adds the round; it starts with the visible text.
+  const named = (action: string) => `${action} ${round.title}`;
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
         {status === 'DRAFT' && (
-          <Link to={`${base}/edit`} className={buttonClass('secondary')}>
-            แก้ไข{name}
+          <Link to={`${base}/edit`} aria-label={named('แก้ไข')} className={buttonClass('secondary')}>
+            แก้ไข
           </Link>
         )}
-        <Link to={`${base}/questions`} className={buttonClass('secondary')}>
-          คำถาม{name}
+        <Link to={`${base}/questions`} aria-label={named('คำถาม')} className={buttonClass('secondary')}>
+          คำถาม
         </Link>
         {publishable && (
-          <Button onClick={() => onAction('PUBLISH', round)}>
-            เผยแพร่{name}
+          <Button aria-label={named('เผยแพร่')} onClick={() => onAction('PUBLISH', round)}>
+            เผยแพร่
           </Button>
         )}
         {status === 'OPEN' && (
-          <Button onClick={() => onAction('CLOSE', round)}>
-            ปิดรับสมัคร{name}
+          <Button aria-label={named('ปิดรับสมัคร')} onClick={() => onAction('CLOSE', round)}>
+            ปิดรับสมัคร
           </Button>
         )}
       </div>
