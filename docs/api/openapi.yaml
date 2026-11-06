@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TU-ClubHub API
-  version: 1.3.0
+  version: 1.4.0
   description: >-
     TU-ClubHub API contract for foundation, public club search/profiles, application
     forms, submission, applicant status tracking, membership offer confirmation/decline,
@@ -423,10 +423,15 @@ paths:
     get:
       tags: [Public Clubs]
       operationId: listPublicClubCategories
-      x-implementation-status: pending
+      x-implementation-status: implemented
       x-contract-status: specified-in-task75
-      summary: List all club categories for public search filters (US-01 / Task62)
-      description: Public endpoint; returns all club categories from club_categories ordered by name ASC, id ASC.
+      summary: List all club categories (search filters and the club profile editor)
+      description: >-
+        Public endpoint; authentication is not required. Returns every club
+        category in one unpaginated list, ordered by name ascending, then id
+        ascending. Used by public search filters (US-01 / Task62) and by the
+        committee profile editor to choose ClubUpdateRequest.categoryId (US-06).
+        An empty list is returned as items: [].
       security: []
       responses:
         '200':
@@ -445,6 +450,8 @@ paths:
                     name: ศิลปวัฒนธรรม
                   - id: '30004'
                     name: บำเพ็ญประโยชน์
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
         default:
@@ -453,10 +460,15 @@ paths:
     get:
       tags: [Public Clubs]
       operationId: listPublicInterestTags
-      x-implementation-status: pending
+      x-implementation-status: implemented
       x-contract-status: specified-in-task75
-      summary: List all interest tags for public search filters (US-01 / Task62)
-      description: Public endpoint; returns all interest tags from tags ordered by name ASC, id ASC.
+      summary: List all interest tags (search filters and the club profile editor)
+      description: >-
+        Public endpoint; authentication is not required. Returns every interest
+        tag in one unpaginated list, ordered by name ascending, then id ascending.
+        Used by public search filters (US-01 / Task62) and by the committee
+        profile editor to choose ClubUpdateRequest.tagIds (US-06). An empty list
+        is returned as items: [].
       security: []
       responses:
         '200':
@@ -471,6 +483,8 @@ paths:
                     name: Programming
                   - id: '40002'
                     name: Music
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
         default:
@@ -879,9 +893,20 @@ paths:
         ADMIN alone grants no access. The permission matrix records guard additions
         still required in the implementation.
         Only name, description, objectives, contact/social URLs, contactEmail,
-        imageUrl, and bannerUrl are writable. Category, affiliation, status, tags,
-        and recruitment rounds are read-only through this operation. Omitted or null
-        nullable request fields are cleared. URL fields must use HTTPS.
+        imageUrl, bannerUrl, categoryId, and tagIds are writable. Affiliation,
+        status, and recruitment rounds are read-only through this operation.
+        Omitted or null nullable request fields are cleared. URL fields must use
+        HTTPS. categoryId must be an id from GET /api/v1/public/club-categories.
+        tagIds is the complete new tag set (at most 10 distinct ids from
+        GET /api/v1/public/interest-tags); it replaces the current tags and an
+        empty array removes them all. To keep the current category or tags, send
+        their current ids. An unknown category or tag id, a repeated tag id, or
+        more than 10 tags returns 400 VALIDATION_FAILED. The profile fields,
+        category, and tags are saved together: when the request fails, nothing
+        is changed. The 200 response and later public profile reads show the new
+        category and tags.
+        Breaking change in contract 1.4.0: categoryId and tagIds are required;
+        a request that omits them returns 400 VALIDATION_FAILED.
       security:
         - SessionCookie: []
           CsrfHeader: []
@@ -910,6 +935,8 @@ paths:
               contactEmail: tucoding@example.org
               imageUrl: https://images.example.org/clubs/20001.png
               bannerUrl: null
+              categoryId: '30001'
+              tagIds: ['40001', '40002']
       responses:
         '200':
           description: Club profile updated
@@ -935,10 +962,17 @@ paths:
                 category:
                   id: '30001'
                   name: Technology
-                tags: []
+                tags:
+                  - id: '40001'
+                    name: Programming
+                  - id: '40002'
+                    name: Music
                 recruitmentRounds: []
         '400':
-          description: Invalid club identifier or request fields failed validation
+          description: >-
+            Invalid club identifier, or request fields failed validation. fieldErrors
+            names each rejected field; list-level tag errors use field tagIds and
+            per-item errors use tagIds[index] (zero-based). Nothing is changed.
           content:
             application/problem+json:
               schema:
@@ -955,8 +989,53 @@ paths:
                     code: VALIDATION_FAILED
                     fieldErrors:
                       - field: name
-                        code: REQUIRED
-                        message: Club name is required.
+                        code: INVALID
+                        message: Club name is required
+                    traceId: 01J9EXAMPLE7K4D5
+                unknownCategory:
+                  summary: categoryId does not name an existing club category
+                  value:
+                    type: urn:tuclubhub:problem:validation-error
+                    title: Request validation failed
+                    status: 400
+                    detail: One or more request fields are invalid.
+                    instance: /api/v1/clubs/20001
+                    code: VALIDATION_FAILED
+                    fieldErrors:
+                      - field: categoryId
+                        code: INVALID
+                        message: Category does not exist
+                    traceId: 01J9EXAMPLE7K4D5
+                unknownOrRepeatedTag:
+                  summary: A tag id does not exist or is repeated
+                  value:
+                    type: urn:tuclubhub:problem:validation-error
+                    title: Request validation failed
+                    status: 400
+                    detail: One or more request fields are invalid.
+                    instance: /api/v1/clubs/20001
+                    code: VALIDATION_FAILED
+                    fieldErrors:
+                      - field: tagIds[1]
+                        code: INVALID
+                        message: Duplicate tag id
+                      - field: tagIds[2]
+                        code: INVALID
+                        message: Tag does not exist
+                    traceId: 01J9EXAMPLE7K4D5
+                tooManyTags:
+                  summary: More than 10 tags were sent
+                  value:
+                    type: urn:tuclubhub:problem:validation-error
+                    title: Request validation failed
+                    status: 400
+                    detail: One or more request fields are invalid.
+                    instance: /api/v1/clubs/20001
+                    code: VALIDATION_FAILED
+                    fieldErrors:
+                      - field: tagIds
+                        code: INVALID
+                        message: At most 10 tags are allowed
                     traceId: 01J9EXAMPLE7K4D5
                 invalidId:
                   summary: Club ID is not a decimal string
@@ -2960,11 +3039,12 @@ components:
     ClubUpdateRequest:
       type: object
       additionalProperties: false
-      required: [name, description]
+      required: [name, description, categoryId, tagIds]
       description: >-
         Full replacement of editable club profile fields. name and description are
-        required and non-blank. Omitted or null nullable fields are cleared. Fields
-        not listed here, including category, affiliations, and status, are read-only.
+        required and non-blank; categoryId and tagIds are required. Omitted or null
+        nullable fields are cleared. Fields not listed here, including affiliations
+        and status, are read-only.
       properties:
         name:
           type: string
@@ -3006,6 +3086,19 @@ components:
           format: uri
           maxLength: 2048
           pattern: '^https://\S+$'
+        categoryId:
+          $ref: '#/components/schemas/PositiveBigintId'
+          description: Id of an existing club category from GET /api/v1/public/club-categories.
+        tagIds:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: >-
+            Complete new set of interest tag ids from GET /api/v1/public/interest-tags.
+            Replaces the club's current tags; [] removes them all. Order is not
+            significant; the response lists tags in its own order.
+          items:
+            $ref: '#/components/schemas/PositiveBigintId'
     ClubCategory:
       type: object
       required: [id, name]

@@ -3,7 +3,7 @@
 | Property | Value |
 |---|---|
 | Version | `v1` |
-| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.3.0), `rounds.openapi.yaml` (v1.2.0), and `task75-sprint2-design.md` |
+| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.4.0), `rounds.openapi.yaml` (v1.2.0), and `task75-sprint2-design.md` |
 | Last updated | 2026-11-06 |
 | Audience | Frontend and backend developers |
 
@@ -24,8 +24,9 @@ Initial source review on 2026-10-19; application POST status updated on 2026-10-
 | Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout; `me` returns `studentStatus` and `activeCommitteeAssignments` read on every call | Login/account/logout connected; committee pages do not read assignments yet |
 | `GET /api/v1/public/clubs/{id}` and `.../{id}/recruitment-rounds` | Implemented; active clubs and currently open rounds from DB | Club detail still uses mock data and is not mounted |
 | `GET /api/v1/public/recruitment-rounds` (Open Call Board) | Implemented; open rounds across all active clubs | `/open-calls` page pending |
+| `GET /api/v1/public/club-categories` and `GET /api/v1/public/interest-tags` | Implemented; complete lists ordered by name, then id | Profile editor fills its category select and tag chips from them; search filters pending (Task62) |
 | `GET /api/v1/clubs/{clubId}` | Contract-only; no handler | Editor client calls this missing endpoint |
-| `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard | Editor/client exist but are not mounted |
+| `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard; `categoryId` and `tagIds` are required and saved with the profile in one transaction | Profile editor at `/clubs/:clubId/edit` sends `categoryId` and `tagIds` |
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
 | Committee round `GET` list/detail (`listRounds`, `getRound`) | Implemented with the round-write committee guard and self-review filter; see rounds contract | Pending |
 | Round `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
@@ -281,6 +282,34 @@ Items are ordered by `closesAt` ascending (soonest deadline first), then `id` as
 
 `club.imageUrl` is `null` when the club has no logo; the client shows its own fallback image. `page` and `size` follow the [collection convention](#collection-convention) (default `0` and `20`, `size` from `1` to `100`); a negative `page`, an out-of-range `size`, or a non-integer value returns `400 VALIDATION_FAILED` with the parameter name in `fieldErrors`. No open rounds returns `200 OK` with empty `items` and zero totals; a page past the end returns empty `items` with unchanged totals. Items and totals use one evaluation instant per request. Responses carry `Cache-Control` with `no-store` because the list changes as rounds open and close. Other errors are `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`; there is no `401`, `403`, or `404`.
 
+#### `GET /api/v1/public/club-categories`
+
+Returns every club category as `{ "items": [...] }` (`PublicClubCategoryList`), ordered by `name` ascending, then `id` ascending. The list is complete and not paginated. Each item has only `id` (decimal string) and `name`. An empty list is `{"items": []}`. Public search filters and the committee profile editor use these ids; `PUT /api/v1/clubs/{clubId}` accepts only an id from this list as `categoryId`.
+
+```json
+{
+  "items": [
+    { "id": "30001", "name": "วิชาการ" },
+    { "id": "30002", "name": "กีฬา" }
+  ]
+}
+```
+
+#### `GET /api/v1/public/interest-tags`
+
+Returns every interest tag as `{ "items": [...] }` (`PublicClubTagList`), ordered by `name` ascending, then `id` ascending, with the same item shape and empty-list form as the category list. `PUT /api/v1/clubs/{clubId}` accepts only ids from this list in `tagIds`.
+
+```json
+{
+  "items": [
+    { "id": "40002", "name": "Music" },
+    { "id": "40001", "name": "Programming" }
+  ]
+}
+```
+
+Both lists are public reads: no session or CSRF token, and no `400`, `401`, `403`, or `404` responses. Other errors are `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`.
+
 ### `GET /api/v1/clubs/{clubId}`
 
 **Contract-only; no backend handler.** The editor client currently calls this path. The implemented public read APIs are the two `/api/v1/public/clubs/...` endpoints above; they have different response DTOs.
@@ -344,7 +373,9 @@ IDs containing non-decimal characters or a minus sign return `400 INVALID_RESOUR
 
 Replaces the editable profile fields for a club and returns the updated public profile. Requires an authenticated session, the current CSRF header, and an effective `COMMITTEE` or `PRESIDENT` assignment for this club. Under the adopted permission matrix, account, student profile, club, membership, and assignment must be `ACTIVE`; membership must have `joined_at <= now` and `ended_at IS NULL`; assignment must have `revoked_at IS NULL` and `starts_at <= now < ends_at`. The server rechecks current database state on every request and inside the write transaction. `ADMIN` alone grants no access. A missing or expired session returns `401`; a suspended account returns `403 ACCOUNT_NOT_ALLOWED`; other permission failures return `403 ACCESS_DENIED`. The matrix records the guard additions still required in the implementation.
 
-The caller may update only `name`, `description`, `objectives`, `contactUrl`, `facebookUrl`, `instagramUrl`, `contactEmail`, `imageUrl`, and `bannerUrl`. Category, affiliation, status, IDs, tags, and recruitment rounds are not writable through this endpoint. `name` and `description` are required and non-blank; `name` is limited to 200 characters. Nullable fields omitted or sent as `null` are cleared. URL fields, when provided, must be HTTPS URLs; `contactEmail`, when provided, must be a valid email address. Text is treated as data, not executable HTML; persistence queries must use bound parameters, and clients must escape text when rendering it.
+The caller may update only `name`, `description`, `objectives`, `contactUrl`, `facebookUrl`, `instagramUrl`, `contactEmail`, `imageUrl`, `bannerUrl`, `categoryId`, and `tagIds`. Affiliation, status, the club ID, and recruitment rounds are not writable through this endpoint. `name` and `description` are required and non-blank; `name` is limited to 200 characters. Nullable fields omitted or sent as `null` are cleared. URL fields, when provided, must be HTTPS URLs; `contactEmail`, when provided, must be a valid email address. Text is treated as data, not executable HTML; persistence queries must use bound parameters, and clients must escape text when rendering it.
+
+`categoryId` (required) is a decimal-string ID from [`GET /api/v1/public/club-categories`](#get-apiv1publicclub-categories). `tagIds` (required) is the complete new tag set: up to 10 distinct decimal-string IDs from [`GET /api/v1/public/interest-tags`](#get-apiv1publicinterest-tags). It replaces the club's current tags, `[]` removes them all, and order does not matter. To keep the current category or tags, send their current IDs (the public profile returns them). The profile fields, category, and tags are saved together: a rejected or failed request changes nothing, and after `200 OK` both the response and the public profile show the new category and tags.
 
 **Request body** (`ClubUpdateRequestDto`):
 
@@ -358,7 +389,9 @@ The caller may update only `name`, `description`, `objectives`, `contactUrl`, `f
   "instagramUrl": "https://instagram.com/tucoding",
   "contactEmail": "tucoding@example.org",
   "imageUrl": "https://images.example.org/clubs/20001.png",
-  "bannerUrl": null
+  "bannerUrl": null,
+  "categoryId": "30001",
+  "tagIds": ["40001", "40002"]
 }
 ```
 
@@ -373,7 +406,17 @@ The caller may update only `name`, `description`, `objectives`, `contactUrl`, `f
 | `405` | `METHOD_NOT_ALLOWED` | The club path does not support the requested method; only `GET` and `PUT` are defined |
 | `503` | `SERVICE_UNAVAILABLE` | The database dependency is unavailable |
 
-For `VALIDATION_FAILED`, each entry in `fieldErrors` identifies a request field using the shared `field`, `code`, and `message` shape. Do not return database constraint errors or internal details to the client.
+For `VALIDATION_FAILED`, each entry in `fieldErrors` identifies a request field using the shared `field`, `code`, and `message` shape. Category and tag errors use these fields:
+
+| `field` | When |
+|---|---|
+| `categoryId` | Missing, not a positive decimal ID, or no such category |
+| `tagIds` | Missing (`null`), or more than 10 items |
+| `tagIds[i]` | Item `i` (zero-based) is not a positive decimal ID, repeats an earlier item, or names no existing tag |
+
+Do not return database constraint errors or internal details to the client.
+
+**Breaking request change (contract 1.4.0):** `categoryId` and `tagIds` became required. A client that omits them now receives `400 VALIDATION_FAILED`. The bundled SPA is the only consumer and ships the matching editor in the same release, so no separate API version is introduced.
 
 ## 5. Health endpoint
 
@@ -498,7 +541,7 @@ Calling that replay a logical read does not define a new GET endpoint or waive C
 Following the Task74 System Analysis handoff, the complete Sprint 2 technical contracts, OpenAPI schemas, RFC 7807 `409 RESOURCE_CONFLICT` `reason` vocabulary, database locking & expiry worker design, and frontend UI wireframes/status mappings are specified in:
 
 - **Master System Design Document:** [`docs/architecture/task75-sprint2-design.md`](../architecture/task75-sprint2-design.md)
-- **Primary OpenAPI 3.1 Specification (`v1.3.0`):** [`docs/api/openapi.yaml`](openapi.yaml)
+- **Primary OpenAPI 3.1 Specification (`v1.4.0`):** [`docs/api/openapi.yaml`](openapi.yaml)
 - **Recruitment Rounds OpenAPI 3.0.3 Specification (`v1.2.0`):** [`docs/api/rounds.openapi.yaml`](rounds.openapi.yaml)
 
 | Sprint 2 Feature / Task | Specified Endpoint(s) | Primary OpenAPI Schema(s) |
