@@ -1,831 +1,415 @@
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { inputClass } from '../../../components/ui/classes'
+import { Field } from '../../../components/ui/Field'
+import { CircleAlertIcon, CircleCheckIcon, XIcon } from '../../../components/ui/icons'
+import { ImageUrlField } from '../../../components/ui/ImageUrlField'
+import { SectionCard } from '../../../components/ui/SectionCard'
+import { StickySaveBar } from '../../../components/ui/StickySaveBar'
+import { ApiError, describeApiError } from '../../../lib/api'
+import type { ClubOption, ClubResponseDto, ClubUpdateRequestDto } from '../types/club'
 import {
-  useEffect,
-  useState,
-  type ChangeEvent,
-  type DragEvent,
-  type FormEvent,
-} from 'react'
-import type {
-  ClubResponseDto,
-  ClubUpdateRequestDto,
-} from '../types/club'
-import {
-  validateClubProfile,
-  type ClubProfileDraft,
-  type ClubProfileFieldErrors,
-} from '../../../utils/clubProfileValidation'
-
-export type ClubProfile = ClubResponseDto
+  MAX_CLUB_TAGS,
+  fromServerFieldErrors,
+  isSameClubEditForm,
+  toClubEditFormValues,
+  toClubUpdateRequest,
+  validateClubEditForm,
+  type ClubEditFormErrors,
+  type ClubEditFormValues,
+} from '../utils/clubEditForm'
 
 interface ClubProfileFormProps {
-  profile: ClubProfile
-  onSave: (request: ClubUpdateRequestDto) => void | Promise<void>
+  /** Current profile (public projection) used to prefill the form. */
+  profile: ClubResponseDto
+  categories: ClubOption[]
+  tags: ClubOption[]
+  /** Sends the PUT; resolves to the saved profile and rejects with the API error. */
+  onSave: (request: ClubUpdateRequestDto) => Promise<ClubResponseDto>
 }
 
-interface FormSectionProps {
-  title: string
-  description: string
-  children: React.ReactNode
+type FieldName = keyof ClubEditFormValues
+type Notice = { type: 'success' | 'error'; message: string; focus: boolean }
+
+// Control ids in page order; the first invalid one receives focus.
+const FIELD_IDS: Record<FieldName, string> = {
+  bannerUrl: 'club-banner-url',
+  imageUrl: 'club-image-url',
+  name: 'club-name',
+  objectives: 'club-objectives',
+  description: 'club-description',
+  categoryId: 'club-category',
+  tagIds: 'club-tags',
+  facebookUrl: 'club-facebook',
+  instagramHandle: 'club-instagram',
+  contactEmail: 'club-email',
+  contactUrl: 'club-contact-url',
 }
 
-type FieldName = keyof ClubProfileDraft
-type UploadField = 'imageUrl' | 'bannerUrl'
-type UploadErrors = Partial<Record<UploadField, string>>
-type FieldErrors = ClubProfileFieldErrors
-type SaveToast = { type: 'success' | 'error'; title: string; message: string }
-interface LocalImagePreview {
-  file: File
-  url: string
+const textAreaClass = (invalid: boolean) => `${inputClass(invalid)} min-h-24 resize-y leading-6`
+
+function withoutField(errors: ClubEditFormErrors, field: FieldName): ClubEditFormErrors {
+  const next = { ...errors }
+  delete next[field]
+  return next
 }
 
-const inputClassName =
-  'mt-2 block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-sm font-normal text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-tu-maroon focus:ring-4 focus:ring-tu-maroon/10'
-
-function createDraft(profile: ClubProfile): ClubProfileDraft {
-  return {
-    name: profile.name,
-    description: profile.description,
-    objectives: profile.objectives ?? '',
-    contactUrl: profile.contactUrl ?? '',
-    facebookUrl: profile.facebookUrl ?? '',
-    instagramHandle: getInstagramHandle(profile.instagramUrl),
-    contactEmail: profile.contactEmail ?? '',
-    imageUrl: profile.imageUrl ?? '',
-    bannerUrl: profile.bannerUrl ?? '',
-  }
-}
-
-function getInstagramHandle(instagramUrl: string | null): string {
-  if (!instagramUrl) return ''
-  try {
-    const url = new URL(instagramUrl)
-    if (!['instagram.com', 'www.instagram.com'].includes(url.hostname)) {
-      return instagramUrl
-    }
-    return url.pathname.split('/').filter(Boolean)[0] ?? ''
-  } catch {
-    return instagramUrl
-  }
-}
-
-function FormSection({ title, description, children }: FormSectionProps) {
-  return (
-    <section className="border-t border-slate-200 px-5 py-5 first:border-t-0 sm:px-7 sm:py-6">
-      <div className="flex items-start gap-3">
-        <span
-          aria-hidden="true"
-          className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-sm font-bold text-tu-maroon"
-        >
-          ◈
-        </span>
-        <div>
-          <h3 className="text-base font-bold text-slate-900">{title}</h3>
-          <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
-        </div>
-      </div>
-      <div className="mt-5 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-        {children}
-      </div>
-    </section>
-  )
-}
-
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) return null
-
-  return (
-    <span className="mt-1 block text-xs font-normal text-red-700" id={id}>
-      {message}
-    </span>
-  )
-}
-
-function ClubProfileFormFields({ profile, onSave }: ClubProfileFormProps) {
-  const [draft, setDraft] = useState(() => createDraft(profile))
-  const [categoryDraft, setCategoryDraft] = useState(
-    () => profile.category?.name ?? '',
-  )
-  const [saved, setSaved] = useState(false)
+/** Club profile editor for committee members (UC-06 wireframe, US-06). */
+export default function ClubProfileForm({ profile, categories, tags, onSave }: ClubProfileFormProps) {
+  const [saved, setSaved] = useState(() => toClubEditFormValues(profile))
+  const [values, setValues] = useState(saved)
+  const [errors, setErrors] = useState<ClubEditFormErrors>({})
+  const [attempted, setAttempted] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
-  const [uploadErrors, setUploadErrors] = useState<UploadErrors>({})
-  const [imagePreview, setImagePreview] = useState<LocalImagePreview | null>(null)
-  const [bannerPreview, setBannerPreview] =
-    useState<LocalImagePreview | null>(null)
-  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
-  const [toast, setToast] = useState<SaveToast | null>(null)
-  const [validationAttempt, setValidationAttempt] = useState(0)
-  const [toastPhase, setToastPhase] = useState<
-    'entering' | 'visible' | 'exiting'
-  >('entering')
-  const hasChanges =
-    JSON.stringify(draft) !== JSON.stringify(createDraft(profile)) ||
-    imagePreview !== null ||
-    bannerPreview !== null ||
-    Object.values(uploadErrors).some(Boolean)
-  const canCancel =
-    hasChanges || categoryDraft !== (profile.category?.name ?? '')
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [tagLimitHit, setTagLimitHit] = useState(false)
+  const noticeRef = useRef<HTMLDivElement>(null)
+  const dirty = !isSameClubEditForm(values, saved)
 
+  // Warn before the tab closes or reloads while changes are unsaved.
   useEffect(() => {
-    if (!toast) return
-
-    const showTimer = window.setTimeout(() => setToastPhase('visible'), 20)
-    const hideTimer = window.setTimeout(() => setToastPhase('exiting'), 6020)
-    const dismissTimer = window.setTimeout(() => setToast(null), 7020)
-
-    return () => {
-      window.clearTimeout(showTimer)
-      window.clearTimeout(hideTimer)
-      window.clearTimeout(dismissTimer)
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
     }
-  }, [toast])
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
 
-  function showToast(nextToast: SaveToast) {
-    setToastPhase('entering')
-    setToast(nextToast)
+  // Move focus to a save result so it is seen and announced.
+  useEffect(() => {
+    if (notice?.focus) noticeRef.current?.focus()
+  }, [notice])
+
+  function update<K extends FieldName>(field: K, value: ClubEditFormValues[K]) {
+    const next = { ...values, [field]: value }
+    setValues(next)
+    setErrors(attempted ? validateClubEditForm(next) : withoutField(errors, field))
+    if (notice?.type === 'success') setNotice(null)
   }
 
-  useEffect(
-    () => () => {
-      if (imagePreview) URL.revokeObjectURL(imagePreview.url)
-    },
-    [imagePreview],
-  )
-
-  useEffect(
-    () => () => {
-      if (bannerPreview) URL.revokeObjectURL(bannerPreview.url)
-    },
-    [bannerPreview],
-  )
-
-  function handleCancel() {
-    setDraft(createDraft(profile))
-    setCategoryDraft(profile.category?.name ?? '')
-    setFieldErrors({})
-    setUploadErrors({})
-    setImagePreview(null)
-    setBannerPreview(null)
-    setAttemptedSubmit(false)
-    setToast(null)
-    setSaved(false)
-  }
-
-  function updateField(field: FieldName, value: string) {
-    const updatedDraft = { ...draft, [field]: value }
-    setDraft(updatedDraft)
-    if (field === 'imageUrl') {
-      setImagePreview(null)
-      setUploadErrors((current) => ({ ...current, imageUrl: undefined }))
-    } else if (field === 'bannerUrl') {
-      setBannerPreview(null)
-      setUploadErrors((current) => ({ ...current, bannerUrl: undefined }))
-    }
-    if (attemptedSubmit || Object.keys(fieldErrors).length > 0) {
-      setFieldErrors(validateClubProfile(updatedDraft))
-    }
-    setSaved(false)
-    setToast(null)
-  }
-
-  function handleImageSelect(
-    field: UploadField,
-    event: ChangeEvent<HTMLInputElement>,
-  ) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-
-    handleSelectedImage(field, file)
-  }
-
-  function handleSelectedImage(field: UploadField, file: File) {
-    const setPreview =
-      field === 'imageUrl' ? setImagePreview : setBannerPreview
-    const error =
-      !['image/jpeg', 'image/png'].includes(file.type)
-        ? 'รองรับเฉพาะไฟล์ JPG และ PNG'
-        : file.size > 5 * 1024 * 1024
-          ? 'ขนาดไฟล์ต้องไม่เกิน 5 MB'
-          : ''
-
-    setSaved(false)
-    if (error) {
-      setUploadErrors((current) => ({ ...current, [field]: error }))
-      showToast({
-        type: 'error',
-        title: 'การอัปโหลดรูปภาพไม่สำเร็จ',
-        message: error,
-      })
+  function addTag(tagId: string) {
+    if (values.tagIds.includes(tagId)) return
+    if (values.tagIds.length >= MAX_CLUB_TAGS) {
+      setTagLimitHit(true)
       return
     }
-
-    setUploadErrors((current) => ({ ...current, [field]: undefined }))
-    setPreview({ file, url: URL.createObjectURL(file) })
-    showToast({
-      type: 'success',
-      title: 'แสดงตัวอย่างรูปภาพแล้ว',
-      message: 'ไฟล์นี้จะแสดงในตัวอย่างบนอุปกรณ์นี้เท่านั้น',
-    })
+    update('tagIds', [...values.tagIds, tagId])
   }
 
-  function handleBannerDrop(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault()
-    const file = event.dataTransfer.files[0]
-    if (file) handleSelectedImage('bannerUrl', file)
+  function removeTag(tagId: string) {
+    setTagLimitHit(false)
+    update('tagIds', values.tagIds.filter((id) => id !== tagId))
+  }
+
+  function handleCancel() {
+    setValues(saved)
+    setErrors({})
+    setAttempted(false)
+    setNotice(null)
+    setTagLimitHit(false)
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setAttemptedSubmit(true)
-    const errors = validateClubProfile(draft)
-    setFieldErrors(errors)
-    const invalidUploads = Object.values(uploadErrors).some(Boolean)
-    if (Object.keys(errors).length > 0 || invalidUploads) {
-      const errorCount =
-        Object.keys(errors).length +
-        Object.values(uploadErrors).filter(Boolean).length
-      setValidationAttempt((attempt) => attempt + 1)
-      showToast({
+    if (saving) return
+
+    setAttempted(true)
+    const clientErrors = validateClubEditForm(values)
+    setErrors(clientErrors)
+    const invalid = (Object.keys(FIELD_IDS) as FieldName[]).filter((field) => clientErrors[field])
+    if (invalid.length > 0) {
+      setNotice({
         type: 'error',
-        title: `ยังบันทึกข้อมูลไม่ได้ พบข้อผิดพลาด ${errorCount} จุด`,
-        message: 'กรุณาตรวจสอบข้อมูลและรูปภาพที่มีเครื่องหมายแจ้งเตือน',
+        message: `ยังบันทึกข้อมูลไม่ได้ พบข้อผิดพลาด ${invalid.length} จุด กรุณาตรวจสอบช่องที่มีข้อความแจ้งเตือน`,
+        focus: false,
       })
+      document.getElementById(FIELD_IDS[invalid[0]])?.focus()
       return
     }
 
-    const request: ClubUpdateRequestDto = {
-      name: draft.name.trim(),
-      description: draft.description.trim(),
-      objectives: draft.objectives?.trim() || null,
-      contactUrl: draft.contactUrl?.trim() || null,
-      facebookUrl: draft.facebookUrl?.trim() || null,
-      instagramUrl: draft.instagramHandle.trim()
-        ? `https://www.instagram.com/${draft.instagramHandle.trim()}/`
-        : null,
-      contactEmail: draft.contactEmail?.trim() || null,
-      imageUrl: draft.imageUrl?.trim() || null,
-      bannerUrl: draft.bannerUrl?.trim() || null,
-    }
-
     setSaving(true)
-    setToast(null)
+    setNotice(null)
     try {
-      await onSave(request)
-      setSaved(true)
-      showToast({
+      const next = toClubEditFormValues(await onSave(toClubUpdateRequest(values)))
+      setSaved(next)
+      setValues(next)
+      setErrors({})
+      setAttempted(false)
+      setTagLimitHit(false)
+      setNotice({
         type: 'success',
-        title: 'บันทึกข้อมูลโปรไฟล์ชมรมสำเร็จ',
-        message:
-          imagePreview || bannerPreview
-            ? 'ข้อมูลโปรไฟล์บันทึกแล้ว แต่รูปที่เลือกเป็นตัวอย่างในเครื่องและยังไม่ได้อัปโหลด'
-            : 'ข้อมูลโปรไฟล์ชมรมของคุณได้รับการบันทึกแล้ว',
+        message: 'บันทึกข้อมูลโปรไฟล์ชมรมเรียบร้อยแล้ว หน้าชมรมสาธารณะแสดงข้อมูลใหม่แล้ว',
+        focus: true,
       })
     } catch (error: unknown) {
-      showToast({
+      // Keep everything the user typed; show what the server rejected under each field.
+      setErrors(error instanceof ApiError ? fromServerFieldErrors(error.fieldErrors) : {})
+      setNotice({
         type: 'error',
-        title: 'การบันทึกข้อมูลไม่สำเร็จ',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'ไม่สามารถบันทึกข้อมูลชมรมได้ กรุณาลองอีกครั้ง',
+        message: describeApiError(error, 'บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'),
+        focus: true,
       })
     } finally {
       setSaving(false)
     }
   }
 
+  const selectedTags = values.tagIds.map(
+    (id) => tags.find((tag) => tag.id === id) ?? { id, name: `แท็กรหัส ${id}` },
+  )
+  const unselectedTags = tags.filter((tag) => !values.tagIds.includes(tag.id))
+
   return (
-    <>
-      {toast && (
+    <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-6" aria-busy={saving || undefined}>
+      <p className="text-sm text-slate-600">
+        ช่องที่มีเครื่องหมาย <span className="text-red-700">*</span> จำเป็นต้องกรอก
+      </p>
+
+      {notice && (
         <div
-          aria-live="polite"
-          className={`fixed left-1/2 right-auto top-4 z-50 flex w-[min(24rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-3 rounded-xl border bg-white p-4 shadow-xl transition-opacity duration-1000 motion-reduce:transition-none ${
-            toast.type === 'success'
-              ? 'border-emerald-200'
-              : 'border-red-200'
-          } ${toastPhase === 'visible' ? 'opacity-100' : 'opacity-0'}`}
-          role={toast.type === 'error' ? 'alert' : 'status'}
+          ref={noticeRef}
+          tabIndex={-1}
+          role={notice.type === 'error' ? 'alert' : 'status'}
+          className={`flex items-start gap-3 rounded-lg border p-4 text-sm font-medium ${
+            notice.type === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          }`}
         >
-          <span
-            aria-hidden="true"
-            className={`mt-0.5 ${toast.type === 'success' ? 'text-emerald-600' : 'text-red-600'}`}
-          >
-            {toast.type === 'success' ? '✓' : '!'}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p
-              className={`text-sm font-semibold ${toast.type === 'success' ? 'text-emerald-700' : 'text-red-700'}`}
-            >
-              {toast.title}
-            </p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
-              {toast.message}
-            </p>
-          </div>
-          <button
-            aria-label="ปิดข้อความแจ้งเตือน"
-            className="rounded p-1 text-slate-400 hover:bg-slate-100"
-            onClick={() => setToast(null)}
-            type="button"
-          >
-            ×
-          </button>
+          {notice.type === 'error' ? (
+            <CircleAlertIcon className="mt-0.5 size-5" />
+          ) : (
+            <CircleCheckIcon className="mt-0.5 size-5" />
+          )}
+          <span>{notice.message}</span>
         </div>
       )}
 
-      <form
-        className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_30px_-24px_rgba(15,23,42,0.35)]"
-        noValidate
-        onSubmit={handleSubmit}
-      >
-      {attemptedSubmit &&
-        (Object.keys(fieldErrors).length > 0 ||
-          Object.values(uploadErrors).some(Boolean)) && (
-          <div
-            key={validationAttempt}
-            className="validation-message-shake mx-4 mt-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm sm:mx-7"
-            role="alert"
-          >
-            <span aria-hidden="true" className="font-bold text-red-600">
-              !
-            </span>
-            <div>
-              <p className="font-semibold text-red-700">
-                ยังบันทึกข้อมูลไม่ได้ พบข้อผิดพลาด{' '}
-                {Object.keys(fieldErrors).length +
-                  Object.values(uploadErrors).filter(Boolean).length}{' '}
-                จุด
-              </p>
-              <p className="mt-1 text-xs text-red-600">
-                กรุณาตรวจสอบข้อมูลและรูปภาพที่มีเครื่องหมายแจ้งเตือน
-              </p>
-            </div>
-          </div>
-        )}
-      <fieldset
-        className="min-w-0 disabled:opacity-70"
-        disabled={saving}
-      >
-        <section className="px-4 pb-5 pt-4 sm:px-7 sm:pt-6">
-          <div className="mb-3 flex items-start gap-3">
-            <span
-              aria-hidden="true"
-              className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm text-slate-500"
-            >
-              ▧
-            </span>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                ภาพโปรไฟล์
-              </h3>
-              <p className="mt-1 text-xs text-slate-500">
-                แบนเนอร์และรูปโปรไฟล์ที่แสดงบนหน้าสาธารณะ
-              </p>
-            </div>
-          </div>
-          <div
-            aria-label="ตัวอย่างภาพพื้นหลังชมรม"
-            className="relative flex aspect-[3/1] min-h-32 items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-100 bg-cover bg-center sm:min-h-48"
-          >
-            {(bannerPreview?.url || draft.bannerUrl) &&
-              !uploadErrors.bannerUrl && (
-                <img
-                  alt="ตัวอย่างภาพพื้นหลังชมรม"
-                  className="absolute inset-0 size-full object-cover"
-                  onError={() => {
-                    setUploadErrors((current) => ({
-                      ...current,
-                      bannerUrl: 'ไม่สามารถแสดงภาพนี้ได้ กรุณาเลือกไฟล์ใหม่',
-                    }))
-                  }}
-                  onLoad={() => {
-                    setUploadErrors((current) => ({
-                      ...current,
-                      bannerUrl: undefined,
-                    }))
-                  }}
-                  src={bannerPreview?.url ?? draft.bannerUrl ?? ''}
-                />
-              )}
-            {!bannerPreview?.url && !draft.bannerUrl && (
-              <svg
-                aria-hidden="true"
-                className="size-8 text-slate-400"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <rect height="16" rx="2" stroke="currentColor" strokeWidth="1.5" width="19" x="2.5" y="4" />
-                <circle cx="8" cy="9" r="1.5" stroke="currentColor" />
-                <path d="m4 18 5-5 3 3 3-4 5 6" stroke="currentColor" strokeWidth="1.5" />
-              </svg>
-            )}
-          </div>
-          <div className="relative z-10 -mt-7 flex flex-wrap items-center gap-3 pl-4 sm:-mt-9 sm:pl-6">
-            <label
-              className="relative flex size-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-white bg-slate-100 text-slate-400 shadow-sm transition hover:ring-2 hover:ring-tu-maroon/30 focus-within:ring-2 focus-within:ring-tu-maroon sm:size-20"
-              title="เลือกรูปโปรไฟล์ชมรม"
-            >
-              {imagePreview?.url || draft.imageUrl ? (
-                <img
-                  alt=""
-                  className="size-full object-cover"
-                  onError={() => {
-                    setUploadErrors((current) => ({
-                      ...current,
-                      imageUrl: 'ไม่สามารถโหลดรูปโปรไฟล์นี้ได้',
-                    }))
-                  }}
-                  onLoad={() => {
-                    setUploadErrors((current) => ({
-                      ...current,
-                      imageUrl: undefined,
-                    }))
-                  }}
-                  src={imagePreview?.url ?? draft.imageUrl ?? ''}
-                />
-              ) : (
-                <svg
-                  aria-hidden="true"
-                  className="size-8"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <rect
-                    height="16"
-                    rx="2"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    width="19"
-                    x="2.5"
-                    y="4"
-                  />
-                  <circle cx="8" cy="9" r="1.5" stroke="currentColor" />
-                  <path
-                    d="m4 18 5-5 3 3 3-4 5 6"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  />
-                </svg>
-              )}
-              {!imagePreview?.url && !draft.imageUrl && (
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute bottom-2 right-2 flex size-5 items-center justify-center rounded-full border-2 border-white bg-slate-500 text-sm font-bold leading-none text-white"
-                >
-                  +
-                </span>
-              )}
+      <fieldset disabled={saving} className="flex min-w-0 flex-col gap-6">
+        <legend className="sr-only">ข้อมูลโปรไฟล์ชมรม</legend>
+
+        <SectionCard
+          number={1}
+          title="รูปภาพชมรม"
+          description="แบนเนอร์และรูปโปรไฟล์ที่แสดงบนหน้าชมรมสาธารณะ วางลิงก์รูปแบบ HTTPS (ยังไม่รองรับการอัปโหลดไฟล์)"
+        >
+          <ImageUrlField
+            id={FIELD_IDS.bannerUrl}
+            label="ภาพแบนเนอร์ชมรม"
+            variant="banner"
+            hint="อัตราส่วน 3:1 เช่น 1200 × 400 พิกเซล"
+            value={values.bannerUrl}
+            onChange={(value) => update('bannerUrl', value)}
+            error={errors.bannerUrl}
+            disabled={saving}
+          />
+          <ImageUrlField
+            id={FIELD_IDS.imageUrl}
+            label="รูปโปรไฟล์ชมรม"
+            variant="avatar"
+            hint="รูปสี่เหลี่ยมจัตุรัส แสดงเป็นวงกลม หากไม่มีรูประบบจะแสดงรูปเริ่มต้น"
+            value={values.imageUrl}
+            onChange={(value) => update('imageUrl', value)}
+            error={errors.imageUrl}
+            disabled={saving}
+          />
+        </SectionCard>
+
+        <SectionCard number={2} title="ข้อมูลทั่วไป" description="เล่าเรื่องชมรมให้นักศึกษารู้จักและอยากเข้าร่วม">
+          <Field id={FIELD_IDS.name} label="ชื่อชมรม" required error={errors.name}>
+            {(control) => (
               <input
-                accept="image/png,image/jpeg"
-                aria-label="เลือกรูปโปรไฟล์ชมรม"
-                className="sr-only"
-                onChange={(event) => handleImageSelect('imageUrl', event)}
-                type="file"
+                {...control}
+                autoComplete="organization"
+                maxLength={200}
+                value={values.name}
+                onChange={(event) => update('name', event.target.value)}
+                className={inputClass(Boolean(errors.name))}
               />
-            </label>
-            <div className="min-w-0 translate-y-5">
-              <p className="text-xs font-medium text-slate-700">
-                {imagePreview?.file.name ?? 'รูปโปรไฟล์ชมรม'}
-              </p>
-              <p className="mt-1 text-[11px] leading-5 text-slate-500">
-                JPG หรือ PNG · ขนาดไม่เกิน 5 MB
-              </p>
-            </div>
-          </div>
-          <label
-            aria-label="อัปโหลดภาพพื้นหลังชมรม"
-            className={`mt-5 flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-6 text-center transition-colors sm:min-h-44 ${
-              uploadErrors.bannerUrl
-                ? 'border-red-500 bg-rose-50'
-                : 'border-slate-300 bg-slate-50 hover:border-slate-400'
-            }`}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={handleBannerDrop}
-            htmlFor="club-banner-upload"
+            )}
+          </Field>
+          <Field id={FIELD_IDS.objectives} label="วัตถุประสงค์ชมรม" required error={errors.objectives}>
+            {(control) => (
+              <textarea
+                {...control}
+                rows={3}
+                value={values.objectives}
+                onChange={(event) => update('objectives', event.target.value)}
+                className={textAreaClass(Boolean(errors.objectives))}
+              />
+            )}
+          </Field>
+          <Field
+            id={FIELD_IDS.description}
+            label="คำอธิบายกิจกรรม / รายละเอียดชมรม"
+            required
+            hint="ข้อความธรรมดา ขึ้นบรรทัดใหม่ได้"
+            error={errors.description}
           >
-            <svg
-              aria-hidden="true"
-              className="size-8 text-slate-400"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              {uploadErrors.bannerUrl ? (
-                <>
-                  <rect height="16" rx="2" stroke="currentColor" strokeWidth="1.7" width="19" x="2.5" y="4" />
-                  <path d="m4 18 5-5 3 3 3-4 5 6M5 5l14 14" stroke="currentColor" strokeWidth="1.7" />
-                </>
-              ) : (
-                <>
-                  <circle cx="8" cy="9" r="1.5" stroke="currentColor" strokeWidth="1.5" />
-                  <rect height="16" rx="2" stroke="currentColor" strokeWidth="1.5" width="19" x="2.5" y="4" />
-                  <path d="m4 18 5-5 3 3 3-4 5 6" stroke="currentColor" strokeWidth="1.5" />
-                </>
+            {(control) => (
+              <textarea
+                {...control}
+                rows={6}
+                value={values.description}
+                onChange={(event) => update('description', event.target.value)}
+                className={textAreaClass(Boolean(errors.description))}
+              />
+            )}
+          </Field>
+        </SectionCard>
+
+        <SectionCard number={3} title="การจัดหมวดหมู่" description="ช่วยให้นักศึกษาค้นพบชมรมได้ง่ายขึ้น">
+          <Field id={FIELD_IDS.categoryId} label="หมวดหมู่ชมรม" required error={errors.categoryId}>
+            {(control) => (
+              <select
+                {...control}
+                value={values.categoryId}
+                onChange={(event) => update('categoryId', event.target.value)}
+                className={inputClass(Boolean(errors.categoryId))}
+              >
+                <option value="" disabled>
+                  เลือกหมวดหมู่ชมรม
+                </option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+
+          <fieldset
+            id={FIELD_IDS.tagIds}
+            tabIndex={-1}
+            aria-describedby={`${FIELD_IDS.tagIds}-count${errors.tagIds ? ` ${FIELD_IDS.tagIds}-error` : ''}`}
+            className="min-w-0"
+          >
+            <legend className="mb-1.5 flex w-full items-baseline justify-between gap-3 text-sm font-medium text-slate-800">
+              แท็กความสนใจ
+              <span id={`${FIELD_IDS.tagIds}-count`} className="text-xs font-normal text-slate-600">
+                เลือกแล้ว {values.tagIds.length}/{MAX_CLUB_TAGS}
+              </span>
+            </legend>
+            <div className="flex min-h-14 flex-wrap items-center gap-2 rounded-lg border border-slate-300 bg-white p-2">
+              {selectedTags.length === 0 && (
+                <span className="px-2 text-sm text-slate-600">ยังไม่ได้เลือกแท็ก</span>
               )}
-            </svg>
-            <p className={`mt-1 text-sm font-medium ${uploadErrors.bannerUrl ? 'text-red-700' : 'text-slate-800'}`}>
-              {uploadErrors.bannerUrl
-                ? 'อัปโหลดไม่สำเร็จ · เก็บรูปเดิมไว้'
-                : bannerPreview
-                  ? bannerPreview.file.name
-                  : 'คลิกเพื่ออัปโหลดหรือลากไฟล์แบนเนอร์มาวางที่นี่'}
-            </p>
-            <p className={`text-xs ${uploadErrors.bannerUrl ? 'text-red-600' : 'text-slate-500'}`}>
-              {uploadErrors.bannerUrl ??
-                'ขนาดแนะนำ 1200 × 400 px · JPG หรือ PNG (สูงสุด 5 MB)'}
-            </p>
-            <span className="mt-1 inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100">
-              {uploadErrors.bannerUrl || bannerPreview
-                ? 'เลือกไฟล์ใหม่'
-                : 'เลือกไฟล์'}
-            </span>
-            <input
-              accept="image/png,image/jpeg"
-              aria-label="เลือกภาพพื้นหลังชมรม"
-              className="sr-only"
-              id="club-banner-upload"
-              onChange={(event) => handleImageSelect('bannerUrl', event)}
-              type="file"
-            />
-          </label>
-          {uploadErrors.imageUrl && (
-            <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
-              {uploadErrors.imageUrl}
-            </div>
-          )}
-          <p className="mt-3 text-[11px] leading-5 text-slate-400">
-            รูปที่เลือกจะแสดงตัวอย่างในเครื่องเท่านั้น ขณะนี้ยังไม่สามารถอัปโหลดไฟล์ไปยังเซิร์ฟเวอร์ได้
-          </p>
-        </section>
-
-        <FormSection
-          description="เล่าเรื่องชมรมให้ผู้สนใจรู้จักและอยากมีส่วนร่วม"
-          title="ข้อมูลทั่วไป"
-        >
-          <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
-            ชื่อชมรม <span className="text-tu-maroon">*</span>
-            <input
-              autoComplete="organization"
-              aria-describedby={fieldErrors.name ? 'club-name-error' : undefined}
-              aria-invalid={Boolean(fieldErrors.name)}
-              aria-required="true"
-              className={inputClassName}
-              maxLength={200}
-              onChange={(event) => updateField('name', event.target.value)}
-              placeholder="ชื่อชมรมของคุณ"
-              value={draft.name}
-            />
-            <FieldError id="club-name-error" message={fieldErrors.name} />
-          </label>
-          <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
-            วัตถุประสงค์ของชมรม
-            <textarea
-              className={`${inputClassName} min-h-24 resize-y`}
-              onChange={(event) =>
-                updateField('objectives', event.target.value)
-              }
-              placeholder="ระบุวัตถุประสงค์ของชมรม"
-              rows={3}
-              value={draft.objectives ?? ''}
-            />
-          </label>
-          <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
-            คำอธิบายกิจกรรม / รายละเอียดชมรม{' '}
-            <span className="text-tu-maroon">*</span>
-            <textarea
-              aria-describedby={
-                fieldErrors.description ? 'club-description-error' : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.description)}
-              aria-required="true"
-              className={`${inputClassName} min-h-32 resize-y`}
-              onChange={(event) =>
-                updateField('description', event.target.value)
-              }
-              placeholder="อธิบายกิจกรรมและรายละเอียดของชมรม"
-              rows={5}
-              value={draft.description}
-            />
-            <FieldError
-              id="club-description-error"
-              message={fieldErrors.description}
-            />
-          </label>
-        </FormSection>
-
-        <FormSection
-          description="ตั้งค่าหมวดหมู่และแท็กเพื่อให้นักศึกษาค้นพบชมรมได้ง่ายขึ้น"
-          title="การจัดหมวดหมู่"
-        >
-          <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
-            หมวดหมู่ชมรม
-            <select
-              className={inputClassName}
-              onChange={(event) => setCategoryDraft(event.target.value)}
-              value={categoryDraft}
-            >
-              <option value="">เลือกหมวดหมู่ชมรม</option>
-              <option value="วิชาการ">วิชาการ</option>
-              <option value="กีฬา">กีฬา</option>
-              <option value="ศิลปวัฒนธรรม">ศิลปวัฒนธรรม</option>
-              <option value="บำเพ็ญประโยชน์">บำเพ็ญประโยชน์</option>
-            </select>
-            <span className="mt-1 block text-xs font-normal text-slate-400">
-              ตัวเลือกนี้เป็นตัวอย่างเท่านั้น ขณะนี้ระบบยังไม่รองรับการบันทึกหมวดหมู่
-            </span>
-          </label>
-          <div className="text-sm font-semibold text-slate-700 sm:col-span-2">
-            แท็กความสนใจ
-            <div className="mt-2 flex min-h-12 flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              {profile.tags.length > 0 ? (
-                profile.tags.map((tag) => (
-                  <span
-                    className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200"
-                    key={tag.id}
+              {selectedTags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex h-11 items-center rounded-full border border-tu-maroon/20 bg-tu-maroon-50 pl-4 text-sm font-medium text-tu-maroon"
+                >
+                  {tag.name}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag.id)}
+                    aria-label={`ลบแท็ก ${tag.name}`}
+                    className="flex size-11 items-center justify-center rounded-full hover:bg-tu-maroon-100"
                   >
-                    {tag.name}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm font-normal text-slate-400">
-                  ยังไม่มีแท็กความสนใจ
+                    <XIcon className="size-4" />
+                  </button>
                 </span>
-              )}
+              ))}
             </div>
-            <span className="mt-1 block text-xs font-normal text-slate-400">
-              แท็กแสดงเพื่อเป็นข้อมูลอ้างอิง และแก้ไขจากหน้านี้ไม่ได้
-            </span>
+            {errors.tagIds && (
+              <p id={`${FIELD_IDS.tagIds}-error`} className="mt-1.5 flex items-start gap-1.5 text-sm text-red-700">
+                <CircleAlertIcon className="mt-0.5 size-4" />
+                <span>{errors.tagIds}</span>
+              </p>
+            )}
+            <p aria-live="polite" className="mt-1.5 min-h-5 text-sm text-amber-800">
+              {tagLimitHit && `เลือกแท็กได้สูงสุด ${MAX_CLUB_TAGS} แท็ก ลบแท็กเดิมก่อนเพิ่มแท็กใหม่`}
+            </p>
+            {unselectedTags.length > 0 && (
+              <div className="mt-2">
+                <p className="text-xs font-medium text-slate-600">เพิ่มแท็ก</p>
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {unselectedTags.map((tag) => (
+                    <li key={tag.id}>
+                      <button
+                        type="button"
+                        onClick={() => addTag(tag.id)}
+                        aria-label={`เพิ่มแท็ก ${tag.name}`}
+                        className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 text-sm text-slate-700 transition-colors hover:border-tu-maroon hover:text-tu-maroon"
+                      >
+                        <span aria-hidden="true">+</span>
+                        {tag.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </fieldset>
+        </SectionCard>
+
+        <SectionCard number={4} title="ช่องทางการติดต่อ" description="ช่องทางที่นักศึกษาใช้ติดต่อหรือติดตามชมรม">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <Field id={FIELD_IDS.facebookUrl} label="Facebook" hint="ลิงก์เพจ เช่น https://www.facebook.com/yourclub" error={errors.facebookUrl}>
+              {(control) => (
+                <input
+                  {...control}
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://www.facebook.com/"
+                  value={values.facebookUrl}
+                  onChange={(event) => update('facebookUrl', event.target.value)}
+                  className={inputClass(Boolean(errors.facebookUrl))}
+                />
+              )}
+            </Field>
+            <Field id={FIELD_IDS.instagramHandle} label="Instagram" hint="ชื่อบัญชี เช่น tu_club" error={errors.instagramHandle}>
+              {(control) => (
+                <div className="relative">
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-600"
+                  >
+                    @
+                  </span>
+                  <input
+                    {...control}
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={values.instagramHandle}
+                    onChange={(event) => update('instagramHandle', event.target.value)}
+                    className={`${inputClass(Boolean(errors.instagramHandle))} pl-7`}
+                  />
+                </div>
+              )}
+            </Field>
+            <Field id={FIELD_IDS.contactEmail} label="อีเมล" hint="ใช้อีเมลของ tu.ac.th หรือ gmail.com" error={errors.contactEmail}>
+              {(control) => (
+                <input
+                  {...control}
+                  type="email"
+                  autoComplete="email"
+                  value={values.contactEmail}
+                  onChange={(event) => update('contactEmail', event.target.value)}
+                  className={inputClass(Boolean(errors.contactEmail))}
+                />
+              )}
+            </Field>
+            <Field id={FIELD_IDS.contactUrl} label="เว็บไซต์หรือลิงก์ติดต่ออื่น" hint="ลิงก์ HTTPS" error={errors.contactUrl}>
+              {(control) => (
+                <input
+                  {...control}
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://"
+                  value={values.contactUrl}
+                  onChange={(event) => update('contactUrl', event.target.value)}
+                  className={inputClass(Boolean(errors.contactUrl))}
+                />
+              )}
+            </Field>
           </div>
-        </FormSection>
-
-        <FormSection
-          description="ข้อมูลสำหรับนักศึกษาที่ต้องการติดต่อชมรม"
-          title="ช่องทางการติดต่อ"
-        >
-          <label className="text-sm font-semibold text-slate-700">
-            อีเมลติดต่อ
-            <input
-              autoComplete="email"
-              aria-describedby={
-                fieldErrors.contactEmail ? 'club-email-error' : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.contactEmail)}
-              className={inputClassName}
-              onChange={(event) =>
-                updateField('contactEmail', event.target.value)
-              }
-              placeholder="เช่น club@tu.ac.th"
-              type="email"
-              value={draft.contactEmail ?? ''}
-            />
-            <FieldError
-              id="club-email-error"
-              message={fieldErrors.contactEmail}
-            />
-          </label>
-          <label className="text-sm font-semibold text-slate-700">
-            เว็บไซต์หรือช่องทางติดต่อ
-            <input
-              aria-describedby={
-                fieldErrors.contactUrl ? 'club-contact-url-error' : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.contactUrl)}
-              className={inputClassName}
-              onChange={(event) =>
-                updateField('contactUrl', event.target.value)
-              }
-              placeholder="https://example.org/contact"
-              type="url"
-              value={draft.contactUrl ?? ''}
-            />
-            <FieldError
-              id="club-contact-url-error"
-              message={fieldErrors.contactUrl}
-            />
-          </label>
-          <label className="text-sm font-semibold text-slate-700">
-            ชื่อบัญชี Instagram
-            <input
-              aria-describedby={
-                fieldErrors.instagramUrl ? 'club-instagram-error' : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.instagramUrl)}
-              className={inputClassName}
-              onChange={(event) =>
-                updateField('instagramHandle', event.target.value)
-              }
-              placeholder="เช่น tu_club"
-              value={draft.instagramHandle}
-            />
-            <FieldError
-              id="club-instagram-error"
-              message={fieldErrors.instagramUrl}
-            />
-          </label>
-          <label className="text-sm font-semibold text-slate-700">
-            ลิงก์ Facebook
-            <input
-              aria-describedby={
-                fieldErrors.facebookUrl ? 'club-facebook-error' : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.facebookUrl)}
-              className={inputClassName}
-              onChange={(event) =>
-                updateField('facebookUrl', event.target.value)
-              }
-              placeholder="https://www.facebook.com/yourclub"
-              type="url"
-              value={draft.facebookUrl ?? ''}
-            />
-            <FieldError
-              id="club-facebook-error"
-              message={fieldErrors.facebookUrl}
-            />
-          </label>
-        </FormSection>
-
+        </SectionCard>
       </fieldset>
 
-      <div className="sticky bottom-0 z-20 flex flex-col gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-7">
-        <div aria-live="polite" className="min-w-0 text-xs sm:text-sm">
-          <p className="font-medium text-slate-500">
-            {saving
-              ? 'กำลังบันทึก · ป้องกันการซ้ำ'
-              : categoryDraft !== (profile.category?.name ?? '')
-                ? 'ตัวเลือกหมวดหมู่ยังไม่บันทึก'
-                : saved
-                  ? 'บันทึกแล้ว · พร้อมใช้งาน'
-                  : hasChanges
-                    ? 'ปกติ · พร้อมบันทึก'
-                    : 'ปิดใช้งาน · ยังไม่มีการเปลี่ยนแปลง'}
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
-          <button
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg bg-tu-maroon px-6 py-3 text-sm font-semibold text-white transition hover:bg-tu-maroon/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-tu-maroon/20 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 sm:min-w-40"
-            disabled={saving || !hasChanges || saved}
-            aria-busy={saving}
-            type="submit"
-          >
-            {saving ? (
-              <>
-                <svg
-                  aria-hidden="true"
-                  className="size-5 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="9"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                  />
-                  <path
-                    className="opacity-75"
-                    d="M21 12a9 9 0 0 0-9-9"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeWidth="3"
-                  />
-                </svg>
-                กำลังบันทึก
-              </>
-            ) : (
-              <>
-                <svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24">
-                  <path d="M5 4h12l3 3v13H4V4h1Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
-                  <path d="M8 4v6h8V4M8 20v-7h8v7" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
-                </svg>
-                บันทึกข้อมูล
-              </>
-            )}
-          </button>
-          <button
-            className="inline-flex min-h-14 items-center justify-center rounded-lg border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-200 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 sm:min-w-24"
-            disabled={saving || !canCancel}
-            onClick={handleCancel}
-            type="button"
-          >
-            ยกเลิก
-          </button>
-        </div>
-      </div>
-      </form>
-    </>
+      <StickySaveBar dirty={dirty} saving={saving} onCancel={handleCancel} />
+    </form>
   )
 }
-
-function ClubProfileForm({ profile, onSave }: ClubProfileFormProps) {
-  return (
-    <ClubProfileFormFields
-      key={profile.id}
-      onSave={onSave}
-      profile={profile}
-    />
-  )
-}
-
-export default ClubProfileForm

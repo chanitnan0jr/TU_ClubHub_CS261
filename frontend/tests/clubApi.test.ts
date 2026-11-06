@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getClubProfile, updateClubProfile } from '../src/features/clubs/api/clubApi.ts'
+import {
+  getClubProfile,
+  listClubCategories,
+  listInterestTags,
+  updateClubProfile,
+} from '../src/features/clubs/api/clubApi.ts'
 import { ApiError, describeApiError } from '../src/lib/api.ts'
 import { csrfResponse, json, problem, stubFetch } from './helpers.ts'
 
@@ -15,11 +20,29 @@ test('legacy club API delegates GET to the shared client and preserves response 
 test('legacy club writes use the shared CSRF flow exactly once', async () => {
   const stub = stubFetch(request => request.url === '/api/v1/auth/csrf' ? csrfResponse() : json({ id: '20001' }))
   try {
-    await updateClubProfile('20001', { name: 'Fictional', description: 'Fictional club' })
+    const request = {
+      name: 'Fictional', description: 'Fictional club', objectives: null, contactUrl: null,
+      facebookUrl: null, instagramUrl: null, contactEmail: null, imageUrl: null, bannerUrl: null,
+      categoryId: '30001', tagIds: ['40001'],
+    }
+    await updateClubProfile('20001', request)
     assert.equal(stub.requests.length, 2)
     assert.equal(stub.requests[1].method, 'PUT')
     assert.equal(stub.requests[1].headers['X-CSRF-TOKEN'], 'csrf-token')
     assert.equal(stub.requests[1].url, '/api/v1/clubs/20001')
+    assert.deepEqual(stub.requests[1].body, request)
+  } finally { stub.restore() }
+})
+
+test('category and interest-tag lists are public GETs without CSRF', async () => {
+  const stub = stubFetch(() => json({ items: [{ id: '30001', name: 'Fictional' }] }))
+  try {
+    assert.deepEqual(await listClubCategories(), { items: [{ id: '30001', name: 'Fictional' }] })
+    await listInterestTags()
+    assert.deepEqual(stub.requests.map(request => [request.method, request.url]), [
+      ['GET', '/api/v1/public/club-categories'],
+      ['GET', '/api/v1/public/interest-tags'],
+    ])
   } finally { stub.restore() }
 })
 
