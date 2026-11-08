@@ -14,6 +14,7 @@ import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -119,8 +120,10 @@ public class ApplicationService {
         Round round = repository.lockRound(input.roundId(), clubId).orElseThrow(ApplicationService::notFound);
         if (round.publishedAt() == null) throw notFound();
 
-        // Sample only after acquiring the round lock, including time spent waiting for it.
-        Instant now = clock.instant();
+        // Sample after the round lock, including time spent waiting. PostgreSQL timestamps
+        // have microsecond precision; truncate once so writes and receipt agree without
+        // rounding a submission forward across the exclusive closing boundary.
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         requireOpenRound(round, now);
         validateQuestions(input, repository.lockQuestions(round.id()));
 
