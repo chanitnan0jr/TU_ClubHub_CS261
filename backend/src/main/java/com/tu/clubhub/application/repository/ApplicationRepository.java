@@ -52,11 +52,11 @@ public class ApplicationRepository {
      * Shared with other submissions; round close/cancel/publish and question edits take
      * FOR UPDATE on the same row, so they still serialize with each submission.
      */
-    public Optional<Round> lockRound(long roundId) {
+    public Optional<Round> lockRound(long roundId, long clubId) {
         return jdbc.query("""
                 SELECT id, club_id, publication_status, published_at, opens_at, closes_at, closed_at
-                FROM recruitment_rounds WHERE id = ? FOR SHARE
-                """, (rs, row) -> round(rs), roundId).stream().findFirst();
+                FROM recruitment_rounds WHERE id = ? AND club_id = ? FOR SHARE
+                """, (rs, row) -> round(rs), roundId, clubId).stream().findFirst();
     }
 
     /** Form read only: plain reads, because loading a form reserves nothing (API_v1.md section 12). */

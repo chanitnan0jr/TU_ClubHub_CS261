@@ -15,6 +15,11 @@ public record ApplicationSubmissionRequest(
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static ApplicationSubmissionRequest fromJson(JsonNode node) {
         ApplicationRequestJson.object(node, Set.of("motivation", "answers", "links"), "request");
+        return readContent(node);
+    }
+
+    // The club-scoped request checks its own envelope, then uses exactly the same content parser.
+    static ApplicationSubmissionRequest readContent(JsonNode node) {
         var answers = ApplicationRequestJson.array(node, "answers");
         var links = ApplicationRequestJson.array(node, "links");
         return new ApplicationSubmissionRequest(
