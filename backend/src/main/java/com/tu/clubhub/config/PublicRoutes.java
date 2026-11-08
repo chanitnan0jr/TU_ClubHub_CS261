@@ -28,8 +28,6 @@ final class PublicRoutes {
             get("/clubs/**"),
             get("/profile"),
             get("/dashboard/**"),
-            get("/admin/dashboard"),
-            get("/admin/dashboard/**"),
 
             // Authentication bootstrap.
             get("/api/v1/auth/csrf"),
