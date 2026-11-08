@@ -12,7 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = ApplicationController.class)
+@RestControllerAdvice(assignableTypes = {ApplicationController.class, CommitteeApplicationController.class})
 @Order(0)
 public class ApplicationExceptionHandler extends ApiExceptionHandler {
     @ExceptionHandler(ApplicationSubmissionException.class)
