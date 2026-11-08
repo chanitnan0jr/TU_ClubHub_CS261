@@ -856,3 +856,272 @@ No review has taken place as part of writing this contract. The Task42 requester
 - [ ] Backend plan covers current account/student checks, session/CSRF, resource hiding, same-round transaction lock, unique-conflict mapping, rollback, and transaction-time deadline checks.
 - [ ] QA plans positive/negative ID bounds, session/CSRF errors, required/optional/unknown/duplicate answers, overlong text, invalid/extra fields, invalid HTTPS links, duplicate submission, and a close occurring after form load.
 - [ ] Run OpenAPI structural/reference/example validation and `git diff --check`; record actual results separately from product review approval. No application implementation or runtime test result is implied by specification validation.
+
+## Admin committee assignments (Task78)
+
+**Implementation handoff — 2026-11-09; local results are in
+[Task78 test report](../testing/task78-assignment-concurrency.md).
+Requester authorized a new Admin API, contract, migration and concurrent HTTP tests.
+Formal reviewer approval, GitHub Actions and deployment are not implied.**
+
+### Endpoints and access
+
+| Method / path | Request schema | Success |
+|---|---|---|
+| `POST /api/v1/admin/clubs/{clubId}/committee-assignments` | `AdminAssignmentCreate` | `201 AdminAssignment`, `Location` of new ID |
+| `GET /api/v1/admin/clubs/{clubId}/committee-assignments/{assignmentId}` | None | `200 AdminAssignment`, including revoked/inactive history |
+| `POST /api/v1/admin/clubs/{clubId}/committee-assignments/{assignmentId}/replace` | `AdminAssignmentReplace` | `201 AdminAssignment` with a new ID and `replacesAssignmentId` |
+| `POST /api/v1/admin/clubs/{clubId}/committee-assignments/{assignmentId}/revoke` | `AdminAssignmentRevoke` | `200 AdminAssignment` for the retained REVOKED row |
+
+- All operations require a `SESSION` cookie and current ACTIVE global `ADMIN`
+  read from the database. POST additionally requires `X-CSRF-TOKEN`; invalid CSRF
+  can precede authentication checks. Global role at login is not authoritative.
+- Admin may read their own assignment, but cannot appoint, replace or revoke
+  themselves. The target is obtained from the stored membership, not a client
+  `userId`. No applicant answers, reviews, document links, credentials or
+  `source_application_id` content is exposed by this Admin DTO.
+- All IDs are `PositiveBigintId`: decimal JSON/path strings without leading zero,
+  range `1..9223372036854775807`. Existing assignment/membership in the wrong club
+  returns `403 ACCESS_DENIED`; missing required resources return `404 RESOURCE_NOT_FOUND`
+  after authentication and Admin authorization.
+- Appointment/replacement requires ACTIVE account, student, club and membership,
+  `joined_at <= now` and `ended_at IS NULL`. Revocation intentionally remains
+  possible when the target, membership or club is inactive. Actor must remain ACTIVE.
+- No bulk, hard-delete, global-role, account-status or membership-bootstrap API is
+  added. No Admin UI is included. Existing committee guards and public routes remain
+  in use; Admin role does not grant access to applicant contents or committee APIs.
+
+### Request DTOs, time and version
+
+| Field | Type / validation |
+|---|---|
+| `membershipId` | Required positive decimal string on create only; selects existing membership |
+| `version` | Required nonnegative signed int64 **JSON integer** on replace/revoke; expected current old-row version |
+| `positionName` | Required nonblank text, at most 100 Unicode code points; display title grants no extra role |
+| `permissionRole` | Required `COMMITTEE` or `PRESIDENT` on create/replace |
+| `startsAt` | Optional offset date-time or null on create/replace; missing/null uses server `Clock` after locks |
+| `endsAt` | Required offset date-time on create/replace; strictly after startsAt |
+| `reason` | Required nonblank text, at most 2000 Unicode code points, on every mutation |
+
+Offset date-times must have seconds, explicit `Z`/`±HH:mm`, at most six fractional
+ digits, and represent a UTC instant in years 0001–9999. The server samples one
+instant after obtaining locks, truncates server time to microseconds, and compares
+instants, so UTC and UTC+7 representations behave identically. Explicit startsAt
+must not precede that server instant; use missing/null when appointment should start
+immediately. Terms use **`startsAt <= now < endsAt`**, with no grace period.
+
+Unrevoked ACTIVE terms for the same `(membership_id, permission_role)` cannot
+overlap. A next term may start exactly at the old end. COMMITTEE and PRESIDENT are
+distinct roles. Replacing a role/term/title revokes the old row and creates a new
+row in one transaction; old terms are never overwritten or backdated.
+
+Unknown fields, null required strings, scalar coercion, fractional/string versions,
+and client-owned `status`, actor, timestamp, replacement/audit fields are rejected.
+Client cannot mutate an existing appointment by replaying create: an overlapping
+create conflicts. Existing mutations require the version read by GET.
+
+### Create example
+
+```json
+{
+  "membershipId": "50001",
+  "positionName": "กรรมการฝ่ายกิจกรรม",
+  "permissionRole": "COMMITTEE",
+  "startsAt": null,
+  "endsAt": "2027-11-09T09:00:00Z",
+  "reason": "แต่งตั้งตามมติชมรมจำลอง"
+}
+```
+
+Response `201`, `Location: /api/v1/admin/clubs/20001/committee-assignments/60002`:
+
+```json
+{
+  "id": "60002",
+  "clubId": "20001",
+  "membershipId": "50001",
+  "userId": "10003",
+  "positionName": "กรรมการฝ่ายกิจกรรม",
+  "permissionRole": "COMMITTEE",
+  "startsAt": "2026-11-09T09:00:00Z",
+  "endsAt": "2027-11-09T09:00:00Z",
+  "status": "ACTIVE",
+  "assignedBy": "10001",
+  "assignmentReason": "แต่งตั้งตามมติชมรมจำลอง",
+  "replacesAssignmentId": null,
+  "revokedBy": null,
+  "revokedAt": null,
+  "revocationReason": null,
+  "createdAt": "2026-11-09T09:00:00Z",
+  "updatedAt": "2026-11-09T09:00:00Z",
+  "version": 0
+}
+```
+
+GET uses the same `AdminAssignment` allowlist. Every listed response property is
+present. `assignmentReason` may be null for pre-migration rows. `replacesAssignmentId`,
+`revokedBy`, `revokedAt`, and `revocationReason` are nullable; no legacy reason is
+fabricated. IDs remain strings and `version` remains an integer. All responses,
+including failures, use `Cache-Control: no-store`.
+
+### Replace example
+
+Send to `/api/v1/admin/clubs/20001/committee-assignments/60001/replace`:
+
+```json
+{
+  "version": 0,
+  "positionName": "กรรมการฝ่ายกิจกรรม",
+  "permissionRole": "COMMITTEE",
+  "startsAt": null,
+  "endsAt": "2027-11-09T09:00:00Z",
+  "reason": "แต่งตั้งตามมติชมรมจำลอง"
+}
+```
+
+Response `201` points at the **new** assignment ID. The old row is retained as
+REVOKED, version increases from 0 to 1, and its old title/role/term stay unchanged:
+
+```json
+{
+  "id": "60002",
+  "clubId": "20001",
+  "membershipId": "50001",
+  "userId": "10003",
+  "positionName": "กรรมการฝ่ายกิจกรรม",
+  "permissionRole": "COMMITTEE",
+  "startsAt": "2026-11-09T09:00:00Z",
+  "endsAt": "2027-11-09T09:00:00Z",
+  "status": "ACTIVE",
+  "assignedBy": "10001",
+  "assignmentReason": "แต่งตั้งตามมติชมรมจำลอง",
+  "replacesAssignmentId": "60001",
+  "revokedBy": null,
+  "revokedAt": null,
+  "revocationReason": null,
+  "createdAt": "2026-11-09T09:00:00Z",
+  "updatedAt": "2026-11-09T09:00:00Z",
+  "version": 0
+}
+```
+
+The replacement starts with version 0. Two durable audit rows (old REVOKED, new
+ASSIGNED) share one command trace UUID and store the current actor, reason and time.
+Audit trace IDs are server-owned; they are not session IDs and are not in this DTO.
+
+### Revoke example
+
+Send to `/api/v1/admin/clubs/20001/committee-assignments/60001/revoke`:
+
+```json
+{
+  "version": 0,
+  "reason": "ถอนตามมติชมรมจำลอง"
+}
+```
+
+Response `200` retains the old ID:
+
+```json
+{
+  "id": "60001",
+  "clubId": "20001",
+  "membershipId": "50001",
+  "userId": "10003",
+  "positionName": "กรรมการฝ่ายกิจกรรม",
+  "permissionRole": "COMMITTEE",
+  "startsAt": "2026-11-09T09:00:00Z",
+  "endsAt": "2027-11-09T09:00:00Z",
+  "status": "REVOKED",
+  "assignedBy": "10001",
+  "assignmentReason": "แต่งตั้งตามมติชมรมจำลอง",
+  "replacesAssignmentId": null,
+  "revokedBy": "10002",
+  "revokedAt": "2026-11-09T09:00:00Z",
+  "revocationReason": "ถอนตามมติชมรมจำลอง",
+  "createdAt": "2026-11-09T09:00:00Z",
+  "updatedAt": "2026-11-09T09:00:00Z",
+  "version": 1
+}
+```
+
+### Conflicts and other errors
+
+| HTTP / code | Condition |
+|---|---|
+| `400 INVALID_RESOURCE_ID` | Invalid path/membership decimal ID or signed-bigint overflow |
+| `400 VALIDATION_FAILED` | Invalid/unknown body fields, version, term, role, reason or backdating |
+| `401 AUTHENTICATION_REQUIRED` | No valid session/current account |
+| `403 ACCESS_DENIED` | Current non-Admin, self-management, or existing cross-club resource |
+| `403 ACCOUNT_NOT_ALLOWED` | Suspended actor; session is invalidated |
+| `403 CSRF_INVALID` | Missing/incorrect POST CSRF token |
+| `404 RESOURCE_NOT_FOUND` | Missing resource required by the authorized command/read |
+| `409 RESOURCE_CONFLICT` | One of the root `reason` values below; no partial writes |
+| `415 HTTP_415` | POST body is not `application/json` |
+| `503 SERVICE_UNAVAILABLE` | Database dependency failure or bounded lock timeout/deadlock |
+| `500 INTERNAL_ERROR` | Unexpected write/audit failure, without SQL/stack traces in the response |
+
+| Root `reason` | Meaning |
+|---|---|
+| `VERSION_MISMATCH` | Existing row version changed; refresh and require a new user decision |
+| `ASSIGNMENT_ALREADY_REVOKED` | Correct current version refers to an already revoked row |
+| `ASSIGNMENT_TERM_OVERLAP` | Same membership/role has overlapping unrevoked ACTIVE terms |
+| `ASSIGNMENT_RECIPIENT_INELIGIBLE` | Appointment/replacement target fails ACTIVE/effective-membership rules |
+
+A version mismatch is checked before the revoked-state conflict. No automatic retry
+or last-write-wins overwrite is performed. Revoke does not return recipient-ineligible
+or overlap conflicts. Error envelope is the existing Problem format; reason is at
+root, alongside code, not nested in detail:
+
+```json
+{
+  "type": "urn:tuclubhub:problem:resource-conflict",
+  "title": "Resource state conflict",
+  "status": 409,
+  "detail": "The request conflicts with the current resource state.",
+  "instance": "/api/v1/admin/clubs/20001/committee-assignments/60001/replace",
+  "code": "RESOURCE_CONFLICT",
+  "traceId": "09d4d750-a78c-4d33-b7b8-0f8bdc861c52",
+  "fieldErrors": [],
+  "reason": "VERSION_MISMATCH"
+}
+```
+
+### Transaction and database guarantees
+
+The real service transaction acquires sorted actor/target user SHARE locks, then
+target student-profile UPDATE lock, existing assignment rows in ID order UPDATE,
+club SHARE, and membership UPDATE. This follows the profile → assignment → club →
+membership hierarchy. After waiting, it rechecks current Admin and recipient state,
+existing assignment version/state, and time before writes. A stable profile row
+serializes concurrent new inserts for the same recipient across application instances.
+
+Existing committee write transactions hold SHARE locks on the granting assignment.
+Admin revocation takes UPDATE on those same rows: a writer already authorized may
+finish first; after revocation commits, the next permission check fails. Effective
+permissions are queried, not cached in login role claims.
+
+V4 adds durable `assignment_reason`, `replaces_assignment_id`, and
+`committee_assignment_audit`, and replaces the old all-history unique key with a
+partial active-term unique index and `tstzrange(..., '[)')` exclusion constraint.
+Native SQL cannot bypass the term-overlap constraint. Versioned service operations
+and audit remain required: privileged SQL is not an alternative product write API.
+Only the two named term constraints map to overlap; other integrity errors retain
+safe unexpected-error handling. SQLSTATE `55P03`/`40P01` maps to bounded `503`.
+
+Operational lock timeout defaults to **2 seconds**, configurable using
+`CLUBHUB_COMMITTEE_ASSIGNMENT_LOCK_TIMEOUT` (1ms–2147483647ms); no application retry.
+A timeout rolls back the whole command and leaves connections usable for a fresh request.
+
+V4 requires `btree_gist`: migration role needs database CREATE privilege or DBA
+pre-provisioning. Existing overlapping unrevoked rows cause migration to fail for
+operator resolution; V4 never silently revokes grants or rewrites history. See
+[PostgreSQL range constraints](https://www.postgresql.org/docs/18/rangetypes.html#RANGETYPES-CONSTRAINT)
+and [trusted extension installation](https://www.postgresql.org/docs/18/contrib.html).
+
+Policy evidence: [permission matrix](../security/permission-matrix.md) §§2.2–2.3,
+5–7; [Task75 lock hierarchy](../architecture/task75-sprint2-design.md) §4.2;
+[Task78 card](../tasks/sprint2/Task78.md). Requester confirmation authorizes the new
+Admin HTTP scope; review of endpoint naming, timeout operations and rollout remains
+for the team. Bootstrap, inactive-membership lifecycle revocation, separate PRESIDENT
+publishing guards and Admin dashboards remain separate work.

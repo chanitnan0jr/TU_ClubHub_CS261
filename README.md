@@ -14,7 +14,8 @@ TU-ClubHub is a web platform in development for Thammasat University students to
 | Recruitment (US-07) | Create, replace, publish, and close APIs with version checks and the self-review restriction; responses follow the `Round` schema, including questions; `/clubs/:clubId/rounds/new` creates and optionally publishes a round | Committee list/detail `GET`, `CANCEL` (effective `PRESIDENT`), and publishing a draft from the UI after editing its questions |
 | Questions (US-08) | Question writes enforce committee/self-review guards. Answered content and positions are protected by `409 RESOURCE_CONFLICT` with `reason: QUESTION_HAS_ANSWERS`, including whole-round replacement. Unanswered existing questions remain editable in mixed open drafts; creation/full replacement still require no applications. The question page shows the specific conflict alert | Team review of the limited Task51 mixed-draft exception; see [test report](docs/testing/task51-answered-question-lock.md) |
 | Applications (US-03) | `GET /api/v1/rounds/{roundId}/application-form` returns an open round's questions; `POST /api/v1/rounds/{roundId}/applications` saves the application, answers, links, and initial history in one transaction, with session/CSRF checks and Problem errors; database tables; a form prototype | A submission client and real question data in the form; the prototype does not persist applications |
-| Later workflows | Schema and design for review, results, membership, notifications, and reporting | Application history, decisions, confirmation/decline, Admin APIs, and dashboards |
+| Admin assignments (Task78) | Session/CSRF Admin create/read/replace/revoke APIs; fresh DB role, expected versions, PostgreSQL locks, retained history and durable audit; [contract](docs/api/API_v1.md#admin-committee-assignments-task78) and [local test report](docs/testing/task78-assignment-concurrency.md) | Team review, deployment, Admin UI and membership bootstrap; dashboards remain separate |
+| Later workflows | Schema and design for review, results, membership, notifications, and reporting | Application history, decisions, confirmation/decline, other Admin workflows, and dashboards |
 | Runtime | Flyway migrations, health endpoint, Docker/Compose, and CI workflow | Deployment and verification of the selected release |
 
 See the [permission matrix implementation gaps](docs/security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย). An implemented endpoint does not mean the entire story or adopted authorization policy is complete.
@@ -25,7 +26,7 @@ See the [permission matrix implementation gaps](docs/security/permission-matrix.
 |---|---|
 | Frontend | React 19, TypeScript 6, Vite 8, Tailwind CSS 4; client-rendered SPA |
 | Backend | Java 21, Spring Boot 4.1.1, Spring Security; feature packages in one application |
-| Database | PostgreSQL; JPA and JDBC repositories; Flyway V1 business schema and V3 session tables |
+| Database | PostgreSQL; JPA and JDBC repositories; Flyway V1 business schema, V3 session tables and V4 assignment integrity/audit |
 | Authentication | TU Authentication API with server-side Spring Session JDBC and CSRF protection |
 | API | REST JSON under `/api/v1`; Markdown and OpenAPI contracts include implementation status |
 | Local delivery | Root Dockerfile embeds the frontend in Spring Boot; Compose uses PostgreSQL 17 |

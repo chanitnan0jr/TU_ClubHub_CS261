@@ -49,3 +49,13 @@
 - [ ] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
 - [ ] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
 - [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ
+
+
+## Local implementation handoff (2026-11-09)
+
+Requester authorized the new Admin API, contract, migration and HTTP concurrency
+tests because main had no Assignment mutation service/API. Branch remains
+`fix/assignment-concurrency`; capability commit uses `feat` per actual changes.
+See [API contract](../../api/API_v1.md#admin-committee-assignments-task78) and
+[verification/review packet](../../testing/task78-assignment-concurrency.md).
+Trello status and reviewer/CI/merge checklist above are not changed by local results.
