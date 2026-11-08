@@ -1269,6 +1269,231 @@ paths:
           $ref: '#/components/responses/ServerError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/clubs/{id}/applications:
+    get:
+      tags: [Committee Review & Results]
+      operationId: listClubApplicationsForCommittee
+      summary: List applications within the committee's authorized club
+      x-implementation-status: implemented
+      description: >-
+        Task65 requester confirmed club-scoped reads on 2026-11-08, replacing
+        the earlier unimplemented round-scoped GET contract without an alias.
+        Requires SESSION and an effective COMMITTEE/PRESIDENT assignment in
+        the path club: ACTIVE account, student, club, membership and assignment,
+        no revocation, starts_at <= serverNow < ends_at. Global ADMIN alone
+        never grants access. Check parent permission before child existence or
+        state; a caller without an effective grant receives 403 even when the
+        supplied club/child does not exist.
+        An optional roundId must belong to this club; a missing round is 404,
+        an existing foreign or self-review round is 403, an explicit DRAFT
+        round is 409 ROUND_NOT_PUBLISHED and CANCELLED is 409 ROUND_CANCELLED.
+        Without a round filter, SQL includes only PUBLISHED rounds with
+        published_at set and excludes every round where this caller has an
+        application in ANY status, including WITHDRAWN, before pagination/count.
+        Restrict by club, round, status and search in the database; no cross-club
+        fetch followed by in-memory filtering. q is a case-insensitive literal
+        substring of studentCode/displayName (trim outer whitespace; blank means
+        no search; percent/underscore are literal). Order by submitted_at ASC,
+        id ASC; there is no client sort override. page=0, size=20 (maximum 100);
+        an out-of-range page returns empty items and the filtered totals.
+        Read-only consistent snapshot; GET never writes review state or results.
+        Only the dedicated DTOs below are reachable: no reviews, internal notes,
+        credentials, decision actors or status-history reasons. Use no-store.
+        See API_v1.md section 13 and permission-matrix.md section 4.
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '20001'
+        - name: roundId
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '70001'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/InternalApplicationStatus'
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: page
+          in: query
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            maximum: 2147483647
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Authorized, filtered application page; no eligible rows returns items []
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitteeClubApplicationPage'
+              examples:
+                populated:
+                  value:
+                    items:
+                      - id: '90001'
+                        roundId: '70001'
+                        applicant:
+                          userId: '10001'
+                          studentCode: '6600000001'
+                          displayName: Fictional Applicant
+                          email: null
+                          facultyName: Science
+                          departmentName: null
+                          programName: null
+                          studyYear: 2
+                        submittedAt: '2026-11-08T09:30:00Z'
+                        status: SUBMITTED
+                    page: {number: 0, size: 20, totalElements: 1, totalPages: 1}
+                empty:
+                  value:
+                    items: []
+                    page: {number: 0, size: 20, totalElements: 0, totalPages: 0}
+        '400':
+          description: INVALID_RESOURCE_ID for malformed IDs; VALIDATION_FAILED for query type/bounds/status/search length
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CommitteeApplicationForbidden'
+        '404':
+          description: Explicitly selected round does not exist, after parent authorization
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          $ref: '#/components/responses/CommitteeApplicationRoundConflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/clubs/{id}/applications/{appId}:
+    get:
+      tags: [Committee Review & Results]
+      operationId: getClubApplicationForCommittee
+      summary: Read applicant answers and document links without internal reviews
+      x-implementation-status: implemented
+      description: >-
+        Same session/effective club assignment checks as listClubApplicationsForCommittee,
+        before probing appId. After parent authorization, a nonexistent application
+        is 404; an existing application from another club is 403 (never silently
+        substituted or returned). Check the stored application's round, self-review
+        conflict in ANY status, and publication state. DRAFT is 409 ROUND_NOT_PUBLISHED;
+        CANCELLED is 409 ROUND_CANCELLED. Closing time does not prevent a read of
+        a published round. Do not reuse public recruitment-window filters here.
+        Pair all current questions with answers by questionId, ordered by
+        display_order ASC, id ASC; an omitted optional answer is null and never
+        shifts other answers. Links are ordered by display_order ASC, id ASC.
+        The requester confirmed on 2026-11-08 that this read excludes reviews,
+        internalComment, reviewer/decision identities, audit reasons and other
+        internal metadata; future decision/write DTOs are not reused here.
+        This operation stores/fetches no external files and proxies no URLs;
+        the existing model provides HTTPS document links, not download endpoints.
+        Read-only snapshot and Cache-Control no-store; no UNDER_REVIEW transition,
+        history or result publication is triggered by reading.
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '20001'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '90001'
+      responses:
+        '200':
+          description: Authorized read projection with only necessary applicant data
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/ApplicationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitteeClubApplicationDetail'
+              example:
+                id: '90001'
+                clubId: '20001'
+                roundId: '70001'
+                applicant:
+                  userId: '10001'
+                  studentCode: '6600000001'
+                  displayName: Fictional Applicant
+                  email: null
+                  facultyName: Science
+                  departmentName: null
+                  programName: null
+                  studyYear: 2
+                motivation: I would like to help organize club activities.
+                questionsWithAnswers:
+                  - questionId: '81001'
+                    questionText: Describe your experience.
+                    isRequired: true
+                    displayOrder: 1
+                    answerText: I have organized student workshops.
+                  - questionId: '81002'
+                    questionText: Any other experience?
+                    isRequired: false
+                    displayOrder: 2
+                    answerText: null
+                links:
+                  - id: '95001'
+                    label: Portfolio
+                    url: https://example.org/portfolio
+                    displayOrder: 1
+                status: SUBMITTED
+                submittedAt: '2026-11-08T09:30:00Z'
+        '400':
+          $ref: '#/components/responses/InvalidResourceId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CommitteeApplicationForbidden'
+        '404':
+          description: Application or its round does not exist, after parent authorization
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          $ref: '#/components/responses/CommitteeApplicationRoundConflict'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/rounds/{roundId}/applications:
     post:
       tags: [Applications]
@@ -1545,225 +1770,6 @@ paths:
           $ref: '#/components/responses/ServiceUnavailable'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
-    get:
-      tags: [Committee Review & Results]
-      operationId: listRoundApplicationsForCommittee
-      x-implementation-status: pending
-      x-contract-status: specified-in-task75
-      summary: List submitted applications for a recruitment round (US-09 / Task65, Read-Only)
-      description: >-
-        Requires an authenticated SESSION, ACTIVE account/student/club/membership/assignment
-        for the club that actually owns roundId, and NO application by the caller in
-        roundId in any status (including WITHDRAWN). Global ADMIN grants no access.
-        Strictly read-only: calling GET never mutates application status or triggers
-        result publication (US-09.AC-04, T74-D02). Under T74-D01, if roundId exists
-        but the caller lacks committee permission or has a self-review conflict,
-        return 403 ACCESS_DENIED; if roundId does not exist, return 404 RESOURCE_NOT_FOUND.
-        Ordered by submittedAt ASC, id ASC.
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: roundId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/PositiveBigintId'
-          example: '70001'
-        - name: status
-          in: query
-          required: false
-          description: Optional internal application status filter.
-          schema:
-            $ref: '#/components/schemas/InternalApplicationStatus'
-        - name: q
-          in: query
-          required: false
-          description: Optional case-insensitive search on applicant studentCode or displayName.
-          schema:
-            type: string
-            maxLength: 200
-        - name: page
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
-        - name: size
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-      responses:
-        '200':
-          description: Paginated list of applications in the round for authorized committee review
-          headers:
-            Cache-Control:
-              $ref: '#/components/headers/ApplicationNoStore'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommitteeApplicationPage'
-              example:
-                round:
-                  id: '70001'
-                  clubId: '20001'
-                  title: Volunteer recruitment
-                  publicationStatus: PUBLISHED
-                  opensAt: '2026-10-01T00:00:00Z'
-                  closesAt: '2026-10-25T16:59:59Z'
-                  closedAt: '2026-10-25T16:59:59Z'
-                  resultsPublishedAt: null
-                  confirmationDeadline: '2026-11-05T16:59:59Z'
-                  version: 1
-                items:
-                  - id: '90001'
-                    applicant:
-                      userId: '10001'
-                      studentCode: '6609650001'
-                      displayName: Somchai Jaidee
-                      email: somchai.jai@dome.tu.ac.th
-                      facultyName: Faculty of Science and Technology
-                      departmentName: Computer Science
-                      programName: Computer Science
-                      studyYear: 2
-                    submittedAt: '2026-10-19T09:30:00Z'
-                    status: SUBMITTED
-                    decidedAt: null
-                    respondedAt: null
-                    version: 0
-                page:
-                  number: 0
-                  size: 20
-                  totalElements: 1
-                  totalPages: 1
-        '400':
-          $ref: '#/components/responses/InvalidResourceId'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          description: Recruitment round does not exist (RESOURCE_NOT_FOUND)
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-        '409':
-          description: Round is in DRAFT or CANCELLED state (ROUND_NOT_PUBLISHED / ROUND_CANCELLED)
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-        '500':
-          $ref: '#/components/responses/ServerError'
-        '503':
-          $ref: '#/components/responses/ServiceUnavailable'
-  /api/v1/rounds/{roundId}/applications/{applicationId}:
-    get:
-      tags: [Committee Review & Results]
-      operationId: getRoundApplicationDetailForCommittee
-      x-implementation-status: pending
-      x-contract-status: specified-in-task75
-      summary: Get full application detail, answers, and portfolio links for committee review (US-09 / Task65, Read-Only)
-      description: >-
-        Requires an authenticated SESSION and effective COMMITTEE or PRESIDENT
-        assignment for the club owning roundId, with no self-review conflict in
-        roundId. Strictly read-only: never changes status to UNDER_REVIEW or
-        mutates any record (US-09.AC-04, T74-D02). Questions are ordered by
-        displayOrder ASC, id ASC and paired by questionId; unanswered optional
-        questions are returned with answerText: null so positions never shift
-        (US-09.AC-03, BR-08). Under T74-D01, if the round or application exists
-        outside the caller's authorized scope, return 403 ACCESS_DENIED; if nonexistent,
-        return 404 RESOURCE_NOT_FOUND.
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: roundId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/PositiveBigintId'
-          example: '70001'
-        - name: applicationId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/PositiveBigintId'
-          example: '90001'
-      responses:
-        '200':
-          description: Full committee view of the application
-          headers:
-            Cache-Control:
-              $ref: '#/components/headers/ApplicationNoStore'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommitteeApplicationDetail'
-              example:
-                id: '90001'
-                clubId: '20001'
-                roundId: '70001'
-                applicant:
-                  userId: '10001'
-                  studentCode: '6609650001'
-                  displayName: Somchai Jaidee
-                  email: somchai.jai@dome.tu.ac.th
-                  facultyName: Faculty of Science and Technology
-                  departmentName: Computer Science
-                  programName: Computer Science
-                  studyYear: 2
-                motivation: I would like to help organize club activities.
-                questionsWithAnswers:
-                  - questionId: '81001'
-                    questionText: Describe an activity you helped organize.
-                    isRequired: true
-                    displayOrder: 1
-                    answerText: I have organized student workshops.
-                  - questionId: '81002'
-                    questionText: What other experience would you like to share?
-                    isRequired: false
-                    displayOrder: 2
-                    answerText: null
-                links:
-                  - id: '95001'
-                    label: Portfolio
-                    url: https://example.org/portfolio
-                    displayOrder: 1
-                status: SUBMITTED
-                resultMessage: null
-                decidedBy: null
-                decidedAt: null
-                respondedAt: null
-                version: 0
-                submittedAt: '2026-10-19T09:30:00Z'
-                reviews: []
-                statusHistory:
-                  - fromStatus: null
-                    toStatus: SUBMITTED
-                    actorId: '10001'
-                    reason: APPLICATION_SUBMITTED
-                    changedAt: '2026-10-19T09:30:00Z'
-        '400':
-          $ref: '#/components/responses/InvalidResourceId'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          description: Round or application does not exist (RESOURCE_NOT_FOUND)
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-        '500':
-          $ref: '#/components/responses/ServerError'
-        '503':
-          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/rounds/{roundId}/applications/{applicationId}/start-review:
     post:
       tags: [Committee Review & Results]
@@ -3486,43 +3492,119 @@ components:
         - DECLINED
         - EXPIRED
         - WITHDRAWN
-    CommitteeRoundSummary:
+    CommitteeApplicantIdentity:
       type: object
       additionalProperties: false
-      required: [id, clubId, title, publicationStatus, opensAt, closesAt, closedAt, resultsPublishedAt, confirmationDeadline, version]
+      required: [userId, studentCode, displayName, email, facultyName, departmentName, programName, studyYear]
+      description: >-
+        Authorized US-09 applicant projection from users and student_profiles.
+        No TU username, account flags, credential, reviewer data or full profile
+        object. Nullable fields are returned explicitly as null. studyYear follows
+        the actual positive SMALLINT database range, not an invented ten-year cap.
       properties:
-        id:
+        userId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        studentCode:
           type: string
-          pattern: '^[0-9]+$'
-        clubId:
-          type: string
-          pattern: '^[0-9]+$'
-        title:
+          maxLength: 20
+        displayName:
           type: string
           maxLength: 200
-        publicationStatus:
-          type: string
-          enum: [DRAFT, PUBLISHED, CANCELLED]
-          description: Persisted recruitment_rounds.publication_status.
-        opensAt:
-          type: string
-          format: date-time
-        closesAt:
-          type: string
-          format: date-time
-        closedAt:
+        email:
           type: [string, 'null']
-          format: date-time
-        resultsPublishedAt:
+          format: email
+          maxLength: 254
+        facultyName:
           type: [string, 'null']
-          format: date-time
-        confirmationDeadline:
+          maxLength: 200
+        departmentName:
           type: [string, 'null']
+          maxLength: 200
+        programName:
+          type: [string, 'null']
+          maxLength: 200
+        studyYear:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 32767
+    CommitteeClubApplicationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, roundId, applicant, submittedAt, status]
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveBigintId'
+        roundId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        applicant:
+          $ref: '#/components/schemas/CommitteeApplicantIdentity'
+        submittedAt:
+          type: string
           format: date-time
-        version:
+          pattern: 'Z$'
+        status:
+          $ref: '#/components/schemas/InternalApplicationStatus'
+    CommitteeClubApplicationPage:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitteeClubApplicationSummary'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    CommitteeClubDocumentLink:
+      type: object
+      additionalProperties: false
+      required: [id, label, url, displayOrder]
+      description: Authorized document link, not a file download token or storage reference.
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveBigintId'
+        label:
+          type: string
+          maxLength: 200
+        url:
+          $ref: '#/components/schemas/ApplicationLinkInput/properties/url'
+        displayOrder:
           type: integer
-          minimum: 0
-          description: Optimistic locking version of recruitment_rounds.
+          minimum: 1
+          maximum: 2147483647
+    CommitteeClubApplicationDetail:
+      type: object
+      additionalProperties: false
+      required: [id, clubId, roundId, applicant, motivation, questionsWithAnswers, links, status, submittedAt]
+      description: >-
+        Read-only Task65 view. No reviews, internalComment, reviewer/decision
+        identifiers, resultMessage, statusHistory, actor/reason, credentials or
+        management version. Does not reference the future decision/write DTO.
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveBigintId'
+        clubId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        roundId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        applicant:
+          $ref: '#/components/schemas/CommitteeApplicantIdentity'
+        motivation:
+          type: string
+        questionsWithAnswers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitteeQuestionAnswerView'
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitteeClubDocumentLink'
+        status:
+          $ref: '#/components/schemas/InternalApplicationStatus'
+        submittedAt:
+          type: string
+          format: date-time
+          pattern: 'Z$'
     ApplicantIdentitySummary:
       type: object
       additionalProperties: false
@@ -3559,46 +3641,6 @@ components:
           type: [integer, 'null']
           minimum: 1
           maximum: 10
-    CommitteeApplicationSummary:
-      type: object
-      additionalProperties: false
-      required: [id, applicant, submittedAt, status, decidedAt, respondedAt, version]
-      properties:
-        id:
-          type: string
-          pattern: '^[0-9]+$'
-        applicant:
-          $ref: '#/components/schemas/ApplicantIdentitySummary'
-        submittedAt:
-          type: string
-          format: date-time
-        status:
-          $ref: '#/components/schemas/InternalApplicationStatus'
-        decidedAt:
-          type: [string, 'null']
-          format: date-time
-          description: applications.decided_at timestamp when ACCEPTED or REJECTED was recorded.
-        respondedAt:
-          type: [string, 'null']
-          format: date-time
-          description: applications.responded_at timestamp when CONFIRMED, DECLINED, or EXPIRED was recorded.
-        version:
-          type: integer
-          minimum: 0
-          description: Optimistic locking version of applications.
-    CommitteeApplicationPage:
-      type: object
-      additionalProperties: false
-      required: [round, items, page]
-      properties:
-        round:
-          $ref: '#/components/schemas/CommitteeRoundSummary'
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/CommitteeApplicationSummary'
-        page:
-          $ref: '#/components/schemas/PageMetadata'
     CommitteeQuestionAnswerView:
       type: object
       additionalProperties: false
@@ -4393,6 +4435,47 @@ components:
           type: string
           const: DOWN
   responses:
+    CommitteeApplicationForbidden:
+      description: ACCESS_DENIED without an effective parent club grant, or for cross-club/self-review resources; ACCOUNT_NOT_ALLOWED for suspended accounts
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:tuclubhub:problem:access-denied
+            title: Access denied
+            status: 403
+            detail: You are not allowed to access this resource.
+            instance: /api/v1/clubs/20001/applications
+            code: ACCESS_DENIED
+            fieldErrors: []
+            traceId: 01J9EXAMPLE7K4D5
+    CommitteeApplicationRoundConflict:
+      description: Explicitly selected round is DRAFT (ROUND_NOT_PUBLISHED) or CANCELLED (ROUND_CANCELLED)
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                required: [reason]
+                properties:
+                  status:
+                    const: 409
+                  code:
+                    const: RESOURCE_CONFLICT
+                  reason:
+                    enum: [ROUND_NOT_PUBLISHED, ROUND_CANCELLED]
+          example:
+            type: urn:tuclubhub:problem:resource-conflict
+            title: Resource state conflict
+            status: 409
+            detail: The request conflicts with the current resource state.
+            instance: /api/v1/clubs/20001/applications
+            code: RESOURCE_CONFLICT
+            reason: ROUND_CANCELLED
+            fieldErrors: []
+            traceId: 01J9EXAMPLE7K4D5
     InvalidResourceId:
       description: The id is not a valid decimal bigint identifier or is out of range
       content:

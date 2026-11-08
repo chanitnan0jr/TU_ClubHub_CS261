@@ -56,8 +56,8 @@
 | **My Application Detail** | `GET /api/v1/me/applications/{applicationId}` | `getMyApplicationDetail` | `SESSION` + `ACTIVE` account + Ownership (`403` ถ้าเป็นของคนอื่น, `404` ถ้าไม่มีจริง) | `openapi.yaml` | `US-04`, `Task64` |
 | **Confirm Membership** | `POST /api/v1/me/applications/{applicationId}/confirm` | `confirmMembershipOffer` | `SESSION` + `CSRF` + `ACTIVE` account + Ownership (`ACTIVE` student & club สำหรับการยืนยันใหม่; Idempotent `200` สำหรับ Retry) | `openapi.yaml` | `US-05`, `Task69`, `Task70` |
 | **Decline Membership** | `POST /api/v1/me/applications/{applicationId}/decline` | `declineMembershipOffer` | `SESSION` + `CSRF` + `ACTIVE` account + Ownership (ไม่บังคับ student/club `ACTIVE`; Idempotent `200` สำหรับ Retry) | `openapi.yaml` | `US-05`, `Task69`, `Task70` |
-| **Committee Review List** | `GET /api/v1/rounds/{roundId}/applications` | `listRoundApplicationsForCommittee` | `SESSION` + Effective `COMMITTEE`/`PRESIDENT` ของชมรมเจ้าของรอบ + ไม่มีใบสมัครตนเองในรอบนั้น (`Read-only`) | `openapi.yaml` | `US-09`, `Task65`, `Task66` |
-| **Committee Review Detail** | `GET /api/v1/rounds/{roundId}/applications/{applicationId}` | `getRoundApplicationDetailForCommittee` | `SESSION` + Effective `COMMITTEE`/`PRESIDENT` ของชมรมเจ้าของรอบ + ไม่มีใบสมัครตนเองในรอบนั้น (`Read-only`) | `openapi.yaml` | `US-09`, `Task65`, `Task66` |
+| **Committee Review List** | `GET /api/v1/clubs/{id}/applications` | `listClubApplicationsForCommittee` | `SESSION` + Effective `COMMITTEE`/`PRESIDENT` ของชมรม; optional `roundId`; กรองรอบ self-review ก่อน pagination/count (`Read-only`) | `openapi.yaml` | `US-09`, `Task65`, `Task66`; requester confirmed 2026-11-08 |
+| **Committee Review Detail** | `GET /api/v1/clubs/{id}/applications/{appId}` | `getClubApplicationForCommittee` | `SESSION` + Effective `COMMITTEE`/`PRESIDENT` ของชมรม + ไม่มีใบสมัครตนเองในรอบจริง; ไม่มีข้อมูลผู้ประเมิน/internal notes (`Read-only`) | `openapi.yaml` | `US-09`, `Task65`, `Task66`; requester confirmed 2026-11-08 |
 | **Start Application Review** | `POST /api/v1/rounds/{roundId}/applications/{applicationId}/start-review` | `startApplicationReview` | `SESSION` + `CSRF` + Effective `COMMITTEE`/`PRESIDENT` + ไม่มี Self-review; เปลี่ยน `SUBMITTED -> UNDER_REVIEW` และ/หรือบันทึกความเห็นกรรมการ (`Optional`) | `openapi.yaml` | `T74-D02`, `US-09`, `Task65`, `Task66` |
 | **Record Internal Decision** | `PUT /api/v1/rounds/{roundId}/applications/{applicationId}/decision` | `recordApplicationDecision` | `SESSION` + `CSRF` + Effective `COMMITTEE`/`PRESIDENT` + ไม่มี Self-review; รอบต้องปิดรับจริงแล้วและยังไม่ประกาศผล | `openapi.yaml` | `S2-DECISION-DRAFT`, `Task67`, `Task68` |
 | **Publish Round Results** | `POST /api/v1/rounds/{roundId}/publish-results` | `publishRoundSelectionResults` | `SESSION` + `CSRF` + Effective `PRESIDENT` เท่านั้น + ไม่มี Self-review; ใบสมัครคัดเลือกต้องตัดสินครบทุกใบและก่อน `confirmation_deadline` | `openapi.yaml` | `S2-PUBLICATION-DRAFT`, `Task67`, `Task68` |
@@ -321,26 +321,29 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
 
 ### 2.6 การเปิดอ่านใบสมัครสำหรับกรรมการ (`US-09`) และการบันทึก/ประกาศผลคัดเลือก (`S2-DECISION-DRAFT` / `S2-PUBLICATION-DRAFT` / `Task65`–`Task68`)
 
-- **Schema อ้างอิง:** [`CommitteeApplicationPage`](../api/openapi.yaml), [`CommitteeApplicationDetail`](../api/openapi.yaml), [`StartApplicationReviewRequest`](../api/openapi.yaml), [`ApplicationDecisionRequest`](../api/openapi.yaml), [`PublishResultsRequest`](../api/openapi.yaml), [`PublishResultsResponse`](../api/openapi.yaml)
+- **Read schemas:** `CommitteeClubApplicationPage`, `CommitteeClubApplicationDetail` ใน [`openapi.yaml`](../api/openapi.yaml); **future write schemas แยก:** `CommitteeApplicationDetail`, `StartApplicationReviewRequest`, `ApplicationDecisionRequest`, `PublishResultsRequest`, `PublishResultsResponse` (ไม่ได้นำมาใช้ใน read endpoints)
 
-#### 1) `GET /api/v1/rounds/{roundId}/applications` (`US-09` / `Task65`)
-- **สิทธิ์การเข้าถึง:** `SESSION` + กรรมการที่มีผล (`COMMITTEE` หรือ `PRESIDENT`) ของชมรมเจ้าของรอบ `roundId` + **ไม่มีใบสมัครของตนเองใน `roundId` ทุกสถานะ (รวม `WITHDRAWN`)**
-- **การตรวจ `403` vs `404` (`T74-D01`):**
-  - หาก `roundId` ไม่มีอยู่จริงในฐานข้อมูล -> `404 RESOURCE_NOT_FOUND`
-  - หาก `roundId` มีอยู่จริง แต่ผู้เรียกไม่มีสิทธิ์กรรมการของชมรมเจ้าของรอบ หรือผู้เรียกมีใบสมัครในรอบนั้น (Self-review) -> `403 ACCESS_DENIED`
-  - หากรอบยังเป็น `DRAFT` หรือ `CANCELLED` -> `409 RESOURCE_CONFLICT` (`reason: ROUND_NOT_PUBLISHED` หรือ `ROUND_CANCELLED`)
-- **Query Parameters:**
-  - `status` (optional enum: `SUBMITTED` | `UNDER_REVIEW` | `ACCEPTED` | `REJECTED` | `CONFIRMED` | `DECLINED` | `EXPIRED` | `WITHDRAWN`)
-  - `q` (optional `string`: ค้นหาจากรหัสนักศึกษา `student_profiles.student_code` หรือชื่อแสดงผล `users.display_name`)
-  - `page` (default `0`), `size` (default `20`, max `100`)
-- **การเรียงลำดับ:** `submitted_at ASC, id ASC` (เรียงตามลำดับการส่งก่อน-หลังเพื่อความยุติธรรมในการตรวจ)
+#### 1) `GET /api/v1/clubs/{id}/applications` (`US-09` / `Task65`)
 
-#### 2) `GET /api/v1/rounds/{roundId}/applications/{applicationId}` (`US-09` / `Task65`)
-- **Strict Read-Only:** การเปิดอ่านรายละเอียดคำตอบและลิงก์พอร์ตโฟลิโอ **ห้าม** เปลี่ยนสถานะใบสมัครเป็น `UNDER_REVIEW` โดยอัตโนมัติ (`US-09.AC-04`, `T74-D02`)
-- **การจับคู่คำถามและคำตอบ (`US-09.AC-03`):**
-  - ดึงคำถามทั้งหมดของรอบจาก `application_questions` เรียงตาม `display_order ASC, id ASC`
-  - จับคู่คำตอบจาก `application_answers` ด้วย `question_id`
-  - หากคำถามข้อใดเป็น Optional (`is_required = false`) และผู้สมัครไม่ได้ตอบ ให้คืนรายการคำถามนั้นพร้อม `"answerText": null` เพื่อไม่ให้ลำดับคำตอบเลื่อนไปจับคู่ผิดข้อ (`US-09.BR-08`)
+**Requester decision 2026-11-08 / Pending Team Review:** ใช้ club-scoped GET ตามการ์ด Task65 แทน round-scoped GET เดิมที่ยังไม่มี implementation โดยไม่เปิด GET alias ดูรายละเอียดและตัวอย่างใน [API §13](../api/API_v1.md#13-committee-application-reads-task65)
+
+- `SESSION` + effective COMMITTEE/PRESIDENT ในชมรมตาม Matrix; global ADMIN อย่างเดียวไม่ได้สิทธิ์
+- Filters: optional `roundId`, `status`, `q` (literal case-insensitive studentCode/displayName, ไม่เกิน 200 Unicode characters), `page=0`, `size=20` (1–100)
+- SQL จำกัดชมรมและรอบ PUBLISHED พร้อม `published_at` และกรอง **ทั้งรอบ** ที่ผู้เรียกมีใบสมัครทุกสถานะ รวม WITHDRAWN ก่อนแบ่งหน้า/นับจำนวน
+- เรียง `submitted_at ASC, id ASC`; หน้าที่เกินคืน items ว่างพร้อมยอดรวมที่กรองแล้ว
+- ตรวจสิทธิ์ parent ก่อน child; ไม่มี grant ในชมรมใช้ 403 โดยไม่ probe การมีอยู่ของ child
+- เมื่อระบุ roundId ชัดเจน: รอบไม่มีจริง 404; รอบต่างชมรม/self-review 403; DRAFT/CANCELLED เป็น 409 ROUND_NOT_PUBLISHED/ROUND_CANCELLED
+- ใช้ `CommitteeClubApplicationPage` (`items`, `page`); ไม่มี root round เพราะข้ามหลายรอบได้ โดยแต่ละรายการมี roundId
+
+#### 2) `GET /api/v1/clubs/{id}/applications/{appId}` (`US-09` / `Task65`)
+
+- ตรวจ effective club grant ก่อนดู appId; หลังผ่าน parent แล้ว appId ไม่มีจริงใช้ 404; มีจริงแต่ต่างชมรมใช้ 403
+- ตรวจรอบจริงของใบสมัครและ self-review ทุกสถานะ; ห้ามใช้ข้อมูล client ยืนยัน owner
+- `CommitteeClubApplicationDetail` แสดงเฉพาะ applicant fields ที่จำเป็น, motivation, questionsWithAnswers, links, status, submittedAt และ IDs
+- **Requester confirmed:** ไม่ส่ง reviews/internalComment, ข้อมูลผู้ประเมิน/ผู้ตัดสิน, resultMessage, statusHistory/audit reason หรือ management version ใน read DTO
+- จับคู่ด้วย questionId และเรียง display_order ASC, id ASC; optional ที่ไม่ตอบเป็น answerText null; ลิงก์เรียง display_order ASC, id ASC
+- อ่านแบบ snapshot/read-only, no-store; ไม่เปลี่ยน UNDER_REVIEW หรือประกาศผล และไม่มีการ proxy/download URL
+- Schema สำหรับ write response ของ Optional start-review/decision ด้านล่างเป็นคนละ DTO ไม่ได้นำมาใช้ใน Task65 reads
 
 #### 3) `POST /api/v1/rounds/{roundId}/applications/{applicationId}/start-review` (`T74-D02` / `US-09` — Optional Explicit Review Action)
 - **สิทธิ์การเข้าถึง:** `SESSION` + `CSRF` + Effective `COMMITTEE` หรือ `PRESIDENT` ของชมรมเจ้าของรอบ + ไม่มีใบสมัครตนเองในรอบนั้น
@@ -725,8 +728,8 @@ CONSTRAINT chk_app_history_change CHECK (from_status IS NULL OR from_status <> t
 | `/rounds/:roundId/apply` (หรือ `/clubs/:clubId/rounds/:roundId/apply`) | หน้าแบบฟอร์มส่งใบสมัครเข้าชมรม (`ApplicationFormPage`) | Protected: นักศึกษา `ACTIVE` | `GET /api/v1/rounds/{roundId}/application-form`<br/>`POST /api/v1/rounds/{roundId}/applications` | `US-03`, `Task53` |
 | `/me/applications` | หน้ารายการใบสมัครของฉัน (`MyApplicationsPage`) | Protected: ผู้ใช้ที่ Login (`ACTIVE` account) | `GET /api/v1/me/applications` | `US-04`, `Task64` |
 | `/me/applications/:applicationId` | หน้ารายละเอียดสถานะใบสมัครและปุ่มยืนยัน/สละสิทธิ์ (`MyApplicationDetailPage`) | Protected: เจ้าของใบสมัคร (`ACTIVE` account) | `GET /api/v1/me/applications/{applicationId}`<br/>`POST /api/v1/me/applications/{applicationId}/confirm`<br/>`POST /api/v1/me/applications/{applicationId}/decline` | `US-04`, `US-05`, `Task64`, `Task70` |
-| `/clubs/:clubId/rounds/:roundId/applications` | หน้ารายชื่อผู้สมัครสำหรับกรรมการ (`CommitteeApplicantListPage`) | Protected: กรรมการชมรมนั้น (ไม่มี Self-review) | `GET /api/v1/rounds/{roundId}/applications`<br/>`POST /api/v1/rounds/{roundId}/publish-results` (เฉพาะ `PRESIDENT`) | `US-09`, `Task66`, `Task68` |
-| `/clubs/:clubId/rounds/:roundId/applications/:applicationId` | หน้าตรวจคำตอบและบันทึกผลคัดเลือก (`CommitteeApplicationDetailPage`) | Protected: กรรมการชมรมนั้น (ไม่มี Self-review) | `GET /api/v1/rounds/{roundId}/applications/{applicationId}`<br/>`POST /api/v1/rounds/{roundId}/applications/{applicationId}/start-review`<br/>`PUT /api/v1/rounds/{roundId}/applications/{applicationId}/decision` | `US-09`, `Task66`, `Task68` |
+| `/clubs/:clubId/rounds/:roundId/applications` | หน้ารายชื่อผู้สมัครสำหรับกรรมการ (`CommitteeApplicantListPage`) | Protected: กรรมการชมรมนั้น (ไม่มี Self-review) | `GET /api/v1/clubs/{clubId}/applications?roundId={roundId}`<br/>`POST /api/v1/rounds/{roundId}/publish-results` (เฉพาะ `PRESIDENT`) | `US-09`, `Task66`, `Task68` |
+| `/clubs/:clubId/rounds/:roundId/applications/:applicationId` | หน้าตรวจคำตอบและบันทึกผลคัดเลือก (`CommitteeApplicationDetailPage`) | Protected: กรรมการชมรมนั้น (ไม่มี Self-review) | `GET /api/v1/clubs/{clubId}/applications/{applicationId}`<br/>`POST /api/v1/rounds/{roundId}/applications/{applicationId}/start-review`<br/>`PUT /api/v1/rounds/{roundId}/applications/{applicationId}/decision` | `US-09`, `Task66`, `Task68` |
 | `/admin/dashboard` | หน้าแดชบอร์ดสถิติภาพรวมมหาวิทยาลัย (`AdminDashboardPage`) | Protected: Global `role === 'ADMIN'` เท่านั้น | `GET /api/v1/admin/dashboard/stats`<br/>`GET /api/v1/public/club-categories` | `US-10`, `Task72` |
 
 > [!IMPORTANT]

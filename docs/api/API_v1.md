@@ -550,7 +550,8 @@ Following the Task74 System Analysis handoff, the complete Sprint 2 technical co
 | **Task79** Real-Time Auth Session Refresh | `GET /api/v1/auth/me` | `CurrentUser` (`studentStatus`, `activeCommitteeAssignments`) |
 | **Task81** Club Profile Edit Capability Flag | `GET /api/v1/public/clubs/{id}`, `GET /api/v1/clubs/{clubId}` | `PublicClubProfile.canEditProfile`, `ClubDetail.canEditProfile` |
 | **US-08 / Task51** Question Edit/Delete Conflict | `PUT / DELETE /api/v1/rounds/{roundId}/questions/{questionId}` | `Problem` (`409 RESOURCE_CONFLICT`, `reason: QUESTION_HAS_ANSWERS`) |
-| **US-09 / Task65–66** Committee Application Review (Read-Only + Optional Start Review) | `GET /api/v1/rounds/{roundId}/applications`, `GET /api/v1/rounds/{roundId}/applications/{applicationId}`, `POST /api/v1/rounds/{roundId}/applications/{applicationId}/start-review` | `CommitteeApplicationPage`, `CommitteeApplicationDetail`, `StartApplicationReviewRequest` |
+| **US-09 / Task65–66** Committee Application Review (Read-Only) | `GET /api/v1/clubs/{id}/applications`, `GET /api/v1/clubs/{id}/applications/{appId}` | `CommitteeClubApplicationPage`, `CommitteeClubApplicationDetail` (no internal reviews; §13) |
+| **Optional Explicit Start Review — separate write scope** | `POST /api/v1/rounds/{roundId}/applications/{applicationId}/start-review` | `StartApplicationReviewRequest`, future `CommitteeApplicationDetail` write response; not a Task65 read DTO |
 | **S2-DECISION-DRAFT / Task67–68** Pre-Publication Review & Decision | `PUT /api/v1/rounds/{roundId}/applications/{applicationId}/decision` | `ApplicationDecisionRequest`, `CommitteeApplicationDetail`, `ApplicationDecisionConflict` |
 | **S2-PUBLICATION-DRAFT / Task67–68** Batch Result Publication | `POST /api/v1/rounds/{roundId}/publish-results` | `PublishResultsRequest`, `PublishResultsResponse`, `PublishResultsConflict` |
 | **US-04 / Task64 & Task56** Applicant Application Tracking & Detail | `GET /api/v1/me/applications`, `GET /api/v1/me/applications/{applicationId}` | `ApplicantApplicationPage`, `ApplicantApplicationDetail`, `ApplicantVisibleStatus` |
@@ -598,7 +599,7 @@ Decisions on the items US-03 left open, adopted on 2026-10-19:
 | `motivation` length | 1–2,000 characters | Matches the default `application_questions.max_length`, so every text field an applicant fills in has the same limit. A club that needs a longer essay can add a question with a higher `max_length`. |
 | Document links | Optional; at most 5 per application | US-03 BR-06 allows an empty field, and requiring documents would block applicants who have none. Five links cover a portfolio, a résumé, and a few certificates. |
 | Membership limit scope | Every club recorded in TU-ClubHub, whatever its affiliation level | The project brief sets a five-club limit without distinguishing club types, and `clubs.affiliation_level` is optional with no agreed values. If the university confirms that only university-level clubs count, narrow the count; the API does not change. |
-| `Location` of a new application | `/api/v1/me/applications/{applicationId}`, read through US-04 | The applicant must be able to read the URI it receives. The 2026-10-27 T74-D01 decision supersedes the earlier owner-read hiding rule: an existing unauthorized application returns `403 ACCESS_DENIED`, a nonexistent application `404 RESOURCE_NOT_FOUND`. Committee list/detail paths and DTOs still need their own contract under read-only US-09. |
+| `Location` of a new application | `/api/v1/me/applications/{applicationId}`, read through US-04 | The applicant must be able to read the URI it receives. The 2026-10-27 T74-D01 decision supersedes the earlier owner-read hiding rule: an existing unauthorized application returns `403 ACCESS_DENIED`, a nonexistent application `404 RESOURCE_NOT_FOUND`. Committee list/detail use their separate read-only contract in §13; applicant tracking remains outside Task65. |
 | Inactive target club | `404 RESOURCE_NOT_FOUND` | Public endpoints already hide inactive clubs with `404`, and US-03 BR-02 avoids revealing resources that are not public. `403 ACCESS_DENIED` remains for the applicant's own eligibility. |
 
 ### `POST /api/v1/rounds/{roundId}/applications`
@@ -856,3 +857,176 @@ No review has taken place as part of writing this contract. The Task42 requester
 - [ ] Backend plan covers current account/student checks, session/CSRF, resource hiding, same-round transaction lock, unique-conflict mapping, rollback, and transaction-time deadline checks.
 - [ ] QA plans positive/negative ID bounds, session/CSRF errors, required/optional/unknown/duplicate answers, overlong text, invalid/extra fields, invalid HTTPS links, duplicate submission, and a close occurring after form load.
 - [ ] Run OpenAPI structural/reference/example validation and `git diff --check`; record actual results separately from product review approval. No application implementation or runtime test result is implied by specification validation.
+
+
+## 13. Committee application reads (Task65)
+
+**Requester decisions recorded 2026-11-08; PO/team review pending.** Use
+`GET /api/v1/clubs/{id}/applications` and
+`GET /api/v1/clubs/{id}/applications/{appId}`. These replace the earlier
+**unimplemented** Task75 round-scoped GET contracts, without GET aliases.
+Task42's round-scoped POST and future explicit review/decision writes remain
+separate. The current frontend contains no committee-review API consumer to
+migrate; Task66 must use these paths and DTOs. No automatic UNDER_REVIEW action
+or result publication is part of either GET.
+
+### Authorization and availability
+
+1. Require a valid `SESSION` and current ACTIVE account. GET requires no CSRF
+   header. Anonymous/expired session is `401 AUTHENTICATION_REQUIRED`; a suspended
+   authenticated account is `403 ACCOUNT_NOT_ALLOWED` and its session is invalidated.
+2. Parse the club ID as `PositiveBigintId`: decimal string without leading zeroes,
+   `1` through `9223372036854775807`; malformed IDs are `400 INVALID_RESOURCE_ID`.
+3. Require an effective COMMITTEE/PRESIDENT assignment **in the path club**:
+   ACTIVE student/account/club/membership/assignment, membership not ended and
+   joined, assignment not revoked and `starts_at <= now < ends_at`. The existing
+   `ClubSecurity` reads current grant data and server Clock each request; global
+   ADMIN or a stale role in session does not bypass it. No effective parent grant
+   returns `403 ACCESS_DENIED` before probing child IDs, including when that
+   supplied parent/child is absent. This retains the club management guard order.
+4. After parent authorization, absent child resources use `404 RESOURCE_NOT_FOUND`;
+   an existing round/application outside this club uses `403 ACCESS_DENIED`.
+   No foreign applicant fields, notes, SQL or exception text are returned.
+5. A caller with an application in a round **in any status, including WITHDRAWN**
+   cannot review any application in that round (matrix §4). Club lists exclude
+   the whole round before count/pagination; explicitly asking for it or one of
+   its applications is `403`. This is separate from applicant ownership APIs.
+6. Review reads include PUBLISHED rounds with `published_at`, whether still open,
+   closed normally or closed early. Do not apply the Public Club API's open-window
+   filter. Explicit DRAFT selection uses `409 RESOURCE_CONFLICT`, root reason
+   `ROUND_NOT_PUBLISHED`; CANCELLED uses `ROUND_CANCELLED`. Without round selection,
+   DRAFT/CANCELLED/unpublished rounds are excluded from the list.
+
+### List: `GET /api/v1/clubs/{id}/applications`
+
+Operation `listClubApplicationsForCommittee`; response `CommitteeClubApplicationPage`.
+
+| Query | Contract |
+|---|---|
+| `roundId` | Optional `PositiveBigintId` string; when supplied must belong to this club and pass the availability/self-review checks above. Empty or malformed is `400 INVALID_RESOURCE_ID`. |
+| `status` | Optional internal enum: SUBMITTED, UNDER_REVIEW, ACCEPTED, REJECTED, CONFIRMED, DECLINED, WITHDRAWN, EXPIRED. Unknown/blank is `400 VALIDATION_FAILED`; PENDING is a UI label, not a status. |
+| `q` | Optional case-insensitive literal substring search of studentCode/displayName; at most 200 Unicode code points before stripping outer whitespace. Blank means no search; `%`, `_` and SQL-like text are treated literally, not as wildcards/SQL. |
+| `page` | Integer 0–2147483647, default 0. Negative, nonnumeric or out-of-range is `400 VALIDATION_FAILED`. |
+| `size` | Integer 1–100, default 20; invalid type/range is `400 VALIDATION_FAILED`. |
+
+SQL limits club, selected round, status, search and non-self-review published rounds
+**before LIMIT/OFFSET and COUNT**, using the same predicate for both queries. No
+application answers/reviews/tags join multiplies the list. Stable order is
+`submitted_at ASC, id ASC`; no client sort override is defined. A page beyond the
+end is `200` with empty items and the filtered total, not 404.
+
+```json
+{
+  "items": [
+    {
+      "id": "90001",
+      "roundId": "70001",
+      "applicant": {
+        "userId": "10001",
+        "studentCode": "6600000001",
+        "displayName": "Fictional Applicant",
+        "email": null,
+        "facultyName": "Science",
+        "departmentName": null,
+        "programName": null,
+        "studyYear": 2
+      },
+      "submittedAt": "2026-11-08T09:30:00Z",
+      "status": "SUBMITTED"
+    }
+  ],
+  "page": { "number": 0, "size": 20, "totalElements": 1, "totalPages": 1 }
+}
+```
+
+For no eligible applications:
+
+```json
+{
+  "items": [],
+  "page": { "number": 0, "size": 20, "totalElements": 0, "totalPages": 0 }
+}
+```
+
+### Detail: `GET /api/v1/clubs/{id}/applications/{appId}`
+
+Operation `getClubApplicationForCommittee`; response `CommitteeClubApplicationDetail`.
+`appId` is a required `PositiveBigintId`. Verify the stored application's club and
+round after parent permission; being a committee member of both clubs still does
+not permit mixing one club's path with the other's application ID.
+
+```json
+{
+  "id": "90001",
+  "clubId": "20001",
+  "roundId": "70001",
+  "applicant": {
+    "userId": "10001",
+    "studentCode": "6600000001",
+    "displayName": "Fictional Applicant",
+    "email": null,
+    "facultyName": "Science",
+    "departmentName": null,
+    "programName": null,
+    "studyYear": 2
+  },
+  "motivation": "I would like to help organize club activities.",
+  "questionsWithAnswers": [
+    { "questionId": "81001", "questionText": "Describe your experience.", "isRequired": true, "displayOrder": 1, "answerText": "I have organized student workshops." },
+    { "questionId": "81002", "questionText": "Any other experience?", "isRequired": false, "displayOrder": 2, "answerText": null }
+  ],
+  "links": [
+    { "id": "95001", "label": "Portfolio", "url": "https://example.org/portfolio", "displayOrder": 1 }
+  ],
+  "status": "SUBMITTED",
+  "submittedAt": "2026-11-08T09:30:00Z"
+}
+```
+
+The nested `CommitteeApplicantIdentity` is an explicit users/student_profiles
+projection, not an entity. It permits nullable email/faculty/department/program/
+studyYear and the actual positive SMALLINT year range. Questions are paired by
+questionId, ordered by display_order then ID; omitted optional answers are null,
+not removed or shifted. Document links are ordered by display_order then ID and
+use the existing HTTPS validation/model (including case-insensitive scheme).
+There is no upload, download proxy, storage reference or remote URL fetch here.
+External document visibility remains controlled by the originating website.
+
+The requester confirmed that both reads exclude **reviews/internalComment,
+reviewer and decision identities, resultMessage, statusHistory/audit reasons,
+management version, credentials and full account/profile entities**. They never
+reference `CommitteeApplicationDetail`, which remains a separate future write
+response schema for start-review/decision. All returned fields are explicitly
+required by the new schemas; nullable properties appear as null.
+
+### Read consistency, errors and review
+
+Both operations are service-owned read-only REPEATABLE READ transactions, keeping
+current grant checks, page count/items and detail joins in one consistent
+snapshot. Revocation committed before the next request's grant check takes effect;
+no authorization result is cached from login. This read scope does not add locks
+or mutations to assignment management. Every response is `Cache-Control: no-store`.
+
+Use the existing `Problem` format for `400`, `401`, `403`, `404`, `409`, `500`,
+`503`; root `reason` is present on the two round-state conflicts. Database failures
+retain their existing safe error mapping, not a fabricated permission/duplicate
+error. Example `409`:
+
+```json
+{
+  "type": "urn:tuclubhub:problem:resource-conflict",
+  "title": "Resource state conflict",
+  "status": 409,
+  "detail": "The request conflicts with the current resource state.",
+  "instance": "/api/v1/clubs/20001/applications",
+  "code": "RESOURCE_CONFLICT",
+  "reason": "ROUND_CANCELLED",
+  "fieldErrors": [],
+  "traceId": "01J9EXAMPLE7K4D5"
+}
+```
+
+[Task65 verification/review handoff](../testing/task65-committee-application-review.md)
+records tests and local results. PO/team review and GitHub Actions are not implied
+by implementation or local validation. Future review writes must not reintroduce
+internal notes into these dedicated read DTOs.

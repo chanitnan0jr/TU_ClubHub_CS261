@@ -111,9 +111,18 @@
 6. ไม่เปิดการแก้ผลที่ประกาศแล้ว และไม่ให้ Admin ข้าม self-review, Term Date, Active, deadline หรือ ownership ถ้าผู้มีสิทธิ์หมดวาระหรือทุกคนมีผลประโยชน์ขัดกัน Admin ต้องแต่งตั้งผู้มีคุณสมบัติคนอื่นตามกระบวนการปกติก่อน
 7. ก่อนประกาศผล applicant API ต้องซ่อนทั้งผลภายในและ history/notification ที่เปิดเผยผล ใช้สถานะแสดงผลก่อนประกาศที่กำหนดใน DTO; review notes ภายในไม่เปิดเผยแก่ผู้สมัครแม้ประกาศผลแล้ว
 8. ตามข้อสรุป T74-D02: MVP ไม่มี INTERVIEW; UNDER_REVIEW เป็นขั้น optional ที่เกิดจาก Action ชัดแจ้งเท่านั้น การอ่าน US-09 ไม่เปลี่ยนสถานะ การบันทึกผลหลังปิดรับสามารถเริ่มจาก SUBMITTED โดยไม่ต้องผ่าน UNDER_REVIEW; Story ของงานเขียนยังแยกจาก US-09
+
 9. ตาม T74-D05/06: การตอบรับใหม่ตรวจ `results_published_at <= now < confirmation_deadline` ด้วยเวลา Server ณ จุดตัดสินใน Transaction หลังได้สิทธิ์เขียน ไม่ใช้เวลาเปิดฟอร์ม; Retry ยืนยัน/สละ Action เดิมคืนผลตัดสินเดิมโดยไม่เพิ่มสมาชิก/history คำขอสวนทางหลังจบรายการใช้ `409 RESOURCE_CONFLICT` ไม่มีเปลี่ยนใจใน MVP; payload/HTTP รายละเอียดของ Retry อยู่ใน Design
 10. งานหมดเวลาทำงานอัตโนมัติได้โดยไม่มีผู้เปิดหน้า เปลี่ยนเฉพาะ published ACCEPTED ที่ยังไม่ตอบรับเป็น EXPIRED เมื่อถึง deadline เก็บความต่างจาก DECLINED และ UI แสดง “สละสิทธิ์ (หมดเวลาตอบรับ)”; ความถี่/ระยะหน่วงงานยังเปิดใน T74-D06
 11. **T74-D07 — Decision recorded from user instruction / Pending Team Review:** ปฏิเสธการยืนยันใหม่ด้วย `409 RESOURCE_CONFLICT` ทุกกรณีที่คู่ผู้สมัคร/ชมรมมีแถวสมาชิกเดิม ไม่ว่าจะ ACTIVE/INACTIVE/LEFT/REMOVED ไม่เปลี่ยนสถานะสมาชิก ผลตอบรับ ประวัติ หรือ source เดิม และไม่เปิด reactivation ใน MVP ข้อยกเว้นมีเพียง exact Retry Action เดิมของใบสมัครที่ตัดสินสำเร็จแล้ว ให้คืนผลตัดสินเดิมโดยไม่เขียนข้อมูล แม้สถานะสมาชิกปัจจุบันเปลี่ยนไปก็ไม่สร้างหรือคืนสถานะสมาชิก; ผลเดิมคือผลตอบรับของใบสมัคร ไม่ใช่การยืนยันว่าสมาชิกปัจจุบันกลับมา Active คำอธิบายความปลอดภัยเมื่อสมาชิกเปลี่ยนสถานะในส่วนที่ 2.3 ไม่ได้เปิด Flow คืนสถานะสมาชิกใน MVP นี้
+
+**Task65 requester decision 2026-11-08 / Pending Team Review:** API อ่านใช้
+`GET /api/v1/clubs/{id}/applications` (optional `roundId`) และ
+`GET /api/v1/clubs/{id}/applications/{appId}` ตาม [API §13](../api/API_v1.md#13-committee-application-reads-task65)
+แทน round-scoped GET เดิมที่ยังไม่ implement ตรวจสิทธิ์ parent ก่อนตรวจ child;
+กรองรอบ self-review ทุกสถานะก่อน pagination/count และไม่ส่ง `reviews`,
+`internalComment`, ข้อมูลผู้ประเมิน/decision actors หรือ audit reasons ผ่าน read DTO
+การอ่านใช้สิทธิ์ปัจจุบันทุก request และไม่เปลี่ยนสถานะ ไม่เพิ่มสิทธิ์ให้ global ADMIN
 
 ## 5. ขอบเขต Admin และข้อมูลที่แต่ละบทบาทมองเห็น
 
@@ -180,6 +189,12 @@
 | exact Retry ยืนยันใบสมัครเดิมที่สำเร็จแล้ว แม้สมาชิกปัจจุบันเป็น INACTIVE/LEFT/REMOVED | คืนผลตัดสินเดิมหลังตรวจ Session/account/ownership โดยไม่เขียนข้อมูลหรือคืนสมาชิกเป็น Active |
 
 ## 9. สถานะ implementation และงานที่ต้องตามนโยบาย
+
+**Task65 update 2026-11-08:** เพิ่ม club-scoped committee list/detail reads พร้อม
+current grant checks, per-round self-review filtering และ DTO ที่ไม่มี internal
+reviews ตาม [API §13](../api/API_v1.md#13-committee-application-reads-task65)
+ผลทดสอบของงานนี้อยู่ใน [รายงาน Task65](../testing/task65-committee-application-review.md)
+ไม่ใช่การยืนยันว่ารายการงานเขียน/ประกาศผล/แต่งตั้งในตารางประวัติด้านล่างเสร็จแล้ว
 
 ทบทวน source/เอกสารสำหรับ Task74 ณ วันที่ 27 ตุลาคม 2026 โดยรักษาประวัติผลรายงานเดิมไว้; รายการนี้ไม่ใช่การรันทดสอบใหม่หรือหลักฐานว่า Workflow Sprint 2 ผ่านแล้ว:
 
