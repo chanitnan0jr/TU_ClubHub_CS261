@@ -4,6 +4,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 /**
  * Central whitelist shared by the security chain and session filters.
@@ -29,8 +30,8 @@ final class PublicRoutes {
             get("/clubs/**"),
             get("/profile"),
             get("/dashboard/**"),
-            get("/admin/dashboard"),
-            get("/admin/dashboard/**"),
+            AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/admin/dashboard"),
+            AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/admin/dashboard/**"),
 
             // Authentication bootstrap.
             get("/api/v1/auth/csrf"),
