@@ -3,6 +3,7 @@ package com.tu.clubhub.application;
 import com.tu.clubhub.application.dto.ApplicationAnswerInput;
 import com.tu.clubhub.application.dto.ApplicationLinkInput;
 import com.tu.clubhub.application.dto.ApplicationSubmissionRequest;
+import com.tu.clubhub.application.dto.ClubApplicationSubmissionRequest;
 import com.tu.clubhub.application.service.ApplicationSubmissionException;
 import com.tu.clubhub.application.service.ApplicationSubmissionValidator;
 import java.util.List;
@@ -39,6 +40,9 @@ class ApplicationSubmissionValidatorTest {
         var error = assertThrows(ApplicationSubmissionException.class, () -> validator.validate(id, valid()));
         assertEquals(400, error.status());
         assertEquals("INVALID_RESOURCE_ID", error.code());
+        var clubError = assertThrows(ApplicationSubmissionException.class, () -> validator.clubId(id));
+        assertEquals(400, clubError.status());
+        assertEquals("INVALID_RESOURCE_ID", clubError.code());
     }
 
     @ParameterizedTest
@@ -137,6 +141,41 @@ class ApplicationSubmissionValidatorTest {
         }
         assertEquals("hello", mapper.readValue(mapper.writeValueAsString(parsed),
                 ApplicationSubmissionRequest.class).motivation());
+    }
+
+    @Test
+    void clubRequestSelectsRoundAndReusesStrictNestedContentParsing() {
+        var permissive = JsonMapper.builder()
+                .disable(tools.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
+        String valid = """
+                {"roundId":"9223372036854775807","motivation":"hello",
+                 "answers":[{"questionId":"2","answerText":"answer"}],
+                 "links":[{"label":"Portfolio","url":"https://example.org"}]}
+                """;
+        var parsed = permissive.readValue(valid, ClubApplicationSubmissionRequest.class);
+        assertEquals(Long.MAX_VALUE, validator.roundId(parsed.roundId()));
+        assertEquals(Long.MAX_VALUE, validator.clubId("9223372036854775807"));
+        assertEquals("2", parsed.submission().answers().getFirst().questionId());
+        assertEquals("https://example.org", parsed.submission().links().getFirst().url());
+        assertEquals("hello", validator.validate(parsed.roundId(), parsed.submission()).motivation());
+        for (String invalid : List.of(
+                valid.replace("\"roundId\":\"9223372036854775807\",", ""),
+                valid.replace("\"roundId\":\"9223372036854775807\"", "\"roundId\":null"),
+                valid.replace("\"roundId\":\"9223372036854775807\"", "\"roundId\":1"),
+                valid.replace("\"motivation\":", "\"applicantId\":\"999\",\"motivation\":"),
+                valid.replace("\"questionId\":\"2\"", "\"questionId\":2"),
+                valid.replace("\"answerText\":\"answer\"", "\"answerText\":42"),
+                valid.replace("\"answerText\":\"answer\"", "\"answerText\":\"answer\",\"optionId\":\"3\""),
+                valid.replace("\"url\":\"https://example.org\"", "\"url\":\"https://example.org\",\"attachmentId\":\"4\""))) {
+            var error = assertThrows(Exception.class,
+                    () -> permissive.readValue(invalid, ClubApplicationSubmissionRequest.class), invalid);
+            Throwable root = error;
+            while (root.getCause() != null) root = root.getCause();
+            assertInstanceOf(ApplicationSubmissionException.class, root);
+            assertEquals("VALIDATION_FAILED", ((ApplicationSubmissionException) root).code());
+        }
+        // The existing round route remains strict: roundId is never accepted in its body.
+        assertThrows(Exception.class, () -> permissive.readValue(valid, ApplicationSubmissionRequest.class));
     }
 
     private static ApplicationSubmissionRequest valid() {
