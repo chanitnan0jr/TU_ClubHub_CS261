@@ -26,6 +26,7 @@ final class PublicRoutes {
             // Existing SPA routes.
             get("/login"),
             get("/clubs/**"),
+            get("/open-calls"),
             get("/profile"),
             get("/dashboard/**"),
 
@@ -39,6 +40,7 @@ final class PublicRoutes {
             get("/api/v1/public/interest-tags"),
             get("/api/v1/public/clubs/*"),
             get("/api/v1/public/clubs/*/recruitment-rounds"),
+            get("/api/v1/public/recruitment-rounds"),
 
             // Deployment health check.
             get("/actuator/health")
