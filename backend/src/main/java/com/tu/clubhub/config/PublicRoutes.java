@@ -2,6 +2,7 @@ package com.tu.clubhub.config;
 
 import org.springframework.http.HttpMethod;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
@@ -23,7 +24,7 @@ final class PublicRoutes {
             get("/*.ico"),
             get("/*.json"),
 
-            // Existing SPA routes.
+            // Existing SPA routes (Task75 §5.1).
             get("/login"),
             get("/clubs"),
             get("/clubs/**"),
@@ -31,8 +32,8 @@ final class PublicRoutes {
             get("/profile"),
             get("/dashboard"),
             get("/dashboard/**"),
-            get("/admin/dashboard"),
-            get("/admin/dashboard/**"),
+            AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/admin/dashboard"),
+            AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/admin/dashboard/**"),
 
             // Authentication bootstrap.
             get("/api/v1/auth/csrf"),
