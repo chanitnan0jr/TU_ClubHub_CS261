@@ -25,10 +25,14 @@ final class PublicRoutes {
 
             // Existing SPA routes.
             get("/login"),
+            get("/clubs"),
             get("/clubs/**"),
             get("/open-calls"),
             get("/profile"),
+            get("/dashboard"),
             get("/dashboard/**"),
+            get("/admin/dashboard"),
+            get("/admin/dashboard/**"),
 
             // Authentication bootstrap.
             get("/api/v1/auth/csrf"),
