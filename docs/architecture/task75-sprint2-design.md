@@ -52,6 +52,7 @@
 | **Question Lock** | `PUT /api/v1/rounds/{roundId}/questions/{questionId}`<br/>`DELETE /api/v1/rounds/{roundId}/questions/{questionId}` | `replaceApplicationQuestion`<br/>`deleteApplicationQuestion` | `SESSION` + `CSRF` + Effective `COMMITTEE`/`PRESIDENT` (ห้าม Self-review); คืน `409 QUESTION_HAS_ANSWERS` เมื่อมีคำตอบแล้ว | `rounds.openapi.yaml` | `US-08`, `Task51`, `Task60` |
 | **Application Form** | `GET /api/v1/rounds/{roundId}/application-form` | `getRoundApplicationForm` | `SESSION` + `ACTIVE` account + `ACTIVE` student; รอบต้อง `PUBLISHED` และอยู่ในช่วงเปิดรับ | `openapi.yaml` | `US-03`, `Task42`, `Task52`, `Task53` |
 | **Submit Application** | `POST /api/v1/rounds/{roundId}/applications` | `submitApplication` | `SESSION` + `CSRF` + `ACTIVE` account + `ACTIVE` student; ตรวจเวลาเปิดรับ, สมัครซ้ำ, สมาชิกเดิม (`ALREADY_MEMBER`) และเพดาน 5 ชมรม | `openapi.yaml` | `US-03`, `Task42`, `Task52`, `Task53` |
+| **Submit Club Application** | `POST /api/v1/clubs/{id}/applications` | `submitClubApplication` | กฎเดียวกับ Submit Application; บังคับ body `roundId` และตรวจว่าเป็นรอบของชมรมใน path; ไม่เลือกรอบอัตโนมัติ | `openapi.yaml` | `US-03`, `Task52` — requester confirmed 2026-11-08, pending team review |
 | **My Applications** | `GET /api/v1/me/applications` | `listMyApplications` | `SESSION` + `ACTIVE` account; ดึงเฉพาะ `applicant_id = sessionUserId` พร้อม Mask สถานะก่อนประกาศผล | `openapi.yaml` | `US-04`, `Task64` |
 | **My Application Detail** | `GET /api/v1/me/applications/{applicationId}` | `getMyApplicationDetail` | `SESSION` + `ACTIVE` account + Ownership (`403` ถ้าเป็นของคนอื่น, `404` ถ้าไม่มีจริง) | `openapi.yaml` | `US-04`, `Task64` |
 | **Confirm Membership** | `POST /api/v1/me/applications/{applicationId}/confirm` | `confirmMembershipOffer` | `SESSION` + `CSRF` + `ACTIVE` account + Ownership (`ACTIVE` student & club สำหรับการยืนยันใหม่; Idempotent `200` สำหรับ Retry) | `openapi.yaml` | `US-05`, `Task69`, `Task70` |
@@ -176,6 +177,7 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
 ใช้ Contract ที่นิยามไว้ใน [`openapi.yaml`](../api/openapi.yaml):
 - `GET /api/v1/rounds/{roundId}/application-form` (`RoundApplicationForm`)
 - `POST /api/v1/rounds/{roundId}/applications` (`ApplicationSubmissionRequest` -> `201 Created` `ApplicationSubmission` พร้อม Header `Location: /api/v1/me/applications/{id}`)
+- **Task52 addition (requester confirmed 2026-11-08; team review pending):** `POST /api/v1/clubs/{id}/applications` (`ClubApplicationSubmissionRequest` เพิ่ม body `roundId` ที่บังคับส่ง) ตรวจรอบเป็นของชมรมใน path แล้วใช้ transaction/locking/validation/response เดียวกับเส้นทางรอบเดิม ไม่เลือก first/latest และไม่ย้าย Frontend consumer เดิม ดู [API §11.1](../api/API_v1.md#111-club-scoped-submission-task52)
 - **ข้อตกลงเพิ่มเติมสำหรับ `Task52` & `Task53` (`T74-D09`):**
   1. `motivation` บังคับกรอก (1–2,000 ตัวอักษร Unicode ก่อน `trim()`, ห้ามมีแต่ช่องว่าง)
   2. `answers` ส่งเฉพาะคำถามที่ตอบ (คำถามที่ `isRequired: true` ต้องมีคำตอบไม่ว่างและยาวไม่เกิน `maxLength` ของคำถามนั้น; คำถามที่ `isRequired: false` หากไม่ตอบให้ตัดออกจาก Array `answers` หรือถ้าส่งมาต้องไม่เป็นค่าว่าง)
