@@ -3,8 +3,8 @@
 | Property | Value |
 |---|---|
 | Version | `v1` |
-| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.2.0), `rounds.openapi.yaml` (v1.1.0), and `task75-sprint2-design.md` |
-| Last updated | 2026-11-01 |
+| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.4.0), `rounds.openapi.yaml` (v1.2.0), and `task75-sprint2-design.md` |
+| Last updated | 2026-11-06 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
@@ -21,12 +21,15 @@ Initial source review on 2026-10-19; application POST status updated on 2026-10-
 
 | API | Backend status | Frontend status |
 |---|---|---|
-| Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout | Login/account/logout connected |
+| Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout; `me` returns `studentStatus` and `activeCommitteeAssignments` read on every call | Login/account/logout connected; committee pages do not read assignments yet |
 | `GET /api/v1/public/clubs/{id}` and `.../{id}/recruitment-rounds` | Implemented; active clubs and currently open rounds from DB | Club detail still uses mock data and is not mounted |
+| `GET /api/v1/public/recruitment-rounds` (Open Call Board) | Implemented; open rounds across all active clubs | `/open-calls` page pending |
+| `GET /api/v1/public/club-categories` and `GET /api/v1/public/interest-tags` | Implemented; complete lists ordered by name, then id | Profile editor fills its category select and tag chips from them; search filters pending (Task62) |
 | `GET /api/v1/clubs/{clubId}` | Contract-only; no handler | Editor client calls this missing endpoint |
-| `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard | Editor/client exist but are not mounted |
+| `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard; `categoryId` and `tagIds` are required and saved with the profile in one transaction | Profile editor at `/clubs/:clubId/edit` sends `categoryId` and `tagIds` |
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
-| Committee round `GET` list/detail and `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
+| Committee round `GET` list/detail (`listRounds`, `getRound`) | Implemented with the round-write committee guard and self-review filter; see rounds contract | Pending |
+| Round `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
 | `GET /api/v1/rounds/{roundId}/application-form` (§12) | Implemented with the Task42-confirmed account/student/window policy; PO/team review pending | Form prototype only |
 | `POST /api/v1/rounds/{roundId}/applications` (§11) | Implemented: transactional service, HTTP handler, shared Problem errors, session/CSRF; see [Task45 verification](../testing/task45-concurrency-and-rollback.md) | No submission client |
 | `/actuator/health` | Implemented | Operational endpoint |
@@ -39,8 +42,8 @@ The foundation contract covers:
 
 - Session-based authentication through the TU Authentication API.
 - CSRF token bootstrap for browser requests.
-- The current user's minimal account identity.
-- Public club profiles and currently open recruitment rounds for active clubs.
+- The current user's account identity, student status, and effective committee assignments.
+- Public club profiles and currently open recruitment rounds for active clubs, per club and across all clubs (Open Call Board).
 - Application submission with answers and document links, including database persistence, as defined in [section 11](#11-application-submission).
 - Applicant-facing form schemas and the read policy in [section 12](#12-round-application-form-task42).
 - A minimal health endpoint for operations.
@@ -79,7 +82,7 @@ Collection APIs must be paginated. Unless a feature needs a different documented
 }
 ```
 
-Only return sort fields explicitly supported by the endpoint. The public recruitment-round endpoint uses this collection wrapper.
+Only return sort fields explicitly supported by the endpoint. Both public recruitment-round endpoints use this collection wrapper.
 
 ## 3. Authentication, session, and CSRF
 
@@ -153,7 +156,7 @@ After TU verification succeeds, the backend creates a local `users` row on first
 
 ### `GET /api/v1/auth/me`
 
-Returns the authenticated user's minimal account identity. It returns `401 AUTHENTICATION_REQUIRED` when no authenticated session exists or its idle/absolute lifetime has expired. Under the adopted policy, a currently suspended account returns `403 ACCOUNT_NOT_ALLOWED` and its session is invalidated. Read the current global role from the database. The response is a UI hint only; the backend still performs authorization for each operation. Committee privileges are assignments scoped to a club and term, not a global user role. The permission matrix records the remaining account/role revalidation work.
+Returns the authenticated account as it is stored now. `role`, `studentStatus`, and `activeCommitteeAssignments` are read from the database on every call, not from the session, so a role change, appointment, revocation, or term end shows on the next call without a new login (Task79). It returns `401 AUTHENTICATION_REQUIRED` when no authenticated session exists or its idle/absolute lifetime has expired. A currently suspended account returns `403 ACCOUNT_NOT_ALLOWED` and its session is invalidated; a session whose account no longer exists also gets `403 ACCOUNT_NOT_ALLOWED`. The response is a UI hint only; the backend still performs authorization for each operation. Committee privileges are assignments scoped to a club and term, not a global user role.
 
 **`200 OK`** with `Cache-Control: no-store`.
 
@@ -161,12 +164,29 @@ Returns the authenticated user's minimal account identity. It returns `401 AUTHE
 {
   "user": {
     "id": "10001",
-    "role": "USER"
+    "role": "USER",
+    "studentStatus": "ACTIVE",
+    "activeCommitteeAssignments": [
+      {
+        "clubId": "20001",
+        "clubName": "Example Club",
+        "permissionRole": "PRESIDENT",
+        "positionName": "Club President",
+        "startsAt": "2026-07-31T17:00:00Z",
+        "endsAt": "2027-07-31T17:00:00Z"
+      }
+    ]
   }
 }
 ```
 
-`role` is `USER` or `ADMIN`. Student eligibility is defined by the permission matrix, but normalized TU student status is not included in this response until its integration and response contract are implemented. Do not infer student or committee access from `role`.
+| Field | Meaning |
+|---|---|
+| `role` | `USER` or `ADMIN`. Do not infer student or committee access from it. |
+| `studentStatus` | `ACTIVE`, `INACTIVE`, `GRADUATED`, or `UNKNOWN`, refreshed at each TU login; `null` when the account has no student profile. Only `ACTIVE` grants student or committee rights. |
+| `activeCommitteeAssignments` | Assignments that grant committee rights at the time of the call, in every club, ordered by club name; `[]` when there are none. An entry is listed only while the committee authorization rule in [§7](#7-authorization-rules) holds: the assignment is unrevoked and `startsAt <= now < endsAt`, the membership has started and not ended, and the account, student status, and club are all Active. Two overlapping assignments in one club give two entries. |
+
+`permissionRole` is `COMMITTEE` or `PRESIDENT`; `positionName` is a display title and grants nothing. The login response carries only `id` and `role`; call `/me` for the other fields.
 
 ### `POST /api/v1/auth/logout`
 
@@ -187,7 +207,7 @@ An upstream timeout or outage must never result in a successful login or an auto
 
 ### Public club API
 
-The following read-only endpoints are public and do not require a session cookie or CSRF token. Both return data only for a club whose `clubs.status` is `ACTIVE`. An unknown or inactive club returns the same `404 CLUB_NOT_FOUND` response to avoid disclosing whether an inactive club exists. The `id` path parameter is a decimal string for a positive signed 64-bit database `bigint`, matching the project's wire convention. Non-decimal values and values outside the supported integer range return `400 INVALID_RESOURCE_ID`.
+The following read-only endpoints are public and do not require a session cookie or CSRF token. They return data only for clubs whose `clubs.status` is `ACTIVE`. For the two per-club endpoints, an unknown or inactive club returns the same `404 CLUB_NOT_FOUND` response to avoid disclosing whether an inactive club exists. The `id` path parameter is a decimal string for a positive signed 64-bit database `bigint`, matching the project's wire convention. Non-decimal values and values outside the supported integer range return `400 INVALID_RESOURCE_ID`.
 
 #### `GET /api/v1/public/clubs/{id}`
 
@@ -228,9 +248,67 @@ Returns a paginated `items`/`page` collection of public recruitment round summar
 }
 ```
 
-For non-empty pages, each item contains only `id`, `name`, `opensAt`, and `closesAt`. `name` is the public display name for the round (mapped from `recruitment_rounds.title`). The contract uses the standard zero-based `page` and `size` parameters (default `0` and `20`, maximum size `100`). Timestamps are `TIMESTAMPTZ` instants serialized as ISO 8601 UTC values ending in `Z`. The implementation samples one backend `Clock.instant()` for both the page query and count. Deployment must keep host clocks synchronized; no clock-skew allowance is defined.
+For non-empty pages, each item contains only `id`, `name`, `description`, `opensAt`, `closesAt`, and `resultsScheduledAt`. `name` is the public display name for the round (mapped from `recruitment_rounds.title`). `description` holds the round details and applicant qualifications written by the committee; it is plain text that clients must escape. `resultsScheduledAt` is the planned results announcement instant, or `null` when none is scheduled. The round's separate eligibility text is not exposed. Items are ordered by `opensAt`, then `id`. The contract uses the standard zero-based `page` and `size` parameters (default `0` and `20`, maximum size `100`). Timestamps are `TIMESTAMPTZ` instants serialized as ISO 8601 UTC values ending in `Z`. The implementation samples one backend `Clock.instant()` for both the page query and count. Deployment must keep host clocks synchronized; no clock-skew allowance is defined.
 
-Both endpoints use the shared `application/problem+json` `Problem` error format for `400 INVALID_RESOURCE_ID`, `404 CLUB_NOT_FOUND`, `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`. Neither endpoint returns `401` or `403` because both are public reads.
+Both per-club endpoints use the shared `application/problem+json` `Problem` error format for `400 INVALID_RESOURCE_ID`, `404 CLUB_NOT_FOUND`, `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`. Invalid `page`/`size` on the rounds list returns `400 VALIDATION_FAILED`. Neither endpoint returns `401` or `403` because both are public reads.
+
+#### `GET /api/v1/public/recruitment-rounds`
+
+The Open Call Board (US-07 AC-03): one paginated `items`/`page` collection of every round that is open right now across all `ACTIVE` clubs. It uses exactly the same open rule as `GET /api/v1/public/clubs/{id}/recruitment-rounds`, so a round appears here only when it also appears in its own club's list. Draft, cancelled, not-yet-open, expired, and manually closed rounds never appear, and no round of an inactive club appears.
+
+Items are ordered by `closesAt` ascending (soonest deadline first), then `id` ascending, so pages are stable. Each item carries the same round fields as the per-club list plus a `club` summary that links to `GET /api/v1/public/clubs/{id}`:
+
+```json
+{
+  "items": [
+    {
+      "id": "50001",
+      "name": "Academic Year 2026",
+      "description": "Open to all faculties. Bring a short portfolio link if you have one.",
+      "opensAt": "2026-10-01T00:00:00Z",
+      "closesAt": "2026-10-31T16:59:59Z",
+      "resultsScheduledAt": "2026-11-07T09:00:00Z",
+      "club": {
+        "id": "20001",
+        "name": "Example Club",
+        "imageUrl": "https://images.example.org/clubs/20001.png",
+        "category": { "id": "30001", "name": "Technology" }
+      }
+    }
+  ],
+  "page": { "number": 0, "size": 20, "totalElements": 1, "totalPages": 1 }
+}
+```
+
+`club.imageUrl` is `null` when the club has no logo; the client shows its own fallback image. `page` and `size` follow the [collection convention](#collection-convention) (default `0` and `20`, `size` from `1` to `100`); a negative `page`, an out-of-range `size`, or a non-integer value returns `400 VALIDATION_FAILED` with the parameter name in `fieldErrors`. No open rounds returns `200 OK` with empty `items` and zero totals; a page past the end returns empty `items` with unchanged totals. Items and totals use one evaluation instant per request. Responses carry `Cache-Control` with `no-store` because the list changes as rounds open and close. Other errors are `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`; there is no `401`, `403`, or `404`.
+
+#### `GET /api/v1/public/club-categories`
+
+Returns every club category as `{ "items": [...] }` (`PublicClubCategoryList`), ordered by `name` ascending, then `id` ascending. The list is complete and not paginated. Each item has only `id` (decimal string) and `name`. An empty list is `{"items": []}`. Public search filters and the committee profile editor use these ids; `PUT /api/v1/clubs/{clubId}` accepts only an id from this list as `categoryId`.
+
+```json
+{
+  "items": [
+    { "id": "30001", "name": "วิชาการ" },
+    { "id": "30002", "name": "กีฬา" }
+  ]
+}
+```
+
+#### `GET /api/v1/public/interest-tags`
+
+Returns every interest tag as `{ "items": [...] }` (`PublicClubTagList`), ordered by `name` ascending, then `id` ascending, with the same item shape and empty-list form as the category list. `PUT /api/v1/clubs/{clubId}` accepts only ids from this list in `tagIds`.
+
+```json
+{
+  "items": [
+    { "id": "40002", "name": "Music" },
+    { "id": "40001", "name": "Programming" }
+  ]
+}
+```
+
+Both lists are public reads: no session or CSRF token, and no `400`, `401`, `403`, or `404` responses. Other errors are `405 METHOD_NOT_ALLOWED`, `503 SERVICE_UNAVAILABLE`, and unexpected `500 INTERNAL_ERROR`.
 
 ### `GET /api/v1/clubs/{clubId}`
 
@@ -270,9 +348,11 @@ Returns a public club profile without requiring login. `clubId` is a decimal str
     {
       "id": "50001",
       "name": "Academic Year 2026",
+      "description": "Open to all faculties. Bring a short portfolio link if you have one.",
       "opensAt": "2026-10-01T00:00:00Z",
       "closesAt": "2026-10-31T16:59:59Z",
-      "closedAt": null
+      "closedAt": null,
+      "resultsScheduledAt": null
     }
   ]
 }
@@ -293,7 +373,9 @@ IDs containing non-decimal characters or a minus sign return `400 INVALID_RESOUR
 
 Replaces the editable profile fields for a club and returns the updated public profile. Requires an authenticated session, the current CSRF header, and an effective `COMMITTEE` or `PRESIDENT` assignment for this club. Under the adopted permission matrix, account, student profile, club, membership, and assignment must be `ACTIVE`; membership must have `joined_at <= now` and `ended_at IS NULL`; assignment must have `revoked_at IS NULL` and `starts_at <= now < ends_at`. The server rechecks current database state on every request and inside the write transaction. `ADMIN` alone grants no access. A missing or expired session returns `401`; a suspended account returns `403 ACCOUNT_NOT_ALLOWED`; other permission failures return `403 ACCESS_DENIED`. The matrix records the guard additions still required in the implementation.
 
-The caller may update only `name`, `description`, `objectives`, `contactUrl`, `facebookUrl`, `instagramUrl`, `contactEmail`, `imageUrl`, and `bannerUrl`. Category, affiliation, status, IDs, tags, and recruitment rounds are not writable through this endpoint. `name` and `description` are required and non-blank; `name` is limited to 200 characters. Nullable fields omitted or sent as `null` are cleared. URL fields, when provided, must be HTTPS URLs; `contactEmail`, when provided, must be a valid email address. Text is treated as data, not executable HTML; persistence queries must use bound parameters, and clients must escape text when rendering it.
+The caller may update only `name`, `description`, `objectives`, `contactUrl`, `facebookUrl`, `instagramUrl`, `contactEmail`, `imageUrl`, `bannerUrl`, `categoryId`, and `tagIds`. Affiliation, status, the club ID, and recruitment rounds are not writable through this endpoint. `name` and `description` are required and non-blank; `name` is limited to 200 characters. Nullable fields omitted or sent as `null` are cleared. URL fields, when provided, must be HTTPS URLs; `contactEmail`, when provided, must be a valid email address. Text is treated as data, not executable HTML; persistence queries must use bound parameters, and clients must escape text when rendering it.
+
+`categoryId` (required) is a decimal-string ID from [`GET /api/v1/public/club-categories`](#get-apiv1publicclub-categories). `tagIds` (required) is the complete new tag set: up to 10 distinct decimal-string IDs from [`GET /api/v1/public/interest-tags`](#get-apiv1publicinterest-tags). It replaces the club's current tags, `[]` removes them all, and order does not matter. To keep the current category or tags, send their current IDs (the public profile returns them). The profile fields, category, and tags are saved together: a rejected or failed request changes nothing, and after `200 OK` both the response and the public profile show the new category and tags.
 
 **Request body** (`ClubUpdateRequestDto`):
 
@@ -307,7 +389,9 @@ The caller may update only `name`, `description`, `objectives`, `contactUrl`, `f
   "instagramUrl": "https://instagram.com/tucoding",
   "contactEmail": "tucoding@example.org",
   "imageUrl": "https://images.example.org/clubs/20001.png",
-  "bannerUrl": null
+  "bannerUrl": null,
+  "categoryId": "30001",
+  "tagIds": ["40001", "40002"]
 }
 ```
 
@@ -322,7 +406,17 @@ The caller may update only `name`, `description`, `objectives`, `contactUrl`, `f
 | `405` | `METHOD_NOT_ALLOWED` | The club path does not support the requested method; only `GET` and `PUT` are defined |
 | `503` | `SERVICE_UNAVAILABLE` | The database dependency is unavailable |
 
-For `VALIDATION_FAILED`, each entry in `fieldErrors` identifies a request field using the shared `field`, `code`, and `message` shape. Do not return database constraint errors or internal details to the client.
+For `VALIDATION_FAILED`, each entry in `fieldErrors` identifies a request field using the shared `field`, `code`, and `message` shape. Category and tag errors use these fields:
+
+| `field` | When |
+|---|---|
+| `categoryId` | Missing, not a positive decimal ID, or no such category |
+| `tagIds` | Missing (`null`), or more than 10 items |
+| `tagIds[i]` | Item `i` (zero-based) is not a positive decimal ID, repeats an earlier item, or names no existing tag |
+
+Do not return database constraint errors or internal details to the client.
+
+**Breaking request change (contract 1.4.0):** `categoryId` and `tagIds` became required. A client that omits them now receives `400 VALIDATION_FAILED`. The bundled SPA is the only consumer and ships the matching editor in the same release, so no separate API version is introduced.
 
 ## 5. Health endpoint
 
@@ -412,8 +506,8 @@ The table includes new APIs and unfinished parts of existing contracts. Define m
 | US-04 | Applicant application list/detail/history | Owner-only access and hiding unpublished results/internal notes are decided; section 11 reserves `GET /api/v1/me/applications` and `GET /api/v1/me/applications/{applicationId}`; define response/status mapping |
 | US-05 | Confirm or decline an offer | User decisions record retry, opposite-action conflict, transaction-time checks and rejection of all prior target membership rows for fresh confirmation; define operation/DTOs and implement publication/atomicity/concurrency |
 | US-06 | Club profile editing extensions | Pending GET integration, category/tag writes, and concurrent update policy; PUT already exists |
-| US-07 | Recruitment management completion | GET list/detail and CANCEL from rounds.openapi.yaml remain pending; define cancellation reason and complete permission checks |
-| US-08 | Recruitment question integration | Round POST/PUT and per-question list/create/update/delete/reorder APIs exist, and the question-management page uses them; current policy permits changes only on drafts without applications; define any future question versioning separately |
+| US-07 | Recruitment management completion | Committee GET list/detail are implemented; CANCEL from rounds.openapi.yaml remains pending; define cancellation reason and its PRESIDENT check |
+| US-08 | Recruitment question integration | Round POST/PUT and per-question list/create/update/delete/reorder APIs exist, and the question-management page uses them; Task51 permits editing/deleting unanswered existing questions in mixed open drafts while answered content/positions stay fixed; adding questions and full replacement still require no applications; PUBLISHED/CLOSED remain locked; define future question versioning separately |
 | US-09 | Committee application review | Scope, privacy boundaries, and self-review are decided in the matrix; current story remains read-only; decision/publication need separate implementation work |
 | Selection-results Draft | Explicit review action, internal decisions and result publication | See [selection-results-draft.md](../stories/sprint2/selection-results-draft.md); the user confirmed ชนิตว์นันท์ as Owner of the two Draft Stories. FE/BE owners remain to be assigned; temporary IDs, team review, operation paths/DTOs/audit design and handlers remain pending |
 | US-10 | Central dashboard | Admin aggregate access is decided; define metrics and academic-period attribution |
@@ -447,8 +541,8 @@ Calling that replay a logical read does not define a new GET endpoint or waive C
 Following the Task74 System Analysis handoff, the complete Sprint 2 technical contracts, OpenAPI schemas, RFC 7807 `409 RESOURCE_CONFLICT` `reason` vocabulary, database locking & expiry worker design, and frontend UI wireframes/status mappings are specified in:
 
 - **Master System Design Document:** [`docs/architecture/task75-sprint2-design.md`](../architecture/task75-sprint2-design.md)
-- **Primary OpenAPI 3.1 Specification (`v1.2.0`):** [`docs/api/openapi.yaml`](openapi.yaml)
-- **Recruitment Rounds OpenAPI 3.0.3 Specification (`v1.1.0`):** [`docs/api/rounds.openapi.yaml`](rounds.openapi.yaml)
+- **Primary OpenAPI 3.1 Specification (`v1.4.0`):** [`docs/api/openapi.yaml`](openapi.yaml)
+- **Recruitment Rounds OpenAPI 3.0.3 Specification (`v1.2.0`):** [`docs/api/rounds.openapi.yaml`](rounds.openapi.yaml)
 
 | Sprint 2 Feature / Task | Specified Endpoint(s) | Primary OpenAPI Schema(s) |
 |---|---|---|
@@ -478,7 +572,7 @@ Update this Markdown contract, the OpenAPI document, backend DTOs, and frontend 
 3. Verify the upstream mapping into local student status. Only verified `ACTIVE` is eligible under the adopted matrix; do not infer this from login success.
 4. Implement the submission limits in section 11 and complete publication/confirmation DTOs, scheduling and membership transitions within the adopted permissions.
 5. Implement the decided committee/admin matrix, including PRESIDENT publication, self-review prohibition, no Admin override, and the enforcement gaps listed in the matrix.
-6. Define a separate versioning design if questions must change after publication; current policy permits editing only drafts without applications.
+6. Define a separate versioning design if questions must change after publication; current policy keeps PUBLISHED/CLOSED locked; see the Task51 mixed-DRAFT exception for existing unanswered questions.
 
 Mark defined but unimplemented APIs as pending, and keep unresolved schemas identified separately. Live TU integration and completed product workflows require their own verification. Authorization policy itself is decided by the permission matrix.
 
@@ -548,7 +642,7 @@ Length limits count Unicode characters in the submitted value, before trimming, 
 
 Only text questions exist in the current model. There is no choice/options schema and no client-supplied question type: a supplied `optionId`, `selectedOptions`, score, applicant identity, application status, or other unknown field is `400 VALIDATION_FAILED`. Reject duplicate `questionId` values even when their answer texts differ; JSON Schema `uniqueItems` alone cannot enforce this identifier-level rule. Missing required answers, blank supplied optional answers, wrong-round/unknown questions, and overlong text also use `400 VALIDATION_FAILED` with indexed `fieldErrors` where applicable.
 
-Loading the form does not reserve a submission or freeze round availability. If a round closes while the student is filling it in, the transaction-time state check returns `409 RESOURCE_CONFLICT` with `reason: ROUND_CLOSED`, with no writes. Current policy permits question edits only on drafts without applications ([permission matrix](../security/permission-matrix.md#3-permission-matrix)); no form version/ETag/precondition token is defined for this POST. Always validate against the current stored question set. If that set changed and an answer is now invalid or required data is missing, use the existing `400 VALIDATION_FAILED`; there is no invented `FORM_CHANGED` conflict. Supporting edits after publication or detecting stale content when IDs/constraints remain valid requires a separately confirmed versioning design (§12 review item R3).
+Loading the form does not reserve a submission or freeze round availability. If a round closes while the student is filling it in, the transaction-time state check returns `409 RESOURCE_CONFLICT` with `reason: ROUND_CLOSED`, with no writes. Current policy permits question edits require open drafts with the Task51 per-question exception ([permission matrix](../security/permission-matrix.md#3-permission-matrix)); no form version/ETag/precondition token is defined for this POST. Always validate against the current stored question set. If that set changed and an answer is now invalid or required data is missing, use the existing `400 VALIDATION_FAILED`; there is no invented `FORM_CHANGED` conflict. Supporting edits after publication or detecting stale content when IDs/constraints remain valid requires a separately confirmed versioning design (§12 review item R3).
 
 #### Success response
 
@@ -627,6 +721,19 @@ Conflict `reason` values, in check order:
 For example, a duplicate uses `status: 409`, `code: RESOURCE_CONFLICT`, and `reason: APPLICATION_ALREADY_EXISTS`, with the shared `type`, `title`, `instance`, and `traceId` fields. Do not expose another applicant's identity or any stored answers/links in error bodies. No numeric rate limit is introduced by this contract; any future limiter must follow the shared `429`/`Retry-After` policy before deployment.
 
 Clients must not retry a `4xx` response unchanged. After a lost response or a `5xx`, retrying is safe without an idempotency key because the one-application-per-round rule prevents a second application. The earlier attempt may still have committed, so when such a retry returns `409`, check the applicant's history (US-04) before telling the student that nothing was submitted; `APPLICATION_ALREADY_EXISTS` means the application exists.
+
+### Task51: answered screening questions (US-08)
+
+Implementation update 2026-11-04, pending team/reviewer acceptance. Session, CSRF, effective committee, Active/term, ownership and self-review checks remain in force.
+
+- `PUT/DELETE /api/v1/rounds/{roundId}/questions/{questionId}` check `application_answers` for that exact question after acquiring the parent round lock. Any persisted answer blocks the target with `409 RESOURCE_CONFLICT`, root `reason: QUESTION_HAS_ANSWERS`, and safe detail `Question has answers`. Rejection changes no question, answer, application, history or round version. A missing/wrong-round question still uses 404.
+- Existing unanswered questions in an open DRAFT (`publication_status = DRAFT`, `closed_at IS NULL`) can be edited/deleted even when another question has answers. This explicit Task51 request is a limited exception to the old round-wide no-applications guard. PUBLISHED/CLOSED remain blocked. Creating new questions and replacing the entire round still require no applications.
+- `PUT .../questions/order` still takes the complete ID list. US-08 BR-05/BR-07 fix answered questions' numeric `displayOrder`; only unanswered rows move into available positions. An impossible layout fails atomically with the same reason. Gaps are valid; without answered questions the result is `1..n`. Deleting an unanswered question never shifts an answered row.
+- `PUT /api/v1/clubs/{clubId}/rounds/{roundId}` deletes/recreates every old question ID. Any answer in that round blocks replacement with the same reason, including `questions: []`. Existing version/permission checks keep their precedence.
+- Existing question/full-round writes keep `FOR UPDATE` on the parent round; submission holds `FOR SHARE` on the same row until answers commit. Assignment/club/round lock order is unchanged. No new migration or DTO fields are introduced.
+- The question page shows the specific edit/delete alert, keeps the row/modal data, and clears a stale success toast before a write. Other 409 reasons keep the existing fallback. See [test evidence, examples and reviewer commands](../testing/task51-answered-question-lock.md).
+
+The mixed-DRAFT exception needs team review against the older Task74/T74-D09 baseline; it does not enable live form changes after publication or claim approval.
 
 ## 12. Round application form (Task42)
 
@@ -725,7 +832,7 @@ GET checks session/account → ID → verified student → visible resource → 
 | Rule / design input | Repository evidence |
 |---|---|
 | Authenticated student, required answers, HTTPS links, one submission per round, server-side time check, atomic writes | [US-03](../stories/sprint1/US-03.md), AC-01–06 and BR-01–11; existing §11 decisions dated 2026-10-19. |
-| Student/club Active, Student rights for Committee/Admin, no role override; question edits only on drafts without applications | [Permission matrix](../security/permission-matrix.md), §§1–3; this policy takes precedence over older unresolved wording in stories. The Task42 requester confirmed the form-read account/student/window policy on 2026-10-20; Task74 records that action for PO/team review without claiming approval. |
+| Student/club Active, Student rights for Committee/Admin, no role override; question edits require open drafts with the Task51 per-question exception | [Permission matrix](../security/permission-matrix.md), §§1–3; this policy takes precedence over older unresolved wording in stories. The Task42 requester confirmed the form-read account/student/window policy on 2026-10-20; Task74 records that action for PO/team review without claiming approval. |
 | Text-only questions, stable question identity, required flag, display order | [US-08](../stories/sprint1/US-08.md); [ApplicationQuestionService](../../backend/src/main/java/com/tu/clubhub/recruitment/service/ApplicationQuestionService.java) uses `questionText`, `isRequired`, and `displayOrder`; its committee-only read must not be reused as applicant authorization. |
 | Real persisted types/constraints | [V1 migration](../../backend/src/main/resources/db/migration/V1__init_schema.sql): `recruitment_rounds`, `application_questions`, `applications`, `application_answers`, `application_links`, `application_status_history`; [ERD](../database/TU-ClubHub-ERD-Updated.dbml). Questions have `max_length`, no question-type/options/file columns. |
 | Round fields | [RecruitmentRound](../../backend/src/main/java/com/tu/clubhub/recruitment/domain/RecruitmentRound.java); [rounds.openapi.yaml](rounds.openapi.yaml) for management semantics. No full internal schema is referenced by form responses. |

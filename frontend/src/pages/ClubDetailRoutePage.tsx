@@ -1,4 +1,5 @@
 import { useNavigate, useParams } from "react-router";
+import PublicLayout from "../components/layout/PublicLayout";
 import { useAuth } from "../features/auth/AuthContext";
 import { ClubDetailPage } from "../features/clubs/components/ClubDetailPage";
 import { isValidId } from "../lib/ids";
@@ -13,15 +14,17 @@ export default function ClubDetailRoutePage() {
   if (!isValidId(clubId)) return <NotFoundPage />;
 
   return (
-    <ClubDetailPage
-      clubId={clubId}
-      isLoggedIn={isAuthenticated}
-      onRequestLogin={() =>
-        navigate(`/login?next=${encodeURIComponent(`/clubs/${clubId}`)}`)
-      }
-      onNavigateToApplication={(roundId) =>
-        navigate(`/clubs/${clubId}/rounds/${roundId}/apply`)
-      }
-    />
+    <PublicLayout>
+      <ClubDetailPage
+        clubId={clubId}
+        isLoggedIn={isAuthenticated}
+        onRequestLogin={() =>
+          navigate(`/login?next=${encodeURIComponent(`/clubs/${clubId}`)}`)
+        }
+        onNavigateToApplication={(roundId) =>
+          navigate(`/clubs/${clubId}/rounds/${roundId}/apply`)
+        }
+      />
+    </PublicLayout>
   );
 }

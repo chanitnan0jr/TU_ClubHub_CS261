@@ -62,34 +62,30 @@ export interface ClubResponseDto {
   };
 }
 
+// Body of PUT /api/v1/clubs/{clubId} (ClubUpdateRequest): a full replacement.
+// null clears an optional field; tagIds is the complete new tag set (max 10).
 export interface ClubUpdateRequestDto {
   name: string;
-  status?: string | null;
-  categoryId?: string;
-  category?: CategoryDto | any;
-  tagline?: string | null;
   description: string;
-  objective?: string | null;
-  objectives?: string | null;
-  activities?: string[];
-  announcementNote?: string | null;
-  logoUrl?: string | null;
-  coverImageUrl?: string | null;
-  imageUrl?: string | null;
-  bannerUrl?: string | null;
-  contactUrl?: string | null;
-  facebookUrl?: string | null;
-  instagramUrl?: string | null;
-  contactEmail?: string | null;
-  affiliationLevel?: string | null;
-  affiliationName?: string | null;
-  recruitmentRounds?: any[];
-  tags?: (ClubTag | any)[];
-  contacts?: {
-    facebook?: string;
-    instagram?: string;
-    email?: string;
-  };
+  objectives: string | null;
+  contactUrl: string | null;
+  facebookUrl: string | null;
+  instagramUrl: string | null;
+  contactEmail: string | null;
+  imageUrl: string | null;
+  bannerUrl: string | null;
+  categoryId: string;
+  tagIds: string[];
+}
+
+// Item of GET /api/v1/public/club-categories and /interest-tags.
+export interface ClubOption {
+  id: string;
+  name: string;
+}
+
+export interface ClubOptionList {
+  items: ClubOption[];
 }
 
 export interface ClubProfileDraft extends Partial<ClubUpdateRequestDto> {
@@ -126,8 +122,11 @@ export interface PublicClubProfile {
 export interface PublicOpenRound {
   id: string;
   name: string;
+  // Round details and qualifications; plain text that may contain line breaks.
+  description: string;
   opensAt: string;
   closesAt: string;
+  resultsScheduledAt: string | null;
 }
 
 export interface PublicOpenRoundPage {
@@ -143,8 +142,10 @@ export interface PublicOpenRoundPage {
 export interface RecruitmentRoundData {
   id: string;
   title: string;
+  description: string;
   opensAt: string;
   closesAt: string;
+  resultsScheduledAt: string | null;
 }
 
 export interface ClubDetailData {

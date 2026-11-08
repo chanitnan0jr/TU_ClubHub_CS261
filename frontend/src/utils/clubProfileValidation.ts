@@ -7,7 +7,11 @@ import {
   isValidUrl,
 } from './validation.ts'
 
-export type ClubProfileDraft = Omit<ClubUpdateRequestDto, 'instagramUrl'> & {
+// Text fields of the profile editor; category and tags are checked in clubEditForm.
+export type ClubProfileDraft = Omit<
+  ClubUpdateRequestDto,
+  'instagramUrl' | 'categoryId' | 'tagIds'
+> & {
   instagramHandle: string
 }
 

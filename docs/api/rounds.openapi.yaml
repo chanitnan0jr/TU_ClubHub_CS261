@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: TU ClubHub Recruitment Rounds API
-  version: 1.1.0
+  version: 1.2.0
   description: >-
     US-07/US-08. Committee-only management API, separate from existing public
     recruitment-rounds API. No physical DELETE; CLOSE/CANCEL retain applications.
@@ -59,56 +59,31 @@ paths:
           pattern: ^[1-9][0-9]{0,18}$
     get:
       operationId: listRounds
-      x-implementation-status: pending
+      x-implementation-status: implemented
       tags:
         - Recruitment rounds
-      summary: listRounds
-      responses:
-        "400":
-          description: Invalid JSON, fields, dates or query parameters
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "401":
-          description: No valid session (CSRF failure can take precedence)
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "403":
-          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "404":
-          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "409":
-          description: Version mismatch, invalid state or edit policy conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "200":
-          description: All rounds for authorized committee, including drafts
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RoundPage"
+      summary: List the club's recruitment rounds for its committee
+      description: >-
+        Returns the club's rounds in every state, including drafts and cancelled or
+        manually closed rounds, each with its questions in display order. Stable
+        ordering: createdAt DESC, id DESC. Requires a currently effective COMMITTEE
+        or PRESIDENT assignment for clubId; permission is checked before the club is
+        looked up, as for the round writes on this path, so a club the caller does
+        not manage returns 403 ACCESS_DENIED whether or not it exists. Rounds the
+        caller has applied to, in any application status, are left out before
+        paging and totals. An empty page, or a page past the last one, returns 200
+        with empty items. Responses include Cache-Control: no-store.
       parameters:
         - name: page
           in: query
+          description: Zero-based page index.
           schema:
             type: integer
             minimum: 0
             default: 0
         - name: size
           in: query
+          description: Page size.
           schema:
             type: integer
             minimum: 1
@@ -116,15 +91,112 @@ paths:
             default: 20
         - name: publicationStatus
           in: query
+          description: Return only rounds with this publicationStatus; omit for all.
           schema:
             type: string
             enum:
               - DRAFT
               - PUBLISHED
               - CANCELLED
-      description:
-        "Stable ordering: createdAt DESC, id DESC. Missing club: 404. Empty
-        existing club: 200 with empty items."
+      responses:
+        "200":
+          description: One page of the club's rounds, drafts included
+          headers:
+            Cache-Control:
+              description: Always includes no-store.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoundPage"
+              examples:
+                roundsPage:
+                  summary: Draft and published rounds
+                  value:
+                    items:
+                      - id: "70002"
+                        clubId: "20001"
+                        title: Recruitment 2569/2
+                        academicYear: 2569
+                        semester: 2
+                        description: Open to every undergraduate who enjoys coding.
+                        eligibilityText: null
+                        opensAt: "2027-01-05T02:00:00Z"
+                        closesAt: "2027-01-19T16:59:59Z"
+                        confirmationDeadline: "2027-02-02T16:59:59Z"
+                        resultsScheduledAt: null
+                        publicationStatus: DRAFT
+                        closedAt: null
+                        publishedAt: null
+                        resultsPublishedAt: null
+                        createdAt: "2026-11-02T03:00:00Z"
+                        updatedAt: "2026-11-02T03:00:00Z"
+                        version: 0
+                        questions: []
+                      - id: "70001"
+                        clubId: "20001"
+                        title: Recruitment 2569/1
+                        academicYear: 2569
+                        semester: 1
+                        description: Open to every undergraduate who enjoys coding.
+                        eligibilityText: First- and second-year students
+                        opensAt: "2026-11-10T02:00:00Z"
+                        closesAt: "2026-11-24T16:59:59Z"
+                        confirmationDeadline: "2026-12-08T16:59:59Z"
+                        resultsScheduledAt: "2026-12-01T09:00:00Z"
+                        publicationStatus: PUBLISHED
+                        closedAt: null
+                        publishedAt: "2026-11-05T04:00:00Z"
+                        resultsPublishedAt: null
+                        createdAt: "2026-11-01T03:00:00Z"
+                        updatedAt: "2026-11-05T04:00:00Z"
+                        version: 1
+                        questions:
+                          - id: "81001"
+                            prompt: Why do you want to join?
+                            required: true
+                            displayOrder: 1
+                            maxLength: 2000
+                    page: 0
+                    size: 20
+                    totalElements: 2
+                    totalPages: 1
+                emptyClub:
+                  summary: Club with no rounds the caller may see
+                  value:
+                    items: []
+                    page: 0
+                    size: 20
+                    totalElements: 0
+                    totalPages: 0
+        "400":
+          description: Invalid clubId (INVALID_RESOURCE_ID) or page, size or publicationStatus (VALIDATION_FAILED)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                invalidClubId:
+                  $ref: "#/components/examples/InvalidClubIdProblem"
+                invalidQuery:
+                  summary: publicationStatus is not one of the listed values
+                  value:
+                    type: urn:tuclubhub:problem:validation-error
+                    title: Request validation failed
+                    status: 400
+                    detail: One or more request fields or parameters are invalid.
+                    instance: /api/v1/clubs/20001/rounds
+                    code: VALIDATION_FAILED
+                    traceId: 00000000-0000-4000-8000-000000000002
+                    fieldErrors:
+                      - field: publicationStatus
+                        code: INVALID
+                        message: Value does not meet this field's constraints.
+        "401":
+          $ref: "#/components/responses/RoundReadUnauthorized"
+        "403":
+          $ref: "#/components/responses/RoundReadForbidden"
     post:
       operationId: createRound
       x-implementation-status: implemented
@@ -213,47 +285,89 @@ paths:
           pattern: ^[1-9][0-9]{0,18}$
     get:
       operationId: getRound
-      x-implementation-status: pending
+      x-implementation-status: implemented
       tags:
         - Recruitment rounds
-      summary: getRound
+      summary: Get one of the club's recruitment rounds with its questions
+      description: >-
+        Returns the round in any state, including a draft, with its questions in
+        display order; use its version for PUT and PATCH. Requires a currently
+        effective COMMITTEE or PRESIDENT assignment for clubId, checked before the
+        round is looked up (403 ACCESS_DENIED otherwise). A roundId that does not
+        exist, or that belongs to another club, returns 404 RESOURCE_NOT_FOUND. A
+        caller who has applied to the round, in any application status, gets 403
+        ACCESS_DENIED. Responses include Cache-Control: no-store.
       responses:
-        "400":
-          description: Invalid JSON, fields, dates or query parameters
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "401":
-          description: No valid session (CSRF failure can take precedence)
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "403":
-          description: Active/term/committee/self-review or existing-private-resource authorization failure (ACCESS_DENIED), suspended account (ACCOUNT_NOT_ALLOWED), or CSRF_INVALID
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "404":
-          description: Club or round/relationship not found within the authorized scope; an existing private resource outside the caller's authorization uses 403 ACCESS_DENIED
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "409":
-          description: Version mismatch, invalid state or edit policy conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
         "200":
-          description: Success
+          description: The round and its questions
+          headers:
+            Cache-Control:
+              description: Always includes no-store.
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Round"
+              examples:
+                draftRound:
+                  summary: Draft round with one question
+                  value:
+                    id: "70002"
+                    clubId: "20001"
+                    title: Recruitment 2569/2
+                    academicYear: 2569
+                    semester: 2
+                    description: Open to every undergraduate who enjoys coding.
+                    eligibilityText: null
+                    opensAt: "2027-01-05T02:00:00Z"
+                    closesAt: "2027-01-19T16:59:59Z"
+                    confirmationDeadline: "2027-02-02T16:59:59Z"
+                    resultsScheduledAt: null
+                    publicationStatus: DRAFT
+                    closedAt: null
+                    publishedAt: null
+                    resultsPublishedAt: null
+                    createdAt: "2026-11-02T03:00:00Z"
+                    updatedAt: "2026-11-02T03:00:00Z"
+                    version: 0
+                    questions:
+                      - id: "81002"
+                        prompt: Why do you want to join?
+                        required: true
+                        displayOrder: 1
+                        maxLength: 2000
+        "400":
+          description: clubId or roundId is not a positive BIGINT (INVALID_RESOURCE_ID)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                invalidClubId:
+                  $ref: "#/components/examples/InvalidClubIdProblem"
+        "401":
+          $ref: "#/components/responses/RoundReadUnauthorized"
+        "403":
+          $ref: "#/components/responses/RoundReadForbidden"
+        "404":
+          description: No round with this roundId in the club (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                roundNotFound:
+                  summary: Round does not exist or belongs to another club
+                  value:
+                    type: urn:tuclubhub:problem:resource-not-found
+                    title: Resource not found
+                    status: 404
+                    detail: No resource was found for this identifier.
+                    instance: /api/v1/clubs/20001/rounds/70009
+                    code: RESOURCE_NOT_FOUND
+                    traceId: 00000000-0000-4000-8000-000000000005
+                    fieldErrors: []
     put:
       operationId: replaceRound
       x-implementation-status: implemented
@@ -285,12 +399,23 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
-        "409":
-          description: Version mismatch, invalid state or edit policy conflict
+        '409':
+          description: Answered-question protection (QUESTION_HAS_ANSWERS), version, round-state or edit-policy
+            conflict; no partial mutation
           content:
             application/problem+json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-conflict
+                title: Resource state conflict
+                status: 409
+                detail: Question has answers
+                instance: /api/v1/clubs/20001/rounds/70001
+                code: RESOURCE_CONFLICT
+                reason: QUESTION_HAS_ANSWERS
+                fieldErrors: []
+                traceId: 00000000-0000-4000-8000-000000000051
         "415":
           description: Unsupported media type
           content:
@@ -320,9 +445,14 @@ paths:
             schema:
               $ref: "#/components/schemas/RoundReplace"
       description:
-        Replace all editable data; omitted nullable fields become null.
-        Never upsert. Questions replaced atomically only when policy permits. Version
-        checked atomically.
+        >-
+        Replace all editable data; omitted nullable fields become null. Never upsert. Questions replaced
+        atomically only when policy permits. Version checked atomically. Full replacement deletes and
+        recreates every old question ID. After permission, parent-row lock and version checks, any answer
+        referencing an existing question in this round rejects the entire replacement with 409
+        RESOURCE_CONFLICT and root reason QUESTION_HAS_ANSWERS, including an empty questions array. No
+        round, question or answer changes on rejection. Other application/state restrictions remain in
+        force.
     patch:
       operationId: transitionRound
       x-implementation-status: partial
@@ -542,13 +672,18 @@ paths:
       - Application questions
       operationId: replaceApplicationQuestion
       summary: Replace editable fields of one application question
-      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
-        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
-        an application to this round cannot read or manage its questions. Check authorization against the actual
-        round owner, including within write transactions. PUT requires both fields; it does not change displayOrder.
-        Use PUT /order for ordering. The question must belong to roundId. Modification is rejected with 409
-        RESOURCE_CONFLICT (reason QUESTION_HAS_ANSWERS) if one or more answers in application_answers reference
-        this question (Task51).
+      description: >-
+        Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has
+        submitted an application to this round cannot read or manage its questions. Check authorization
+        against the actual round owner, including within write transactions. PUT requires both fields; it
+        does not change displayOrder. Use PUT /order for ordering. The question must belong to roundId.
+        Modification is rejected with 409 RESOURCE_CONFLICT (reason QUESTION_HAS_ANSWERS) if one or more
+        answers in application_answers reference this question (Task51). Task51 requires an open DRAFT for
+        unanswered edits. Other answered questions in that draft do not block this target. Any answer
+        referencing this exact question blocks it before the round-state check. The parent FOR UPDATE lock
+        is acquired before checking answers; submission holds FOR SHARE on the same parent until its answers
+        commit. No rejected write changes the question, answers or round version.
       parameters:
       - name: X-CSRF-TOKEN
         in: header
@@ -596,21 +731,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '409':
-          description: Question already has submitted answers (reason QUESTION_HAS_ANSWERS), round state/edit-policy conflict, or concurrent modification
+          description: Answered-question protection (QUESTION_HAS_ANSWERS), version, round-state or edit-policy
+            conflict; no partial mutation
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
               example:
                 type: urn:tuclubhub:problem:resource-conflict
-                title: "Resource state conflict"
+                title: Resource state conflict
                 status: 409
-                detail: Cannot modify a screening question that already has submitted answers.
+                detail: Question has answers
                 instance: /api/v1/rounds/70001/questions/81001
                 code: RESOURCE_CONFLICT
                 reason: QUESTION_HAS_ANSWERS
                 fieldErrors: []
-                traceId: 01J9EXAMPLE7K4D5
+                traceId: 00000000-0000-4000-8000-000000000051
         '415':
           description: Unsupported media type
           content:
@@ -622,12 +758,18 @@ paths:
       - Application questions
       operationId: deleteApplicationQuestion
       summary: Delete one application question only if it has no answers
-      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
-        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
-        an application to this round cannot read or manage its questions. Check authorization against the actual
-        round owner, including within write transactions. Deletion is rejected when one or more answers reference
-        this question (409 RESOURCE_CONFLICT with reason QUESTION_HAS_ANSWERS). Other edit-state policy conflicts also return 409. Never cascade-delete
-        answers. Recompact remaining displayOrder values transactionally.
+      description: >-
+        Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has
+        submitted an application to this round cannot read or manage its questions. Check authorization
+        against the actual round owner, including within write transactions. Deletion is rejected when one
+        or more answers reference this question (409 RESOURCE_CONFLICT with reason QUESTION_HAS_ANSWERS).
+        Other edit-state policy conflicts also return 409. Never cascade-delete answers. Recompact remaining
+        displayOrder values transactionally. Task51 requires an open DRAFT for unanswered deletion; answers
+        to other questions do not block this target. Check this exact question after the parent FOR UPDATE
+        lock, shared with the submission FOR SHARE protocol. Deletion compacts only unanswered positions
+        without moving answered rows; gaps are valid. Rejection changes no question, answer or round
+        version.
       parameters:
       - name: X-CSRF-TOKEN
         in: header
@@ -665,21 +807,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '409':
-          description: Question already has submitted answers (reason QUESTION_HAS_ANSWERS), round state/edit-policy conflict, or concurrent modification
+          description: Answered-question protection (QUESTION_HAS_ANSWERS), version, round-state or edit-policy
+            conflict; no partial mutation
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
               example:
                 type: urn:tuclubhub:problem:resource-conflict
-                title: "Resource state conflict"
+                title: Resource state conflict
                 status: 409
-                detail: Cannot delete a screening question that already has submitted answers.
+                detail: Question has answers
                 instance: /api/v1/rounds/70001/questions/81001
                 code: RESOURCE_CONFLICT
                 reason: QUESTION_HAS_ANSWERS
                 fieldErrors: []
-                traceId: 01J9EXAMPLE7K4D5
+                traceId: 00000000-0000-4000-8000-000000000051
   /api/v1/rounds/{roundId}/questions/order:
     parameters:
     - name: roundId
@@ -694,13 +837,19 @@ paths:
       - Application questions
       operationId: reorderApplicationQuestions
       summary: Set the full application-question order for one round
-      description: Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
-        for the club owning this round. ADMIN alone does not authorize access. A committee member who has submitted
-        an application to this round cannot read or manage its questions. Check authorization against the actual
-        round owner, including within write transactions. questionIds must contain every currently existing question
-        ID in the round exactly once, including no foreign IDs; [] is valid only when no questions exist. Reorder
-        is atomic and assigns displayOrder = 1..n. Missing, duplicate or foreign IDs return 400. A stale set
-        changed concurrently returns 409. Editing remains subject to round state policy.
+      description: >-
+        Requires an ACTIVE account and currently effective COMMITTEE or PRESIDENT assignment and membership
+        for the club owning this round. ADMIN alone does not authorize access. A committee member who has
+        submitted an application to this round cannot read or manage its questions. Check authorization
+        against the actual round owner, including within write transactions. questionIds must contain every
+        currently existing question ID in the round exactly once, including no foreign IDs; [] is valid only
+        when no questions exist. Reorder is atomic and assigns displayOrder = 1..n when no answered anchors
+        exist. Missing, duplicate or foreign IDs return 400. A stale set changed concurrently returns 409.
+        Editing remains subject to round state policy. Task51 follows US-08 BR-05/BR-07: answered questions
+        retain their exact numeric displayOrder. Assign unanswered questions to available positions in the
+        requested relative order, retaining gaps where needed. A layout that cannot keep every answered
+        position fails atomically with 409 RESOURCE_CONFLICT and reason QUESTION_HAS_ANSWERS. A mixed open
+        DRAFT is allowed; PUBLISHED/CLOSED remain blocked. When no answers exist the result is 1..n.
       parameters:
       - name: X-CSRF-TOKEN
         in: header
@@ -748,11 +897,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '409':
-          description: Round state/edit-policy conflict or concurrent modification
+          description: Answered-question protection (QUESTION_HAS_ANSWERS), version, round-state or edit-policy
+            conflict; no partial mutation
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-conflict
+                title: Resource state conflict
+                status: 409
+                detail: Question has answers
+                instance: /api/v1/rounds/70001/questions/order
+                code: RESOURCE_CONFLICT
+                reason: QUESTION_HAS_ANSWERS
+                fieldErrors: []
+                traceId: 00000000-0000-4000-8000-000000000051
         '415':
           description: Unsupported media type
           content:
@@ -766,6 +926,73 @@ components:
       in: cookie
       name: SESSION
       description: Spring Session cookie; confirm deployment cookie name.
+  examples:
+    InvalidClubIdProblem:
+      summary: clubId is not a positive BIGINT
+      value:
+        type: urn:tuclubhub:problem:invalid-resource-id
+        title: Invalid resource identifier
+        status: 400
+        detail: A resource identifier has an invalid format.
+        instance: /api/v1/clubs/abc/rounds
+        code: INVALID_RESOURCE_ID
+        traceId: 00000000-0000-4000-8000-000000000001
+        fieldErrors:
+          - field: clubId
+            code: INVALID
+            message: Value does not meet this field's constraints.
+  responses:
+    RoundReadUnauthorized:
+      description: No valid session, or the session has expired (AUTHENTICATION_REQUIRED)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            authenticationRequired:
+              summary: Not signed in
+              value:
+                type: urn:tuclubhub:problem:authentication-required
+                title: Authentication required
+                status: 401
+                detail: Sign in to access this resource.
+                instance: /api/v1/clubs/20001/rounds
+                code: AUTHENTICATION_REQUIRED
+                traceId: 00000000-0000-4000-8000-000000000003
+                fieldErrors: []
+    RoundReadForbidden:
+      description: >-
+        ACCESS_DENIED when the caller has no currently effective committee
+        assignment for clubId (including a club that does not exist) or has
+        applied to the requested round; ACCOUNT_NOT_ALLOWED when the account is
+        suspended, which also ends the session.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            accessDenied:
+              summary: Not a current committee member of this club
+              value:
+                type: urn:tuclubhub:problem:access-denied
+                title: Access denied
+                status: 403
+                detail: You are not allowed to access this resource.
+                instance: /api/v1/clubs/20001/rounds
+                code: ACCESS_DENIED
+                traceId: 00000000-0000-4000-8000-000000000004
+                fieldErrors: []
+            accountNotAllowed:
+              summary: Suspended account
+              value:
+                type: urn:tuclubhub:problem:account-not-allowed
+                title: Account not allowed
+                status: 403
+                detail: This account is not allowed to use TU-ClubHub.
+                instance: /api/v1/clubs/20001/rounds
+                code: ACCOUNT_NOT_ALLOWED
+                traceId: 00000000-0000-4000-8000-000000000006
+                fieldErrors: []
   schemas:
     QuestionInput:
       type: object

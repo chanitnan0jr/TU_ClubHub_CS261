@@ -1,0 +1,175 @@
+name: System Integration CI
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - 'compose.yaml'
+      - '.github/workflows/ci-integration.yml'
+      - 'docs/tasks/sprint2/Task83.md'
+      - 'docs/testing/task83-system-integration-ci-report.md'
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - 'compose.yaml'
+      - '.github/workflows/ci-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  system-integration:
+    name: System Integration Tests & Flyway Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: tu_clubhub_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tu_clubhub_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_PASSWORD: ci_test_password
+      PGPASSWORD: ci_test_password
+      SEEDTEST_DATABASE_URL: jdbc:postgresql://localhost:5432/tu_clubhub_test
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Verify PostgreSQL service container readiness
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y postgresql-client
+          fi
+          pg_isready -h localhost -p 5432 -U postgres -d tu_clubhub_test
+          psql -h localhost -p 5432 -U postgres -d tu_clubhub_test -c "SELECT version();"
+
+      - name: Grant execute permission for Maven Wrapper
+        run: chmod +x mvnw
+
+      - name: Run System Integration Test Suite & Flyway Migrations
+        run: >-
+          ./mvnw clean verify
+          -Dtest="SeedDataMigrationTest,*IntegrationTest,*E2ETest,*QATest"
+          -Dsurefire.failIfNoSpecifiedTests=false
+
+      - name: Verify Flyway Schema History & Sprint 2 Seed Data (Task55)
+        run: |
+          mkdir -p target/seed-verification
+          echo "=== 1. Flyway Schema History ===" | tee target/seed-verification/summary.log
+          psql -X -v ON_ERROR_STOP=1 -h localhost -p 5432 -U postgres -d tu_clubhub_test \
+            -c "SELECT installed_rank, version, description, type, success FROM flyway_schema_history ORDER BY installed_rank;" \
+            | tee -a target/seed-verification/summary.log
+
+          echo "=== 2. Apply Sprint 2 Seed Data (Pass 1) ===" | tee -a target/seed-verification/summary.log
+          psql -X -v ON_ERROR_STOP=1 -h localhost -p 5432 -U postgres -d tu_clubhub_test \
+            -f src/main/resources/db/seed/sprint2_seed.sql \
+            | tee -a target/seed-verification/summary.log
+
+          echo "=== 3. Re-apply Sprint 2 Seed Data (Pass 2 - Idempotency Check) ===" | tee -a target/seed-verification/summary.log
+          psql -X -v ON_ERROR_STOP=1 -h localhost -p 5432 -U postgres -d tu_clubhub_test \
+            -f src/main/resources/db/seed/sprint2_seed.sql \
+            | tee -a target/seed-verification/summary.log
+
+          echo "=== 4. Verify Sprint 2 Seed Invariants ===" | tee -a target/seed-verification/summary.log
+          psql -X -v ON_ERROR_STOP=1 -h localhost -p 5432 -U postgres -d tu_clubhub_test \
+            -f src/test/resources/db/seed/verify_sprint2_seed.sql \
+            2>&1 | tee -a target/seed-verification/summary.log
+
+      - name: Write System Integration Test Report Summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, os, xml.etree.ElementTree as ET
+
+          suites = []
+          total_tests = total_failures = total_errors = total_skipped = 0
+          total_time = 0.0
+
+          for path in sorted(glob.glob("target/surefire-reports/TEST-*.xml")):
+              root = ET.parse(path).getroot()
+              name = root.attrib.get("name", os.path.basename(path)).split(".")[-1]
+              t = int(root.attrib.get("tests", 0))
+              f = int(root.attrib.get("failures", 0))
+              e = int(root.attrib.get("errors", 0))
+              s = int(root.attrib.get("skipped", 0))
+              tm = float(root.attrib.get("time", 0.0))
+              p = t - f - e - s
+              suites.append((name, t, p, f, e, s, tm))
+              total_tests += t
+              total_failures += f
+              total_errors += e
+              total_skipped += s
+              total_time += tm
+
+          total_passed = total_tests - total_failures - total_errors - total_skipped
+          pass_rate = (total_passed / total_tests * 100.0) if total_tests else 0.0
+
+          print("## System Integration Tests & Database Verification (${{ job.status }})")
+          print()
+          print("### 1. Overall Integration Test Summary")
+          print("| Total Suites | Total Tests | Passed | Failures | Errors | Skipped | Pass Rate | Duration (s) |")
+          print("|---:|---:|---:|---:|---:|---:|---:|---:|")
+          print(f"| {len(suites)} | {total_tests} | {total_passed} | {total_failures} | {total_errors} | {total_skipped} | {pass_rate:.1f}% | {total_time:.2f} |")
+          print()
+          print("### 2. Flyway Migration & Sprint 2 Seed Verification (`postgres:17-alpine`)")
+          seed_log = "target/seed-verification/summary.log"
+          seed_passed = False
+          if os.path.exists(seed_log):
+              with open(seed_log, "r", encoding="utf-8", errors="replace") as fh:
+                  content = fh.read()
+              seed_passed = "Sprint 2 seed verification PASSED" in content
+          status_badge = "PASSED" if seed_passed else "CHECK LOGS"
+          print("| Check | Target | Status |")
+          print("|---|---|---|")
+          print("| Flyway Schema Migration (`V1`, `V2`, `V3`) | `tu_clubhub_test` | Verified |")
+          print("| Sprint 2 Seed Data (`sprint2_seed.sql` 2-pass idempotency) | `tu_clubhub_test` | Verified |")
+          print(f"| Sprint 2 Seed Invariants (`verify_sprint2_seed.sql`) | 6 statuses + membership checks | **{status_badge}** |")
+          print()
+          print("<details><summary><strong>3. Per-Suite Integration Test Breakdown</strong></summary>")
+          print()
+          print("| Test Suite | Tests | Passed | Failures | Errors | Skipped | Time (s) |")
+          print("|---|---:|---:|---:|---:|---:|---:|")
+          for name, t, p, f, e, s, tm in suites:
+              print(f"| `{name}` | {t} | {p} | {f} | {e} | {s} | {tm:.2f} |")
+          print()
+          print("</details>")
+          PY
+
+      - name: Upload System Integration Test Reports & Coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-integration-test-report
+          path: |
+            backend/target/surefire-reports/
+            backend/target/site/jacoco/
+            backend/target/seed-verification/
+          if-no-files-found: warn

@@ -1,6 +1,9 @@
 import type { ChangeEvent } from 'react';
+import { inputClass } from '../../../components/ui/classes';
+import { Field } from '../../../components/ui/Field';
 
 interface DateTimePickerProps {
+  id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -10,6 +13,7 @@ interface DateTimePickerProps {
 }
 
 export const DateTimePicker = ({
+  id,
   label,
   value,
   onChange,
@@ -22,22 +26,17 @@ export const DateTimePicker = ({
   };
 
   return (
-    <div className="w-full flex flex-col gap-1">
-      <label className="text-sm font-medium text-gray-700">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <input
-        type="datetime-local"
-        value={value}
-        onChange={handleChange}
-        disabled={disabled}
-        className={`h-[44px] w-full rounded-lg border px-3 text-sm transition-colors focus:outline-none focus:ring-2 ${
-          error
-            ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
-            : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
-        } ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
-      />
-      {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
-    </div>
+    <Field id={id} label={label} required={required} error={error}>
+      {(control) => (
+        <input
+          {...control}
+          type="datetime-local"
+          value={value}
+          onChange={handleChange}
+          disabled={disabled}
+          className={inputClass(Boolean(error))}
+        />
+      )}
+    </Field>
   );
 };

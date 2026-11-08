@@ -9,7 +9,7 @@
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE / QA) |
 | **งานที่ต้องทำก่อน (Dependency)** | Application Data Model จาก Task75 และ Recruitment Question จาก Task51 |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | ariyawe krittayabunlue|
 | **Trello Card Link** | [https://trello.com/c/xMYk2zNW](https://trello.com/c/xMYk2zNW) |
 
 ---

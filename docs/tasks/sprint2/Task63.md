@@ -4,13 +4,14 @@
 |---|---|
 | **Task ID** | `Task63` |
 | **Feature Code** | `CLUB-02` |
-| **สถานะบน Trello** | `To Do` |
+| **สถานะบน Trello** | `Done` (Merged in PR #71) |
 | **ผู้รับผิดชอบ (Owner)** | ภูบดี (FE1 - Frontend Engineer) |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task62 (Club Search API) และ UI Wireframe จาก Task75 |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
 | **สมาชิกบนการ์ด Trello** | Phubordee Srithan |
 | **Trello Card Link** | [https://trello.com/c/2lhyMkQN](https://trello.com/c/2lhyMkQN) |
+| **Pull Request** | [PR #71](https://github.com/chanitnan0jr/TU_ClubHub_CS261/pull/71) |
 
 ---
 
@@ -39,15 +40,15 @@
 
 ### เกณฑ์ตรวจรับ (Acceptance Criteria)
 
-- [ ] ผู้ใช้สามารถพิมพ์ค้นหาและเลือกตัวกรองแล้วผลลัพธ์อัปเดตอย่างถูกต้อง
-- [ ] คลิกที่การ์ดชมรมเพื่อเปิดดูหน้ารายละเอียดชมรมได้
-- [ ] แสดงผล Responsive ใช้งานได้ดีทั้งบนมือถือและคอมพิวเตอร์
+- [x] ผู้ใช้สามารถพิมพ์ค้นหาและเลือกตัวกรองแล้วผลลัพธ์อัปเดตอย่างถูกต้อง
+- [x] คลิกที่การ์ดชมรมเพื่อเปิดดูหน้ารายละเอียดชมรมได้
+- [x] แสดงผล Responsive ใช้งานได้ดีทั้งบนมือถือและคอมพิวเตอร์
 
 ### Definition of Done (Checklist กลาง)
 
-- [ ] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
-- [ ] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
-- [ ] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
-- [ ] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
-- [ ] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
-- [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ
+- [x] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
+- [x] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
+- [x] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
+- [x] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
+- [x] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
+- [x] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ

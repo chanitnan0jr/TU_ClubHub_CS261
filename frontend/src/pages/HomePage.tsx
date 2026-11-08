@@ -1,121 +1,87 @@
-import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { Link } from "react-router";
 import LoadingScreen from "../app/LoadingScreen";
-import { useAuth } from "../features/auth/AuthContext";
+import PublicLayout from "../components/layout/PublicLayout";
+import { buttonClass } from "../components/ui/classes";
+import { CalendarDaysIcon, UsersIcon } from "../components/ui/icons";
+import { useAuth, type ActiveCommitteeAssignment } from "../features/auth/AuthContext";
 import Login from "../features/auth/Login";
-import { isValidId } from "../lib/ids";
 
-const inputClass =
-  "mt-1 block w-full rounded-lg border border-gray-300 p-2 text-sm shadow-sm";
-const linkButtonClass =
-  "rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-transparent";
+const roleLabel = (assignment: ActiveCommitteeAssignment) =>
+  assignment.positionName?.trim() || (assignment.permissionRole === "PRESIDENT" ? "ประธานชมรม" : "กรรมการชมรม");
 
+function OpenCallsLink({ primary }: { primary: boolean }) {
+  return (
+    <Link to="/open-calls" className={`${buttonClass(primary ? "primary" : "secondary")} shrink-0`}>
+      <CalendarDaysIcon className="size-4" />
+      ดูรอบที่เปิดรับสมัคร
+    </Link>
+  );
+}
+
+// Visitors see the login form; signed-in users get the open-call board and the
+// clubs they manage, from the active committee assignments in /auth/me.
 export default function HomePage() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
-  const navigate = useNavigate();
-  const [clubId, setClubId] = useState("");
-  const [roundId, setRoundId] = useState("");
+  const { user, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) return <LoadingScreen />;
 
-  if (!isAuthenticated || !user) return <Login />;
+  if (!isAuthenticated || !user) {
+    return (
+      <PublicLayout>
+        <div className="mx-auto flex w-full max-w-md flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm leading-6 text-slate-700">ดูรอบที่ชมรมเปิดรับสมัครได้โดยไม่ต้องเข้าสู่ระบบ</p>
+          <OpenCallsLink primary={false} />
+        </div>
+        <Login />
+      </PublicLayout>
+    );
+  }
 
-  const clubOk = isValidId(clubId);
-  const roundOk = isValidId(roundId);
-
-  const handleSubmit = (e: FormEvent) => e.preventDefault();
+  const assignments = user.activeCommitteeAssignments ?? [];
+  const name = user.displayName?.trim();
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-xl text-center">
-        <h1 className="text-2xl font-bold text-red-700">ยินดีต้อนรับสู่ TU ClubHub</h1>
-        <div className="text-left bg-gray-50 p-4 rounded-lg space-y-2 border">
-          <p><strong>ID ผู้ใช้:</strong> {user.id}</p>
-          <p><strong>สิทธิ์ (Role):</strong> {user.role}</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3 text-left">
-          <h2 className="text-sm font-bold text-gray-800">ไปยังหน้าของชมรม</h2>
-          <p className="text-xs text-gray-500">
-            ระบบยังไม่มีรายการชมรมและรอบของคุณ จึงต้องระบุรหัส (ตัวเลข) เอง
-          </p>
-
-          <div>
-            <label htmlFor="home-club-id" className="block text-xs font-medium text-gray-700">
-              รหัสชมรม
-            </label>
-            <input
-              id="home-club-id"
-              inputMode="numeric"
-              value={clubId}
-              onChange={(e) => setClubId(e.target.value.trim())}
-              placeholder="เช่น 20001"
-              className={inputClass}
-            />
+    <PublicLayout>
+      <div className="flex flex-col gap-8">
+        <section className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+              {name ? `สวัสดี ${name}` : "ยินดีต้อนรับสู่ TU ClubHub"}
+            </h1>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              ดูรอบรับสมัครที่เปิดอยู่ของทุกชมรม แล้วสมัครเข้าร่วมชมรมที่สนใจ
+            </p>
           </div>
+          <OpenCallsLink primary />
+        </section>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={!clubOk}
-              onClick={() => navigate(`/clubs/${clubId}`)}
-              className={linkButtonClass}
-            >
-              ดูหน้าชมรม
-            </button>
-            <button
-              type="button"
-              disabled={!clubOk}
-              onClick={() => navigate(`/clubs/${clubId}/edit`)}
-              className={linkButtonClass}
-            >
-              แก้ไขโปรไฟล์ชมรม
-            </button>
-            <button
-              type="button"
-              disabled={!clubOk}
-              onClick={() => navigate(`/clubs/${clubId}/rounds/new`)}
-              className={linkButtonClass}
-            >
-              สร้างรอบรับสมัคร
-            </button>
-          </div>
-
-          <div>
-            <label htmlFor="home-round-id" className="block text-xs font-medium text-gray-700">
-              รหัสรอบรับสมัคร
-            </label>
-            <input
-              id="home-round-id"
-              inputMode="numeric"
-              value={roundId}
-              onChange={(e) => setRoundId(e.target.value.trim())}
-              placeholder="เช่น 10"
-              className={inputClass}
-            />
-          </div>
-
-          <button
-            type="button"
-            disabled={!clubOk || !roundOk}
-            onClick={() => navigate(`/clubs/${clubId}/rounds/${roundId}/questions`)}
-            className={linkButtonClass}
-          >
-            จัดการคำถามคัดเลือก
-          </button>
-
-          <p className="text-xs text-gray-500">
-            หน้าแก้ไขโปรไฟล์และจัดการคำถามใช้ได้เฉพาะกรรมการของชมรมนั้น
-          </p>
-        </form>
-
-        <button
-          onClick={logout}
-          className="w-full px-4 py-2 font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-        >
-          ออกจากระบบ
-        </button>
+        {assignments.length > 0 && (
+          <section aria-labelledby="my-clubs-heading" className="flex flex-col gap-3">
+            <h2 id="my-clubs-heading" className="text-lg font-semibold text-slate-900">
+              ชมรมที่ฉันดูแล
+            </h2>
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {assignments.map((assignment) => (
+                <li key={`${assignment.clubId}-${assignment.startsAt}`}>
+                  <Link
+                    to={`/clubs/${assignment.clubId}/manage`}
+                    className="flex h-full items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-tu-maroon hover:bg-tu-maroon-50"
+                  >
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-tu-maroon-50 text-tu-maroon">
+                      <UsersIcon className="size-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-slate-900">{assignment.clubName}</span>
+                      <span className="block text-sm text-slate-600">{roleLabel(assignment)}</span>
+                      <span className="mt-3 block text-sm font-semibold text-tu-maroon">ไปที่ภาพรวมชมรม</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
-    </div>
+    </PublicLayout>
   );
 }

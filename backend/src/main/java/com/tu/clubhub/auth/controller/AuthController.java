@@ -12,6 +12,7 @@ import com.tu.clubhub.auth.integration.tu.TuAuthRequestRejectedException;
 import com.tu.clubhub.auth.service.AccountNotAllowedException;
 import com.tu.clubhub.auth.service.AuthenticationFailedException;
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
+import com.tu.clubhub.auth.service.CurrentUserService;
 import com.tu.clubhub.auth.service.InvalidLoginRequestException;
 import com.tu.clubhub.auth.service.LoginRateLimitedException;
 import com.tu.clubhub.auth.service.LoginService;
@@ -47,6 +48,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class AuthController {
 
 	private final LoginService loginService;
+	private final CurrentUserService currentUserService;
 	private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
 	private final SecurityContextRepository securityContextRepository;
 	private final CsrfTokenRepository csrfTokenRepository;
@@ -54,11 +56,13 @@ public class AuthController {
 
 	public AuthController(
 			LoginService loginService,
+			CurrentUserService currentUserService,
 			SessionAuthenticationStrategy sessionAuthenticationStrategy,
 			SecurityContextRepository securityContextRepository,
 			CsrfTokenRepository csrfTokenRepository,
 			CsrfTokenRequestHandler csrfTokenRequestHandler) {
 		this.loginService = loginService;
+		this.currentUserService = currentUserService;
 		this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
 		this.securityContextRepository = securityContextRepository;
 		this.csrfTokenRepository = csrfTokenRepository;
@@ -115,9 +119,7 @@ public class AuthController {
 		ClubHubPrincipal principal = (ClubHubPrincipal) authentication.getPrincipal();
 		return ResponseEntity.ok()
 				.cacheControl(CacheControl.noStore())
-				.body(new CurrentUserResponse(
-						new CurrentUserResponse.UserSummary(
-								principal.userId().toString(), principal.role())));
+				.body(new CurrentUserResponse(currentUserService.describe(principal.userId())));
 	}
 
 	@PostMapping("/logout")

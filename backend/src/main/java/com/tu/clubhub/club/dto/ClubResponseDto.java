@@ -32,8 +32,10 @@ public record ClubResponseDto(
 	public record PublicRecruitmentRoundDto(
 			String id,
 			String name,
+			String description,
 			Instant opensAt,
 			Instant closesAt,
-			Instant closedAt) {
+			Instant closedAt,
+			Instant resultsScheduledAt) {
 	}
 }

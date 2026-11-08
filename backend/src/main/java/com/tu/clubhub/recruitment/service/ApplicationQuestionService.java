@@ -59,6 +59,9 @@ public class ApplicationQuestionService {
 
         RoundScope round = authorizedRound(roundId, true);
         requireEditable(round);
+        if (repository.hasApplications(round.id())) {
+            throw conflict("Rounds with applications cannot have questions edited");
+        }
 
         String text = requireQuestionText(questionText);
         boolean required = requireIsRequired(isRequired);
@@ -80,6 +83,7 @@ public class ApplicationQuestionService {
 
         requirePositiveId(questionId, "questionId");
         requireQuestion(roundId, questionId);
+        requireUnanswered(roundId, questionId);
         requireEditable(round);
 
         String text = requireQuestionText(questionText);
@@ -103,10 +107,7 @@ public class ApplicationQuestionService {
         requirePositiveId(questionId, "questionId");
         requireQuestion(roundId, questionId);
 
-        if (repository.hasAnswers(roundId, questionId)) {
-            throw conflict(
-                    "Question has answers and cannot be deleted");
-        }
+        requireUnanswered(roundId, questionId);
 
         requireEditable(round);
 
@@ -138,6 +139,8 @@ public class ApplicationQuestionService {
 
         try {
             repository.reorder(roundId, questionIds);
+        } catch (ApplicationQuestionRepository.AnsweredQuestionOrderException ex) {
+            throw conflict("Question has answers");
         } catch (IllegalArgumentException ex) {
             throw badRequest(ex.getMessage());
         } catch (InvalidDataAccessApiUsageException ex) {
@@ -225,11 +228,12 @@ public class ApplicationQuestionService {
             throw conflict(
                     "Only open draft rounds can have their questions edited");
         }
+    }
 
-        if (repository.hasApplications(round.id())) {
-            throw conflict(
-                    "Rounds with applications cannot have questions edited");
-        }
+    private void requireUnanswered(Long roundId, Long questionId) {
+        // The parent FOR UPDATE lock is already held until transaction completion.
+        // Submission takes FOR SHARE on the same parent before writing any answer.
+        if (repository.hasAnswers(roundId, questionId)) throw conflict("Question has answers");
     }
 
     private void requireQuestion(

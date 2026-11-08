@@ -1,6 +1,7 @@
 import { Navigate, useSearchParams } from "react-router";
 import LoadingScreen from "../app/LoadingScreen";
 import { safeRedirectPath } from "../app/redirect";
+import PublicLayout from "../components/layout/PublicLayout";
 import { useAuth } from "../features/auth/AuthContext";
 import Login from "../features/auth/Login";
 
@@ -14,5 +15,9 @@ export default function LoginPage() {
     return <Navigate to={safeRedirectPath(params.get("next"))} replace />;
   }
 
-  return <Login />;
+  return (
+    <PublicLayout>
+      <Login />
+    </PublicLayout>
+  );
 }

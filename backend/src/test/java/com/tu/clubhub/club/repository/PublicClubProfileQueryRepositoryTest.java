@@ -1,10 +1,12 @@
 package com.tu.clubhub.club.repository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -66,6 +68,21 @@ class PublicClubProfileQueryRepositoryTest {
         // The other club has one eligible round, but it must not leak into A's page.
         assertEquals(1L, queries.countOpenPublicRounds(clubB, now));
         assertEquals(0L, queries.countOpenPublicRounds(clubA, now.plusSeconds(60)));
+    }
+
+    @Test
+    void publishedRoundSummariesCarryDetailsAndNeverIncludeDrafts() {
+        Instant resultsAt = now.plusSeconds(3600);
+        jdbc.update("UPDATE recruitment_rounds SET results_scheduled_at = ? WHERE club_id = ? AND title = ?",
+                OffsetDateTime.ofInstant(resultsAt, ZoneOffset.UTC), clubA, "published open");
+
+        var rounds = queries.findPublishedRounds(clubA);
+
+        assertEquals(List.of("published open", "already closed", "manually closed",
+                "opens exactly now", "not yet open"), rounds.stream().map(r -> r.name()).toList());
+        assertEquals("Test round", rounds.get(0).description());
+        assertEquals(resultsAt, rounds.get(0).resultsScheduledAt());
+        assertNull(rounds.get(1).resultsScheduledAt());
     }
 
     private Long insertClub(Long categoryId, String name) {

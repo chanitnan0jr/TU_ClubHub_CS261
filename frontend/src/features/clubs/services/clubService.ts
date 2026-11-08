@@ -34,8 +34,10 @@ export function toClubDetailData(
     rounds: (rounds?.items ?? []).map((round) => ({
       id: round.id,
       title: round.name,
+      description: round.description ?? '',
       opensAt: round.opensAt,
       closesAt: round.closesAt,
+      resultsScheduledAt: round.resultsScheduledAt ?? null,
     })),
     roundsUnavailable: rounds === null,
   };

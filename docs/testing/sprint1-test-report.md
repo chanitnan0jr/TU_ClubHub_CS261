@@ -1,10 +1,11 @@
 # Sprint 1 Test Report (Task48:U03-QA-2)
 
-เทียบผลทดสอบกับ Acceptance Criteria ของ Story ใน Sprint 1 ณ วันที่ 1 พ.ย. 2026 ที่ commit `ad2468a`
+เทียบผลทดสอบกับ Acceptance Criteria ของ Story ใน Sprint 1 ณ วันที่ 1 พ.ย. 2026 ที่ commit `ad2468a` และทดสอบซ้ำ 6 พ.ย. 2026 บน branch `feat/sprint1-ui` หลังปิดช่องว่าง UI
 
 **หลักฐานที่ใช้:**
 - CI บน `main` (backend `mvnw verify` กับ PostgreSQL และ frontend `lint`/`test`/`build`)
 - ชุดทดสอบในเครื่องที่ commit นี้: backend 427 tests และ frontend 48 tests ผ่านทั้งหมด
+- 6 พ.ย. บน `feat/sprint1-ui`: backend 531 tests และ frontend 123 tests ผ่านทั้งหมด และ E2E ผ่าน API บน QA stack (mock auth) 24/24 ขั้น: แก้หมวดหมู่/แท็ก → สร้าง แก้ เผยแพร่รอบ → ขึ้น Open Call Board → สมัคร → ปิดก่อนกำหนด → ได้ `ROUND_CLOSED`
 - รายงานย่อยที่ลิงก์ไว้ในแต่ละแถว
 - การทดสอบผ่านเบราว์เซอร์ใน [U03 flow report](task48-u03-flow-report.md) บน [ระบบที่ติดตั้งด้วย Docker Compose](task47-deployment-report.md)
 
@@ -12,10 +13,10 @@
 
 | Story | SP | ผล | ที่ยังขาด |
 |---|---:|---|---|
-| US-02 ดูรายละเอียดชมรม | 2 | **ผ่านครบ 6/6** | — |
+| US-02 ดูรายละเอียดชมรม | 2 | **ผ่านครบ 6/6** (6 พ.ย.) | — |
 | US-03 ส่งใบสมัคร | 8 | **ผ่าน 5/6, AC-06 บางส่วน** | AC-06 ส่วน "แสดงในหน้าประวัติทันที" ต้องใช้ US-04 (`/me/applications` ยังไม่ทำ) |
-| US-06 แก้ไขโปรไฟล์ชมรม | 5 | **ผ่าน 4/5, AC-01 บางส่วน** | AC-01 ยังแก้หมวดหมู่และแท็กไม่ได้ |
-| US-07 จัดการรอบรับสมัคร | 3 | **ผ่าน 4/5, AC-01 บางส่วน** | AC-01 สร้างและเผยแพร่ผ่าน UI ได้แล้ว แต่ยังไม่มี UI แก้ไขหรือปิดรอบ (มีแค่ API) |
+| US-06 แก้ไขโปรไฟล์ชมรม | 5 | **ผ่านครบ 5/5** (6 พ.ย.) | — |
+| US-07 จัดการรอบรับสมัคร | 3 | **ผ่านครบ 5/5** (6 พ.ย.) | — |
 | US-08 คำถามคัดเลือก | 2 | **ผ่านครบ 5/5** | ยังไม่มี reason `QUESTION_HAS_ANSWERS` แยก (ยกไปทำใน Task51) |
 
 ## รายละเอียดราย AC
@@ -23,20 +24,20 @@
 | Story / AC | ผล | หลักฐาน |
 |---|---|---|
 | US-02 AC-01 ดูข้อมูลสาธารณะโดยไม่ Login | Pass | [task37](task37-public-club-details-test-report.md) TC-02-01 |
-| US-02 AC-02 แสดงรอบที่เปิดและปุ่มไปสมัคร | Pass | task37 TC-02-02 และ flow ขั้น 4–5 (ปุ่ม "สมัครเข้าร่วมชมรมนี้" ใช้งานได้) |
+| US-02 AC-02 แสดงรอบที่เปิดและปุ่มไปสมัคร | Pass | task37 TC-02-02, flow ขั้น 4–5 และ 6 พ.ย.: การ์ดรอบแสดง "รายละเอียด/คุณสมบัติ" และ "กำหนดประกาศผล" (`description`, `resultsScheduledAt` ใน Public API, `PublicClubProfileQueryRepositoryTest`, `clubDetailPage.test.ts`, E2E) |
 | US-02 AC-03 ไม่มีรอบเปิดต้องแจ้งชัดเจน | Pass | ทดสอบผ่านเบราว์เซอร์ 1 พ.ย.: `/clubs/1` แสดง "ไม่มีรอบรับสมัครในขณะนี้" |
 | US-02 AC-04 ไม่เปิดเผยรอบร่าง | Pass | task37 TC-02-04/05 |
-| US-02 AC-05 รูปโหลดไม่ได้ใช้รูปเริ่มต้น | Pass | task37 TC-02-06 (ไม่มีรูป) และ `onError` ใน `ClubDetailPage` เปลี่ยนเป็นรูปเริ่มต้น (ตรวจจากโค้ด) |
+| US-02 AC-05 รูปโหลดไม่ได้ใช้รูปเริ่มต้น | Pass | task37 TC-02-06 และ 6 พ.ย.: ทั้งแบนเนอร์และโลโก้ (`ClubLogo`) เปลี่ยนเป็นรูปเริ่มต้นเมื่อโหลดไม่ได้ (`clubDetailPage.test.ts`) |
 | US-02 AC-06 ชมรมไม่มีอยู่หรือไม่เผยแพร่แสดง 404 | Pass | task37 TC-02-07 |
 | US-03 AC-01 – AC-05 | Pass | [TC-03-01..08](task45-u03-qa-test-cases.md) ทั้งเทสต์อัตโนมัติและผ่านเบราว์เซอร์ |
 | US-03 AC-06 บันทึกครบ สถานะรอพิจารณา และเห็นในหน้าประวัติ | บางส่วน | บันทึกครบเป็น `SUBMITTED` (flow ขั้น 5) แต่ยังไม่มีหน้าประวัติ (US-04) |
-| US-06 AC-01 แก้ข้อมูลชมรม | บางส่วน | [task13](task13-club-profile-test-report.md) และ flow ขั้น 2 แก้ชื่อ คำอธิบาย วัตถุประสงค์ ช่องทางติดต่อได้ แต่ยังแก้หมวดหมู่และแท็กไม่ได้ |
+| US-06 AC-01 แก้ข้อมูลชมรม | Pass | [task13](task13-club-profile-test-report.md), flow ขั้น 2 และ 6 พ.ย.: แก้หมวดหมู่และแท็กได้ (`ClubCategoryTagIntegrationTest`, `clubProfileForm.test.ts`, E2E) |
 | US-06 AC-02 – AC-03 ตรวจ HTTPS และรูปแบบช่องทางติดต่อ | Pass | task13 TC-06-03 ขึ้นไป และ `clubProfileValidation.test.ts` |
 | US-06 AC-04 ตรวจสิทธิ์กรรมการและวาระทุกครั้ง | Pass | [task04](task04-club-committee-security-test-report.md) และ `CommitteeRevocationConcurrencyIntegrationTest` |
 | US-06 AC-05 หน้าสาธารณะอัปเดตทันที | Pass | task13 และ flow ขั้น 4 (คำอธิบายใหม่แสดงทันที) |
-| US-07 AC-01 สร้าง แก้ไข เผยแพร่ ปิดรอบ | บางส่วน | API ครบ (`RecruitmentRoundServiceTest`, `RecruitmentRoundControllerTest`) และ UI สร้างกับเผยแพร่ได้ (flow ขั้น 3) แต่ยังไม่มี UI แก้ไขหรือปิดรอบ |
+| US-07 AC-01 สร้าง แก้ไข เผยแพร่ ปิดรอบ | Pass | API ครบ (`RecruitmentRoundServiceTest`, `RecruitmentRoundControllerTest`, `RecruitmentRoundReadIntegrationTest`) และ 6 พ.ย.: หน้า `/clubs/:id/rounds` มีปุ่มแก้ไข เผยแพร่ ปิดรับ และหน้า `/rounds/:roundId/edit` (`roundManagement.test.ts`, E2E) |
 | US-07 AC-02 เปิดต้องก่อนปิด | Pass | backend ตรวจใน `RoundWriteRequest` และ `RecruitmentRoundService` (ตรวจจากโค้ด ยังไม่มี backend test เฉพาะกฎนี้) และ `recruitmentValidation.test.ts` |
-| US-07 AC-03 รอบที่เปิดอยู่แสดงบนหน้าชมรม | Pass | flow ขั้น 4 |
+| US-07 AC-03 รอบที่เปิดอยู่แสดงบน Open Call Board | Pass | flow ขั้น 4 (หน้าชมรม) และ 6 พ.ย.: หน้า `/open-calls` จาก `GET /api/v1/public/recruitment-rounds` ไม่แสดงรอบร่าง/ยังไม่เปิด/ปิดแล้ว (`PublicClubControllerIntegrationTest`, `openCalls.test.ts`, E2E) |
 | US-07 AC-04 ปิดก่อนกำหนดแล้วหยุดรับทันที | Pass | flow ขั้น 6 และ `rechecksDeadlineOrManualCloseAfterWaitingForActualRoundLock` |
 | US-07 AC-05 ไม่ใช่กรรมการได้ 403 | Pass | `RecruitmentRoundApplicantRestrictionIntegrationTest` และ `RecruitmentRoundControllerTest` |
 | US-08 AC-01 – AC-02 เพิ่ม แก้ ลบ เรียง และบังคับตอบ | Pass | [task29](task29-application-questions-test-report.md) 21/21 และ [การตรวจหา defect](task29-question-defect-review.md) (แก้ข้อความใน UI 2 จุดแล้ว) |

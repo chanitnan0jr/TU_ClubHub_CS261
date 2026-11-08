@@ -4,13 +4,14 @@
 |---|---|
 | **Task ID** | `Task83` |
 | **Feature Code** | `PIPELINE-02` |
-| **สถานะบน Trello** | `To Do` |
+| **สถานะบน Trello** | `Doing` (In Review — PR #73) |
 | **ผู้รับผิดชอบ (Owner)** | สิรวิชญ์ (DevOps Lead / QA) ร่วมกับ วรพล (DevOps) |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (DevOps / QA) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task82 (CI พื้นฐาน) และ Flyway Migration จาก Task55 |
 | **SDLC Labels** | 5. Deployment & DevOps |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | Sirawich Kridatikanwut, 34Woraphon Pupatanun|
 | **Trello Card Link** | [https://trello.com/c/efbn4Fes](https://trello.com/c/efbn4Fes) |
+| **Artefacts** | [`.github/workflows/ci-integration.yml`](../../../.github/workflows/ci-integration.yml), [`docs/testing/task83-system-integration-ci-report.md`](../../testing/task83-system-integration-ci-report.md) |
 
 ---
 
@@ -39,15 +40,15 @@
 
 ### เกณฑ์ตรวจรับ (Acceptance Criteria)
 
-- [ ] Pipeline เริ่มรัน PostgreSQL และรัน Flyway Migration ได้สำเร็จอัตโนมัติ
-- [ ] Integration Tests รันผ่านครบ 100% บน GitHub Actions
-- [ ] มีสรุปผลการทดสอบ (Test Report Summary) แสดงให้เห็นบน GitHub Actions
+- [x] Pipeline เริ่มรัน PostgreSQL และรัน Flyway Migration ได้สำเร็จอัตโนมัติ
+- [x] Integration Tests รันผ่านครบ 100% บน GitHub Actions
+- [x] มีสรุปผลการทดสอบ (Test Report Summary) แสดงให้เห็นบน GitHub Actions
 
 ### Definition of Done (Checklist กลาง)
 
-- [ ] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
-- [ ] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
-- [ ] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
-- [ ] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
-- [ ] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
+- [x] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
+- [x] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
+- [x] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
+- [x] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
+- [x] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
 - [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ

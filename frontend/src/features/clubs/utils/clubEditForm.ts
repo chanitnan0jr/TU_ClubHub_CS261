@@ -1,89 +1,96 @@
-import {
-  isRequired,
-  isValidFacebookUrl,
-  isValidInstagramUrl,
-  isValidUrl,
-} from '../../../utils/validation.ts'
+import type { ProblemFieldError } from '../../../lib/api.ts'
+import { validateClubProfile } from '../../../utils/clubProfileValidation.ts'
+import { isRequired } from '../../../utils/validation.ts'
 import type { ClubResponseDto, ClubUpdateRequestDto } from '../types/club.ts'
 
+/** Form state of the club profile editor (US-06); every text field is a string. */
 export interface ClubEditFormValues {
-  name: string
-  description: string
-  objectives: string
-  contactUrl: string
-  facebookUrl: string
-  instagramUrl: string
-  contactEmail: string
-  imageUrl: string
   bannerUrl: string
+  imageUrl: string
+  name: string
+  objectives: string
+  description: string
+  categoryId: string
+  tagIds: string[]
+  facebookUrl: string
+  instagramHandle: string
+  contactEmail: string
+  contactUrl: string
 }
 
 export type ClubEditFormErrors = Partial<Record<keyof ClubEditFormValues, string>>
 
+/** The API accepts at most this many interest tags per club. */
+export const MAX_CLUB_TAGS = 10
+
 export const EMPTY_CLUB_EDIT_FORM: ClubEditFormValues = {
-  name: '',
-  description: '',
-  objectives: '',
-  contactUrl: '',
-  facebookUrl: '',
-  instagramUrl: '',
-  contactEmail: '',
-  imageUrl: '',
   bannerUrl: '',
+  imageUrl: '',
+  name: '',
+  objectives: '',
+  description: '',
+  categoryId: '',
+  tagIds: [],
+  facebookUrl: '',
+  instagramHandle: '',
+  contactEmail: '',
+  contactUrl: '',
 }
 
-const MAX_NAME_LENGTH = 200
+const INSTAGRAM_HOSTS = ['instagram.com', 'www.instagram.com']
 
+/** The account name of an instagram.com URL; any other value is kept so validation can flag it. */
+export function instagramHandleFromUrl(instagramUrl: string | null | undefined): string {
+  if (!instagramUrl) return ''
+  try {
+    const url = new URL(instagramUrl)
+    if (!INSTAGRAM_HOSTS.includes(url.hostname)) return instagramUrl
+    return url.pathname.split('/').filter(Boolean)[0] ?? ''
+  } catch {
+    return instagramUrl
+  }
+}
+
+// Users may type the account name with its leading "@".
+const normalizeHandle = (value: string) => value.trim().replace(/^@/, '')
+
+/** Prefills the form from the public profile or the PUT response. */
 export function toClubEditFormValues(profile: ClubResponseDto): ClubEditFormValues {
   return {
-    name: profile.name ?? '',
-    description: profile.description ?? '',
-    objectives: profile.objectives ?? '',
-    contactUrl: profile.contactUrl ?? '',
-    facebookUrl: profile.facebookUrl ?? '',
-    instagramUrl: profile.instagramUrl ?? '',
-    contactEmail: profile.contactEmail ?? '',
-    imageUrl: profile.imageUrl ?? '',
     bannerUrl: profile.bannerUrl ?? '',
+    imageUrl: profile.imageUrl ?? '',
+    name: profile.name ?? '',
+    objectives: profile.objectives ?? '',
+    description: profile.description ?? '',
+    categoryId: profile.category?.id ?? profile.categoryId ?? '',
+    tagIds: (profile.tags ?? []).map((tag: { id: string }) => tag.id),
+    facebookUrl: profile.facebookUrl ?? '',
+    instagramHandle: instagramHandleFromUrl(profile.instagramUrl),
+    contactEmail: profile.contactEmail ?? '',
+    contactUrl: profile.contactUrl ?? '',
   }
 }
 
 export function validateClubEditForm(values: ClubEditFormValues): ClubEditFormErrors {
-  const errors: ClubEditFormErrors = {}
+  const { instagramUrl, ...textErrors } = validateClubProfile({
+    name: values.name,
+    description: values.description,
+    objectives: values.objectives,
+    contactUrl: values.contactUrl.trim(),
+    facebookUrl: values.facebookUrl.trim(),
+    instagramHandle: normalizeHandle(values.instagramHandle),
+    contactEmail: values.contactEmail.trim(),
+    imageUrl: values.imageUrl.trim(),
+    bannerUrl: values.bannerUrl.trim(),
+  })
+  const errors: ClubEditFormErrors = { ...textErrors }
+  if (instagramUrl) errors.instagramHandle = instagramUrl
 
-  if (!isRequired(values.name)) {
-    errors.name = 'กรุณากรอกชื่อชมรม'
-  } else if (values.name.trim().length > MAX_NAME_LENGTH) {
-    errors.name = `ชื่อชมรมต้องมีความยาวไม่เกิน ${MAX_NAME_LENGTH} ตัวอักษร`
-  }
-
-  if (!isRequired(values.description)) {
-    errors.description = 'กรุณากรอกคำอธิบายชมรม'
-  }
-
-  const urlChecks: Array<{
-    field: keyof ClubEditFormValues
-    isValid: (value: string) => boolean
-    message: string
-  }> = [
-    { field: 'contactUrl', isValid: isValidUrl, message: 'กรุณากรอก URL HTTPS ที่ถูกต้อง' },
-    {
-      field: 'facebookUrl',
-      isValid: isValidFacebookUrl,
-      message: 'กรุณาใช้ลิงก์ Facebook ที่ขึ้นต้นด้วย https://',
-    },
-    {
-      field: 'instagramUrl',
-      isValid: isValidInstagramUrl,
-      message: 'กรุณาใช้ลิงก์ Instagram ที่ขึ้นต้นด้วย https://',
-    },
-    { field: 'imageUrl', isValid: isValidUrl, message: 'กรุณากรอก URL HTTPS ที่ถูกต้อง' },
-    { field: 'bannerUrl', isValid: isValidUrl, message: 'กรุณากรอก URL HTTPS ที่ถูกต้อง' },
-  ]
-
-  for (const { field, isValid, message } of urlChecks) {
-    const value = values[field]
-    if (value.trim() && !isValid(value)) errors[field] = message
+  // Required on this page by the UC-06 wireframe, although the API allows null.
+  if (!isRequired(values.objectives)) errors.objectives = 'กรุณากรอกวัตถุประสงค์ชมรม'
+  if (!values.categoryId) errors.categoryId = 'กรุณาเลือกหมวดหมู่ชมรม'
+  if (values.tagIds.length > MAX_CLUB_TAGS) {
+    errors.tagIds = `เลือกแท็กได้สูงสุด ${MAX_CLUB_TAGS} แท็ก`
   }
 
   return errors
@@ -94,15 +101,41 @@ export function validateClubEditForm(values: ClubEditFormValues): ClubEditFormEr
 const nullIfBlank = (value: string): string | null => value.trim() || null
 
 export function toClubUpdateRequest(values: ClubEditFormValues): ClubUpdateRequestDto {
+  const handle = normalizeHandle(values.instagramHandle)
   return {
     name: values.name.trim(),
     description: values.description.trim(),
     objectives: nullIfBlank(values.objectives),
     contactUrl: nullIfBlank(values.contactUrl),
     facebookUrl: nullIfBlank(values.facebookUrl),
-    instagramUrl: nullIfBlank(values.instagramUrl),
+    instagramUrl: handle ? `https://www.instagram.com/${handle}/` : null,
     contactEmail: nullIfBlank(values.contactEmail),
     imageUrl: nullIfBlank(values.imageUrl),
     bannerUrl: nullIfBlank(values.bannerUrl),
+    categoryId: values.categoryId,
+    tagIds: [...values.tagIds],
   }
+}
+
+/** True when two form states would send the same request; tag order does not matter. */
+export function isSameClubEditForm(a: ClubEditFormValues, b: ClubEditFormValues): boolean {
+  const normalized = (values: ClubEditFormValues) =>
+    JSON.stringify({ ...values, tagIds: [...values.tagIds].sort() })
+  return normalized(a) === normalized(b)
+}
+
+const SERVER_FIELDS: Partial<Record<string, keyof ClubEditFormValues>> = {
+  instagramUrl: 'instagramHandle',
+}
+
+/** Places API field errors (already reduced to safe Thai text) under the matching form field. */
+export function fromServerFieldErrors(fieldErrors: ProblemFieldError[]): ClubEditFormErrors {
+  const errors: ClubEditFormErrors = {}
+  for (const { field, message } of fieldErrors) {
+    const name = field.startsWith('tagIds') ? 'tagIds' : SERVER_FIELDS[field] ?? field
+    if (Object.hasOwn(EMPTY_CLUB_EDIT_FORM, name)) {
+      errors[name as keyof ClubEditFormValues] ??= message
+    }
+  }
+  return errors
 }

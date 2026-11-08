@@ -35,13 +35,13 @@ class ApiSecurityProblemIntegrationTest {
     @Autowired ObjectMapper mapper;
     @Autowired jakarta.persistence.EntityManager entityManager;
     String prefix;
-    long committee, member, otherCommittee, admin, club, otherClub, inactiveClub, draft, inactiveRound;
+    long committee, member, otherCommittee, admin, category, club, otherClub, inactiveClub, draft, inactiveRound;
 
     @BeforeEach void fixtures() {
         prefix = "task80-" + UUID.randomUUID();
         committee = account("committee", "USER"); member = account("member", "USER");
         otherCommittee = account("other", "USER"); admin = account("admin", "ADMIN");
-        long category = jdbc.queryForObject("INSERT INTO club_categories(name) VALUES (?) RETURNING id", Long.class, prefix);
+        category = jdbc.queryForObject("INSERT INTO club_categories(name) VALUES (?) RETURNING id", Long.class, prefix);
         club = club(category, "club", "ACTIVE"); otherClub = club(category, "other", "ACTIVE");
         inactiveClub = club(category, "hidden", "INACTIVE");
         assignment(committee, club); assignment(otherCommittee, otherClub);
@@ -110,7 +110,10 @@ class ApiSecurityProblemIntegrationTest {
         return mvc.perform(put("/api/v1/clubs/" + club).with(authentication(auth(id, role))).with(csrf())
                 .contentType(MediaType.APPLICATION_JSON).content(body()));
     }
-    private String body() { return "{\"name\":\"" + prefix + "updated\",\"description\":\"Fictional test club\"}"; }
+    private String body() {
+        return "{\"name\":\"" + prefix + "updated\",\"description\":\"Fictional test club\",\"categoryId\":\""
+                + category + "\",\"tagIds\":[]}";
+    }
     private ResultActions form(long id) throws Exception {
         return mvc.perform(get("/api/v1/rounds/" + id + "/application-form").with(authentication(auth(member, "USER"))));
     }
