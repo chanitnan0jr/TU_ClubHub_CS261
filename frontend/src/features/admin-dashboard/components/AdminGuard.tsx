@@ -28,7 +28,7 @@ export const AdminGuard: React.FC<AdminGuardProps> = ({ children }) => {
             403 - ไม่สามารถเข้าถึงหน้านี้ได้ (Access Denied)
           </h2>
           <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-            หน้าแดชบอร์ดสถิติส่วนกลางอนุญาตเฉพาะผู้ดูแลระบบส่วนกลาง (System Admin) เท่า นั้น
+            หน้าแดชบอร์ดสถิติส่วนกลางอนุญาตเฉพาะผู้ดูแลระบบส่วนกลาง (System Admin) เท่านั้น
           </p>
           <a
             href="/"

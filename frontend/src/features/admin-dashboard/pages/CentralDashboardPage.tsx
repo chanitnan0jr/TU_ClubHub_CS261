@@ -4,60 +4,96 @@ import { StatCards } from '../components/StatCards';
 import { DataCharts } from '../components/DataCharts';
 import { AdminGuard } from '../components/AdminGuard';
 import type { AdminDashboardStatsResponse, ClubCategoryOption } from '../types/dashboard';
+import { apiRequest, describeApiError } from '../../../lib/api';
 
 export const CentralDashboardPage: React.FC = () => {
   const [data, setData] = useState<AdminDashboardStatsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // States สำหรับ Dynamic Filters
+  // Dynamic Filters
   const [categories, setCategories] = useState<ClubCategoryOption[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedYear, setSelectedYear] = useState<string>('2569');
-  const [selectedSemester, setSelectedSemester] = useState<string>('1');
-  const [selectedStatus, setSelectedStatus] = useState<string>('ACTIVE');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<string>('');
+  const [selectedSemester, setSelectedSemester] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
 
-  // 1. ดึงข้อมูลหมวดหมู่ชมรม master data
+  // Search State
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [appliedQuery, setAppliedQuery] = useState<string>('');
+
+  // Pagination State
+  const [page, setPage] = useState<number>(1);
+
+  // 1. ดึงหมวดหมู่ชมรม master data
   useEffect(() => {
-    fetch('/api/v1/public/club-categories')
-      .then((res) => res.json())
-      .then((resData) => setCategories(resData.items || []))
+    apiRequest('/api/v1/public/club-categories')
+      .then((resData: any) => setCategories(resData.items || []))
       .catch((err) => console.error('Failed to load categories', err));
   }, []);
 
-  // 2. ดึงข้อมูลสถิติ Stats จาก Backend API จริง
-  const fetchDashboardStats = () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (searchQuery) params.append('q', searchQuery);
-    if (selectedCategory) params.append('categoryId', selectedCategory);
-    if (selectedYear) params.append('academicYear', selectedYear);
-    if (selectedSemester) params.append('semester', selectedSemester);
-    if (selectedStatus) params.append('clubStatus', selectedStatus);
-
-    fetch(`/api/v1/admin/dashboard/stats?${params.toString()}`)
-      .then((res) => res.json())
-      .then((resData) => {
-        setData(resData);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('Failed to fetch dashboard stats', err);
-        setLoading(false);
-      });
-  };
-
+  // 2. ดึงสถิติ Dashboard ด้วย apiRequest
   useEffect(() => {
+    let isMounted = true;
+
+    const fetchDashboardStats = async () => {
+      setLoading(true);
+      setError(null);
+
+      const params = new URLSearchParams();
+      if (appliedQuery) params.append('q', appliedQuery);
+      if (selectedCategory) params.append('categoryId', selectedCategory);
+      if (selectedYear) params.append('academicYear', selectedYear);
+      if (selectedSemester) params.append('semester', selectedSemester);
+      if (selectedStatus !== 'ALL') params.append('clubStatus', selectedStatus);
+      params.append('page', page.toString());
+
+      try {
+        const resData = (await apiRequest(
+          `/api/v1/admin/dashboard/stats?${params.toString()}`
+        )) as AdminDashboardStatsResponse;
+
+        if (isMounted) {
+          setData(resData);
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setError(describeApiError(err, 'โหลดข้อมูลสถิติไม่สำเร็จ'));
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
     fetchDashboardStats();
-  }, [selectedCategory, selectedYear, selectedSemester, selectedStatus]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [appliedQuery, selectedCategory, selectedYear, selectedSemester, selectedStatus, page]);
 
   const handleClearFilters = () => {
     setSearchQuery('');
+    setAppliedQuery('');
     setSelectedCategory('');
-    setSelectedYear('2569');
-    setSelectedSemester('1');
-    setSelectedStatus('ACTIVE');
+    setSelectedYear('');
+    setSelectedSemester('');
+    setSelectedStatus('ALL');
+    setPage(1);
   };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      setAppliedQuery(searchQuery);
+      setPage(1);
+    }
+  };
+
+  // ดึงค่า totalPages และ currentPage อย่างปลอดภัยตาม Type จริง
+  const totalPages = data?.clubs?.page?.totalPages ?? (data?.clubs as any)?.totalPages ?? 1;
+  const currentPage = data?.clubs?.page?.number ?? (data?.clubs as any)?.page ?? page;
 
   return (
     <AdminGuard>
@@ -65,7 +101,6 @@ export const CentralDashboardPage: React.FC = () => {
         <AdminHeader />
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Breadcrumb และ Title */}
           <div className="mb-6">
             <div className="text-xs text-gray-500 mb-1">
               พื้นที่ส่วนกลาง &gt; แดชบอร์ดสถิติภาพรวมมหาวิทยาลัย
@@ -90,8 +125,8 @@ export const CentralDashboardPage: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && fetchDashboardStats()}
-                placeholder="ค้นหาด้วยชื่อชมรม..."
+                onKeyDown={handleSearchKeyDown}
+                placeholder="ค้นหาด้วยชื่อชมรม... (กด Enter เพื่อค้นหา)"
                 className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#c82333]"
               />
               <span className="absolute left-2.5 top-2.5 text-xs text-gray-400">🔍</span>
@@ -99,7 +134,10 @@ export const CentralDashboardPage: React.FC = () => {
 
             <select
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
+                setPage(1);
+              }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none"
             >
               <option value="">ทุกหมวดหมู่ชมรม</option>
@@ -112,18 +150,26 @@ export const CentralDashboardPage: React.FC = () => {
 
             <select
               value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
+              onChange={(e) => {
+                setSelectedYear(e.target.value);
+                setPage(1);
+              }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none"
             >
+              <option value="">ทุกปีการศึกษา</option>
               <option value="2569">ปีการศึกษา 2569</option>
               <option value="2568">ปีการศึกษา 2568</option>
             </select>
 
             <select
               value={selectedSemester}
-              onChange={(e) => setSelectedSemester(e.target.value)}
+              onChange={(e) => {
+                setSelectedSemester(e.target.value);
+                setPage(1);
+              }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none"
             >
+              <option value="">ทุกภาคเรียน</option>
               <option value="1">ภาคเรียนที่ 1</option>
               <option value="2">ภาคเรียนที่ 2</option>
               <option value="3">ภาคฤดูร้อน</option>
@@ -131,12 +177,15 @@ export const CentralDashboardPage: React.FC = () => {
 
             <select
               value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setPage(1);
+              }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none"
             >
+              <option value="ALL">สถานะ: ทั้งหมด</option>
               <option value="ACTIVE">สถานะ: ACTIVE</option>
               <option value="INACTIVE">สถานะ: INACTIVE</option>
-              <option value="ALL">ทั้งหมด</option>
             </select>
 
             <button
@@ -147,7 +196,12 @@ export const CentralDashboardPage: React.FC = () => {
             </button>
           </div>
 
-          {loading ? (
+          {/* แสดง UI Error */}
+          {error ? (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center my-6">
+              <p className="text-red-600 text-xs font-semibold">{error}</p>
+            </div>
+          ) : loading ? (
             <div className="bg-white rounded-xl p-12 text-center border border-gray-100 my-6">
               <p className="text-gray-400 text-xs animate-pulse">กำลังโหลดข้อมูลสถิติ Central Dashboard...</p>
             </div>
@@ -160,7 +214,6 @@ export const CentralDashboardPage: React.FC = () => {
                 totalApplications={data.summary.totalApplications}
               />
 
-              {/* Table สรุปข้อมูลรายชมรม */}
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-8">
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center">
                   <h3 className="text-sm font-bold text-gray-900">รายงานสรุปสถิติจำนวนผู้สมัครรายชมรม</h3>
@@ -195,15 +248,25 @@ export const CentralDashboardPage: React.FC = () => {
                             </span>
                           </td>
                           <td className="p-3">
-                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 font-bold text-[10px]">
+                            <span
+                              className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                                club.clubStatus === 'ACTIVE'
+                                  ? 'bg-emerald-50 text-emerald-600'
+                                  : 'bg-gray-100 text-gray-600'
+                              }`}
+                            >
                               {club.clubStatus}
                             </span>
                           </td>
-                          <td className="p-3 text-emerald-600 font-medium">
+                          <td
+                            className={`p-3 font-medium ${
+                              club.hasOpenRecruitment ? 'text-emerald-600' : 'text-gray-400'
+                            }`}
+                          >
                             • {club.hasOpenRecruitment ? 'เปิดรับสมัคร' : 'ปิดรับสมัคร'}
                           </td>
                           <td className="p-3 font-bold text-gray-900">{club.totalApplications}</td>
-                          <td className="p-3">{club.underReviewCount}</td>
+                          <td className="p-3">{club.acceptedCount}</td>
                           <td className="p-3 font-bold text-emerald-600">{club.confirmedCount}</td>
                           <td className="p-3 font-bold text-gray-900">{club.activeMemberCount}</td>
                         </tr>
@@ -211,6 +274,30 @@ export const CentralDashboardPage: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination UI */}
+                {totalPages > 1 && (
+                  <div className="p-4 border-t border-gray-100 flex justify-between items-center text-xs">
+                    <button
+                      disabled={page === 1}
+                      onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                      className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                    >
+                      ◀ ก่อนหน้า
+                    </button>
+                    <span className="text-gray-500 font-medium">
+                      หน้า <strong className="text-gray-900">{currentPage}</strong> จาก{' '}
+                      <strong>{totalPages}</strong>
+                    </span>
+                    <button
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((p) => p + 1)}
+                      className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                    >
+                      ถัดไป ▶
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           ) : null}
