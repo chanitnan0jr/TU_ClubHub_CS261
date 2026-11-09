@@ -1,21 +1,3 @@
-export const api = {
-  async get<T>(url: string): Promise<{ data: T }> {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return { data };
-  },
-};
-
 export interface ProblemFieldError {
   field: string
   code?: string
@@ -204,20 +186,4 @@ export function describeApiError(error: unknown, fallback: string): string {
   }
   if (error instanceof TypeError) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่'
   return fallback
-}
-
-export async function fetchMyApplicationsAPI(userId: string) {
-  const response = await fetch('/api/v1/applications/my', {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Id': userId,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch my applications');
-  }
-
-  return response.json();
 }

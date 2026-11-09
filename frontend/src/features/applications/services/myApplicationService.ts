@@ -1,32 +1,31 @@
-const API_BASE_URL = 'http://localhost:8080/api/v1';
+import { apiRequest } from '../../../lib/api';
+import type {
+  ApplicantApplicationDetail,
+  ApplicantApplicationPage,
+} from '../types/application';
 
-export const fetchMyApplicationsAPI = async (userId: string = 'student-001'): Promise<any> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/applications/my`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': userId,
-      },
-    });
+export const MY_APPLICATIONS_PAGE_SIZE = 20;
 
-    if (!response.ok) {
-      throw new Error(`Error fetching applications: ${response.statusText}`);
-    }
+export async function fetchMyApplications(
+  page = 0,
+  size = MY_APPLICATIONS_PAGE_SIZE,
+): Promise<ApplicantApplicationPage> {
+  return apiRequest<ApplicantApplicationPage>(
+    `/api/v1/me/applications?page=${page}&size=${size}`,
+  );
+}
 
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Failed to fetch my applications:', error);
-    throw error;
-  }
-};
-
-export const getMyApplications = fetchMyApplicationsAPI;
+export async function fetchMyApplicationDetail(
+  applicationId: string,
+): Promise<ApplicantApplicationDetail> {
+  return apiRequest<ApplicantApplicationDetail>(
+    `/api/v1/me/applications/${encodeURIComponent(applicationId)}`,
+  );
+}
 
 export const myApplicationService = {
-  fetchMyApplicationsAPI,
-  getMyApplications,
+  fetchMyApplications,
+  fetchMyApplicationDetail,
 };
 
 export default myApplicationService;

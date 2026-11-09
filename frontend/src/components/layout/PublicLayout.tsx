@@ -67,6 +67,11 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
               <NavLink to="/open-calls" className={navLinkClass}>
                 รอบที่เปิดรับ
               </NavLink>
+              {isAuthenticated && (
+                <NavLink to="/me/applications" className={navLinkClass}>
+                  ใบสมัครของฉัน
+                </NavLink>
+              )}
               {assignments.length > 0 && (
                 <NavLink to={myClubsPath} end className={navLinkClass}>
                   ชมรมที่ฉันดูแล

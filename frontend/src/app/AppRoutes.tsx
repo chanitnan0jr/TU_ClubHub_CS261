@@ -6,7 +6,9 @@ import ClubEditRoutePage from "../pages/ClubEditRoutePage";
 import ClubManageRoutePage from "../pages/ClubManageRoutePage";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
-import MyApplicationsPage from "../pages/MyApplicationsPage";
+import MyApplicationsPage, {
+  MyApplicationDetailRoutePage,
+} from "../pages/MyApplicationsPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import OpenCallsPage from "../pages/OpenCallsPage";
 import QuestionManagementRoutePage from "../pages/QuestionManagementRoutePage";
@@ -16,7 +18,7 @@ import RoundListRoutePage from "../pages/RoundListRoutePage";
 import RequireAuth from "./RequireAuth";
 
 // Paths must stay under the prefixes the backend forwards to index.html
-// (SpaForwardController): /login, /clubs/**, /profile and /dashboard/**.
+// (SpaForwardController): /login, /clubs/**, /profile/**, /me/applications/**, and /dashboard/**.
 export default function AppRoutes() {
   return (
     <Routes>
@@ -97,10 +99,26 @@ export default function AppRoutes() {
         }
       />
       <Route
+        path="/profile/applications/:applicationId"
+        element={
+          <RequireAuth>
+            <MyApplicationDetailRoutePage />
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/me/applications"
         element={
           <RequireAuth>
             <MyApplicationsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/me/applications/:applicationId"
+        element={
+          <RequireAuth>
+            <MyApplicationDetailRoutePage />
           </RequireAuth>
         }
       />
