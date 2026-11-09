@@ -1,3 +1,4 @@
+import { CentralDashboardPage } from '../features/admin-dashboard/pages/CentralDashboardPage';
 import { Route, Routes } from "react-router";
 import ApplicationRoutePage from "../pages/ApplicationRoutePage";
 import ApplicationResultRoutePage from "../pages/ApplicationResultRoutePage";
@@ -19,7 +20,7 @@ import RoundListRoutePage from "../pages/RoundListRoutePage";
 import RequireAuth from "./RequireAuth";
 
 // Paths must stay under the prefixes the backend forwards to index.html
-// (SpaForwardController): /login, /clubs/**, /profile/**, /me/applications/**, and /dashboard/**.
+// (SpaForwardController): /login, /clubs/**, /profile/**, /me/applications/**, /dashboard/**, and /admin/dashboard.
 export default function AppRoutes() {
   return (
     <Routes>
@@ -29,6 +30,7 @@ export default function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/open-calls" element={<OpenCallsPage />} />
       <Route path="/clubs/:clubId" element={<ClubDetailRoutePage />} />
+      <Route path="/admin/dashboard" element={<RequireAuth><CentralDashboardPage /></RequireAuth>} />
       <Route
         path="/clubs/:clubId/rounds/:roundId/apply"
         element={

@@ -64,6 +64,15 @@ class SpaRoutingIntegrationTest {
 	}
 
 	@Test
+	void adminDashboardRouteForwardsWithoutAuthentication() throws Exception {
+		mockMvc.perform(get("/admin/dashboard"))
+				.andExpect(status().isOk())
+				.andExpect(forwardedUrl("/index.html"));
+		mockMvc.perform(get("/api/v1/admin/dashboard/stats"))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
 	void apiEndpointsDoNotForwardToIndexHtml() throws Exception {
 		mockMvc.perform(get("/api/v1/non-existent-route"))
 				.andExpect(status().is4xxClientError());

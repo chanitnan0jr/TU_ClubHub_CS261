@@ -14,6 +14,30 @@ test('GET sends no CSRF header and parses the JSON body', async () => {
   }
 })
 
+test('an aborted request passes its signal to fetch and cannot trigger a stale session failure', async () => {
+  const original = globalThis.fetch
+  let resolveResponse!: (response: Response) => void
+  let seenSignal: AbortSignal | null | undefined
+  let notifications = 0
+  const response = new Promise<Response>((resolve) => { resolveResponse = resolve })
+  globalThis.fetch = (async (_input, init) => { seenSignal = init?.signal; return response }) as typeof fetch
+  resetAuthFailureNotification()
+  const unsubscribe = subscribeAuthFailures(() => { notifications++ })
+  try {
+    const controller = new AbortController()
+    const request = apiRequest('/api/v1/protected', { signal: controller.signal })
+    assert.equal(seenSignal, controller.signal)
+    controller.abort()
+    resolveResponse(problem(401, 'AUTHENTICATION_REQUIRED', 'expired'))
+    await assert.rejects(request)
+    assert.equal(notifications, 0)
+  } finally {
+    unsubscribe()
+    resetAuthFailureNotification()
+    globalThis.fetch = original
+  }
+})
+
 test('writes fetch the CSRF header first and send it with the JSON body', async () => {
   const stub = stubFetch((request) =>
     request.url === '/api/v1/auth/csrf' ? csrfResponse() : json({ id: '1' }, 201),
