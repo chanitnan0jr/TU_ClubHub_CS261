@@ -4,13 +4,14 @@
 |---|---|
 | **Task ID** | `Task71` |
 | **Feature Code** | `REPORT-01` |
-| **สถานะบน Trello** | `To Do` |
+| **สถานะบน Trello** | `Doing` (In Review — PR #77) |
 | **ผู้รับผิดชอบ (Owner)** | ณัฐชนินทร์ (Boom - Fullstack / Backend) |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task79 (Role Check) และ Seed Data จาก Task55 |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
 | **สมาชิกบนการ์ด Trello** | boom boom|
 | **Trello Card Link** | [https://trello.com/c/1YJliqm2](https://trello.com/c/1YJliqm2) |
+| **Pull Request** | [PR #77](https://github.com/chanitnan0jr/TU_ClubHub_CS261/pull/77) |
 
 ---
 
@@ -39,15 +40,15 @@
 
 ### เกณฑ์ตรวจรับ (Acceptance Criteria)
 
-- [ ] คำนวณตัวเลขสถิติถูกต้องตรงกับข้อมูลจริงในฐานข้อมูล
-- [ ] จำกัดสิทธิ์เฉพาะผู้ใช้ Role ADMIN เท่านั้นที่เข้าถึงได้ (`403 Forbidden` สำหรับคนอื่น)
-- [ ] Query ทำงานรวดเร็ว มีประสิทธิภาพ
+- [x] คำนวณตัวเลขสถิติถูกต้องตรงกับข้อมูลจริงในฐานข้อมูล
+- [x] จำกัดสิทธิ์เฉพาะผู้ใช้ Role ADMIN เท่านั้นที่เข้าถึงได้ (`403 Forbidden` สำหรับคนอื่น)
+- [x] Query ทำงานรวดเร็ว มีประสิทธิภาพ
 
 ### Definition of Done (Checklist กลาง)
 
-- [ ] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
-- [ ] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
-- [ ] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
-- [ ] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
-- [ ] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
+- [x] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
+- [x] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
+- [x] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
+- [x] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
+- [x] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
 - [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ
