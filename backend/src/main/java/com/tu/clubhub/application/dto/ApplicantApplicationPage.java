@@ -1,5 +1,6 @@
 package com.tu.clubhub.application.dto;
 
+import com.tu.clubhub.club.dto.PublicPageMetadataDto;
 import java.time.Instant;
 import java.util.List;
 
@@ -9,7 +10,7 @@ import java.util.List;
  */
 public record ApplicantApplicationPage(
         List<Item> items,
-        PageMetadata page) {
+        PublicPageMetadataDto page) {
 
     public record Item(
             String id,
@@ -38,13 +39,6 @@ public record ApplicantApplicationPage(
             Instant closesAt,
             Instant resultsPublishedAt,
             Instant confirmationDeadline) {
-    }
-
-    public record PageMetadata(
-            int number,
-            int size,
-            long totalElements,
-            int totalPages) {
     }
 
     public enum VisibleStatus {

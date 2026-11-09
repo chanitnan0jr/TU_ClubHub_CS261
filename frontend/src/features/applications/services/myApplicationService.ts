@@ -22,10 +22,3 @@ export async function fetchMyApplicationDetail(
     `/api/v1/me/applications/${encodeURIComponent(applicationId)}`,
   );
 }
-
-export const myApplicationService = {
-  fetchMyApplications,
-  fetchMyApplicationDetail,
-};
-
-export default myApplicationService;

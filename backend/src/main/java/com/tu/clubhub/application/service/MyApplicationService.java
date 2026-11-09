@@ -5,12 +5,12 @@ import com.tu.clubhub.application.dto.ApplicantApplicationDetail.StatusHistoryEn
 import com.tu.clubhub.application.dto.ApplicantApplicationPage;
 import com.tu.clubhub.application.dto.ApplicantApplicationPage.ClubSummary;
 import com.tu.clubhub.application.dto.ApplicantApplicationPage.Item;
-import com.tu.clubhub.application.dto.ApplicantApplicationPage.PageMetadata;
 import com.tu.clubhub.application.dto.ApplicantApplicationPage.RoundSummary;
 import com.tu.clubhub.application.dto.ApplicantApplicationPage.VisibleStatus;
 import com.tu.clubhub.application.repository.MyApplicationRepository;
 import com.tu.clubhub.application.repository.MyApplicationRepository.ApplicationRow;
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
+import com.tu.clubhub.club.dto.PublicPageMetadataDto;
 import com.tu.clubhub.user.repository.UserAccountRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -68,11 +68,7 @@ public class MyApplicationService {
 
         return new ApplicantApplicationPage(
                 items,
-                new PageMetadata(
-                        page,
-                        size,
-                        total,
-                        Math.toIntExact(pages)));
+                new PublicPageMetadataDto(page, size, total, pages));
     }
 
     @Transactional(

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Breadcrumbs } from '../../../components/ui/Breadcrumbs';
 import { Button } from '../../../components/ui/Button';
@@ -9,6 +9,7 @@ import {
   ExternalLinkIcon,
 } from '../../../components/ui/icons';
 import { SectionCard } from '../../../components/ui/SectionCard';
+import { useApiResource } from '../../../hooks/useApiResource';
 import { describeApiError } from '../../../lib/api';
 import { formatThaiDateTime } from '../../../lib/format';
 import { ClubLogo } from '../../clubs/components/ClubLogo';
@@ -22,19 +23,9 @@ import {
   MY_APPLICATIONS_PAGE_SIZE,
 } from '../services/myApplicationService';
 import type {
-  ApplicantApplicationDetail,
-  ApplicantApplicationPage,
   ApplicantApplicationSummary,
   ApplicationFilterTab,
 } from '../types/application';
-
-type ListLoadResult =
-  | { status: 'ok'; data: ApplicantApplicationPage }
-  | { status: 'error'; message: string };
-
-type DetailLoadResult =
-  | { status: 'ok'; data: ApplicantApplicationDetail }
-  | { status: 'error'; message: string };
 
 const pageIndex = (value: string | null) =>
   value && /^[1-9]\d{0,5}$/.test(value) ? Number(value) - 1 : 0;
@@ -47,66 +38,31 @@ const filterTabs: { id: ApplicationFilterTab; label: string }[] = [
   { id: 'CONFIRMED_DECLINED', label: 'ยืนยัน/สละสิทธิ์แล้ว' },
 ];
 
-function matchesFilter(
-  application: ApplicantApplicationSummary,
+const closedStatuses = new Set([
+  'CONFIRMED',
+  'DECLINED',
+  'EXPIRED',
+  'WITHDRAWN',
+]);
+
+const matchesFilter = (
+  app: ApplicantApplicationSummary,
   tab: ApplicationFilterTab,
-): boolean {
-  switch (tab) {
-    case 'ALL':
-      return true;
-    case 'SUBMITTED':
-      return application.applicantVisibleStatus === 'SUBMITTED';
-    case 'ACCEPTED_PENDING_CONFIRMATION':
-      return (
-        application.applicantVisibleStatus === 'ACCEPTED_PENDING_CONFIRMATION'
-      );
-    case 'REJECTED':
-      return application.applicantVisibleStatus === 'REJECTED';
-    case 'CONFIRMED_DECLINED':
-      return (
-        application.applicantVisibleStatus === 'CONFIRMED' ||
-        application.applicantVisibleStatus === 'DECLINED' ||
-        application.applicantVisibleStatus === 'EXPIRED' ||
-        application.applicantVisibleStatus === 'WITHDRAWN'
-      );
-  }
-}
+) =>
+  tab === 'ALL' ||
+  (tab === 'CONFIRMED_DECLINED'
+    ? closedStatuses.has(app.applicantVisibleStatus)
+    : app.applicantVisibleStatus === tab);
 
 export function MyApplicationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const page = pageIndex(searchParams.get('page'));
-  const [reloadKey, setReloadKey] = useState(0);
   const [activeTab, setActiveTab] = useState<ApplicationFilterTab>('ALL');
-  const [loaded, setLoaded] = useState<{
-    key: string;
-    result: ListLoadResult;
-  } | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
-
-  const requestKey = `${page}:${reloadKey}`;
-  const result = loaded?.key === requestKey ? loaded.result : null;
-
-  useEffect(() => {
-    let ignore = false;
-    fetchMyApplications(page, MY_APPLICATIONS_PAGE_SIZE).then(
-      (data) => {
-        if (!ignore) {
-          setLoaded({ key: requestKey, result: { status: 'ok', data } });
-        }
-      },
-      (error: unknown) => {
-        if (ignore) return;
-        const message = describeApiError(
-          error,
-          'ไม่สามารถโหลดประวัติใบสมัครได้ กรุณาลองใหม่อีกครั้ง',
-        );
-        setLoaded({ key: requestKey, result: { status: 'error', message } });
-      },
-    );
-    return () => {
-      ignore = true;
-    };
-  }, [page, requestKey]);
+  const { data, error, isLoading, reload } = useApiResource(
+    `my-applications:${page}`,
+    () => fetchMyApplications(page, MY_APPLICATIONS_PAGE_SIZE),
+  );
 
   const goToPage = (next: number) => {
     setSearchParams(next === 0 ? {} : { page: String(next + 1) });
@@ -114,7 +70,7 @@ export function MyApplicationsPage() {
   };
 
   let content: ReactNode;
-  if (result === null) {
+  if (isLoading) {
     content = (
       <div role="status">
         <span className="sr-only">กำลังโหลดข้อมูลประวัติใบสมัคร...</span>
@@ -128,33 +84,36 @@ export function MyApplicationsPage() {
         </ul>
       </div>
     );
-  } else if (result.status === 'error') {
+  } else if (!data) {
     content = (
       <div className="flex flex-col items-center gap-4 rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
         <p role="alert" className="text-sm text-slate-700">
-          {result.message}
+          {describeApiError(
+            error,
+            'ไม่สามารถโหลดประวัติใบสมัครได้ กรุณาลองใหม่อีกครั้ง',
+          )}
         </p>
-        <Button
-          variant="primary"
-          onClick={() => setReloadKey((key) => key + 1)}
-        >
+        <Button variant="primary" onClick={reload}>
           ลองใหม่
         </Button>
       </div>
     );
   } else {
-    const { items, page: meta } = result.data;
+    const { items, page: meta } = data;
     const filteredItems = items.filter((item) => matchesFilter(item, activeTab));
-    const submittedCount = items.filter(
-      (item) => item.applicantVisibleStatus === 'SUBMITTED',
-    ).length;
-    const acceptedCount = items.filter(
-      (item) =>
-        item.applicantVisibleStatus === 'ACCEPTED_PENDING_CONFIRMATION',
-    ).length;
-    const confirmedCount = items.filter(
-      (item) => item.applicantVisibleStatus === 'CONFIRMED',
-    ).length;
+    const countOf = (status: string) =>
+      items.filter((item) => item.applicantVisibleStatus === status).length;
+    const stats = [
+      ['ใบสมัครทั้งหมด', meta.totalElements, 'text-slate-500', 'text-slate-900'],
+      ['รอพิจารณา', countOf('SUBMITTED'), 'text-amber-700', 'text-amber-800'],
+      [
+        'ผ่านการคัดเลือก',
+        countOf('ACCEPTED_PENDING_CONFIRMATION'),
+        'text-emerald-700',
+        'text-emerald-800',
+      ],
+      ['ยืนยันสิทธิ์แล้ว', countOf('CONFIRMED'), 'text-blue-700', 'text-blue-900'],
+    ] as const;
 
     content =
       items.length === 0 && meta.totalElements > 0 ? (
@@ -182,34 +141,18 @@ export function MyApplicationsPage() {
       ) : (
         <div className="flex flex-col gap-6">
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <dt className="text-xs font-medium text-slate-500">ใบสมัครทั้งหมด</dt>
-              <dd className="mt-1 text-2xl font-bold text-slate-900">
-                {meta.totalElements}{' '}
-                <span className="text-xs font-normal text-slate-500">รายการ</span>
-              </dd>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <dt className="text-xs font-medium text-amber-700">รอพิจารณา</dt>
-              <dd className="mt-1 text-2xl font-bold text-amber-800">
-                {submittedCount}{' '}
-                <span className="text-xs font-normal text-amber-700">รายการ</span>
-              </dd>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <dt className="text-xs font-medium text-emerald-700">ผ่านการคัดเลือก</dt>
-              <dd className="mt-1 text-2xl font-bold text-emerald-800">
-                {acceptedCount}{' '}
-                <span className="text-xs font-normal text-emerald-700">รายการ</span>
-              </dd>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <dt className="text-xs font-medium text-blue-700">ยืนยันสิทธิ์แล้ว</dt>
-              <dd className="mt-1 text-2xl font-bold text-blue-900">
-                {confirmedCount}{' '}
-                <span className="text-xs font-normal text-blue-700">รายการ</span>
-              </dd>
-            </div>
+            {stats.map(([label, count, dtColor, ddColor]) => (
+              <div
+                key={label}
+                className="rounded-xl border border-slate-200 bg-white p-4"
+              >
+                <dt className={`text-xs font-medium ${dtColor}`}>{label}</dt>
+                <dd className={`mt-1 text-2xl font-bold ${ddColor}`}>
+                  {count}{' '}
+                  <span className={`text-xs font-normal ${dtColor}`}>รายการ</span>
+                </dd>
+              </div>
+            ))}
           </dl>
 
           <div
@@ -311,38 +254,12 @@ export function MyApplicationDetailPage({
 }: {
   applicationId: string;
 }) {
-  const [reloadKey, setReloadKey] = useState(0);
-  const [loaded, setLoaded] = useState<{
-    key: string;
-    result: DetailLoadResult;
-  } | null>(null);
+  const { data: detail, error, isLoading, reload } = useApiResource(
+    `my-application-detail:${applicationId}`,
+    () => fetchMyApplicationDetail(applicationId),
+  );
 
-  const requestKey = `${applicationId}:${reloadKey}`;
-  const result = loaded?.key === requestKey ? loaded.result : null;
-
-  useEffect(() => {
-    let ignore = false;
-    fetchMyApplicationDetail(applicationId).then(
-      (data) => {
-        if (!ignore) {
-          setLoaded({ key: requestKey, result: { status: 'ok', data } });
-        }
-      },
-      (error: unknown) => {
-        if (ignore) return;
-        const message = describeApiError(
-          error,
-          'ไม่สามารถโหลดรายละเอียดใบสมัครได้ กรุณาลองใหม่อีกครั้ง',
-        );
-        setLoaded({ key: requestKey, result: { status: 'error', message } });
-      },
-    );
-    return () => {
-      ignore = true;
-    };
-  }, [applicationId, requestKey]);
-
-  if (result === null) {
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-6 pb-12" role="status">
         <span className="sr-only">กำลังโหลดรายละเอียดใบสมัคร...</span>
@@ -354,7 +271,7 @@ export function MyApplicationDetailPage({
     );
   }
 
-  if (result.status === 'error') {
+  if (!detail) {
     return (
       <div className="flex flex-col gap-6 pb-12">
         <Breadcrumbs
@@ -366,13 +283,13 @@ export function MyApplicationDetailPage({
         />
         <div className="flex flex-col items-center gap-4 rounded-xl border border-slate-200 bg-white px-6 py-12 text-center">
           <p role="alert" className="text-sm text-slate-700">
-            {result.message}
+            {describeApiError(
+              error,
+              'ไม่สามารถโหลดรายละเอียดใบสมัครได้ กรุณาลองใหม่อีกครั้ง',
+            )}
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Button
-              variant="primary"
-              onClick={() => setReloadKey((key) => key + 1)}
-            >
+            <Button variant="primary" onClick={reload}>
               ลองใหม่
             </Button>
             <Link to="/me/applications" className={buttonClass('secondary')}>
@@ -384,7 +301,6 @@ export function MyApplicationDetailPage({
     );
   }
 
-  const detail = result.data;
   const { club, round } = detail;
   const submittedText = formatThaiDateTime(detail.submittedAt);
   const publishedText = round.resultsPublishedAt
@@ -396,6 +312,12 @@ export function MyApplicationDetailPage({
   const respondedText = detail.respondedAt
     ? formatThaiDateTime(detail.respondedAt)
     : '';
+  const dateItems = [
+    ['วันที่ส่งใบสมัคร', submittedText || '-'],
+    ['วันที่ประกาศผล', publishedText],
+    ['กำหนดยืนยันสิทธิ์', deadlineText],
+    ['วันที่ตอบรับสิทธิ์', respondedText],
+  ].filter(([, value]) => Boolean(value));
 
   return (
     <div className="flex flex-col gap-6 pb-12">
@@ -489,36 +411,15 @@ export function MyApplicationDetailPage({
           )}
 
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-lg border border-slate-200 px-4 py-3">
-              <dt className="text-xs text-slate-500">วันที่ส่งใบสมัคร</dt>
-              <dd className="mt-0.5 font-medium text-slate-900">
-                {submittedText || '-'}
-              </dd>
-            </div>
-            {publishedText && (
-              <div className="rounded-lg border border-slate-200 px-4 py-3">
-                <dt className="text-xs text-slate-500">วันที่ประกาศผล</dt>
-                <dd className="mt-0.5 font-medium text-slate-900">
-                  {publishedText}
-                </dd>
+            {dateItems.map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded-lg border border-slate-200 px-4 py-3"
+              >
+                <dt className="text-xs text-slate-500">{label}</dt>
+                <dd className="mt-0.5 font-medium text-slate-900">{value}</dd>
               </div>
-            )}
-            {deadlineText && (
-              <div className="rounded-lg border border-slate-200 px-4 py-3">
-                <dt className="text-xs text-slate-500">กำหนดยืนยันสิทธิ์</dt>
-                <dd className="mt-0.5 font-medium text-slate-900">
-                  {deadlineText}
-                </dd>
-              </div>
-            )}
-            {respondedText && (
-              <div className="rounded-lg border border-slate-200 px-4 py-3">
-                <dt className="text-xs text-slate-500">วันที่ตอบรับสิทธิ์</dt>
-                <dd className="mt-0.5 font-medium text-slate-900">
-                  {respondedText}
-                </dd>
-              </div>
-            )}
+            ))}
           </dl>
         </div>
       </SectionCard>
@@ -628,5 +529,3 @@ export function MyApplicationDetailPage({
     </div>
   );
 }
-
-export default MyApplicationsPage;

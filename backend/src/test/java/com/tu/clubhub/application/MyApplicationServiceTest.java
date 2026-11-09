@@ -75,7 +75,7 @@ class MyApplicationServiceTest {
         assertEquals(1, result.page().number());
         assertEquals(2, result.page().size());
         assertEquals(3L, result.page().totalElements());
-        assertEquals(2, result.page().totalPages());
+        assertEquals(2L, result.page().totalPages());
 
         verify(repository).countByApplicant(USER_ID);
         verify(repository).findByApplicant(USER_ID, 2, 2L);

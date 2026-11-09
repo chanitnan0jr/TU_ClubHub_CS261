@@ -66,6 +66,50 @@ export function ApplicationStatusBadge({
   );
 }
 
+function statusBanner(
+  status: ApplicantVisibleStatus,
+  deadlineText: string,
+  respondedText: string,
+) {
+  switch (status) {
+    case 'SUBMITTED':
+      return {
+        box: 'border-amber-200 bg-amber-50/70 text-amber-900',
+        title: 'ใบสมัครของคุณอยู่ระหว่างการพิจารณาของคณะกรรมการชมรม',
+      };
+    case 'ACCEPTED_PENDING_CONFIRMATION':
+      return {
+        box: 'border-emerald-200 bg-emerald-50/80 text-emerald-950',
+        title: 'ยินดีด้วย! คุณผ่านการคัดเลือกเข้าเป็นสมาชิกชมรม',
+        sub: deadlineText ? `กำหนดยืนยันสิทธิ์ภายใน: ${deadlineText}` : '',
+      };
+    case 'REJECTED':
+      return {
+        box: 'border-red-200 bg-red-50/70 text-red-900',
+        title: 'ขอขอบคุณที่ให้ความสนใจสมัครเข้าร่วมชมรมในรอบนี้',
+      };
+    case 'CONFIRMED':
+      return {
+        box: 'border-blue-200 bg-blue-50/70 text-blue-950',
+        title: 'คุณได้ยืนยันสิทธิ์เข้าร่วมเป็นสมาชิกชมรมนี้แล้ว',
+        sub: respondedText ? `ยืนยันสิทธิ์เมื่อ: ${respondedText}` : '',
+      };
+    case 'EXPIRED':
+    case 'WITHDRAWN':
+    case 'DECLINED':
+      return {
+        box: 'border-slate-200 bg-slate-50 text-slate-700',
+        title:
+          status === 'EXPIRED'
+            ? 'หมดเวลาการยืนยันสิทธิ์ภายในกำหนด ระบบจึงบันทึกการสละสิทธิ์อัตโนมัติ'
+            : status === 'WITHDRAWN'
+              ? 'คุณได้ถอนใบสมัครในรอบนี้แล้ว'
+              : 'คุณได้แจ้งสละสิทธิ์การเข้าเป็นสมาชิกชมรมในรอบนี้แล้ว',
+        sub: respondedText ? `ดำเนินการเมื่อ: ${respondedText}` : '',
+      };
+  }
+}
+
 export function ApplicationCard({
   application,
 }: {
@@ -80,14 +124,19 @@ export function ApplicationCard({
   const respondedText = application.respondedAt
     ? formatThaiDateTime(application.respondedAt)
     : '';
-  const isAcceptedPending =
-    applicantVisibleStatus === 'ACCEPTED_PENDING_CONFIRMATION';
+  const banner = statusBanner(
+    applicantVisibleStatus,
+    deadlineText,
+    respondedText,
+  );
 
   return (
     <article
       aria-labelledby={headingId}
       className={`flex flex-col gap-4 rounded-xl border bg-white p-5 shadow-xs sm:p-6 ${
-        isAcceptedPending ? 'border-emerald-300' : 'border-slate-200'
+        applicantVisibleStatus === 'ACCEPTED_PENDING_CONFIRMATION'
+          ? 'border-emerald-300'
+          : 'border-slate-200'
       }`}
     >
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
@@ -114,60 +163,10 @@ export function ApplicationCard({
         </div>
       </div>
 
-      {applicantVisibleStatus === 'SUBMITTED' && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
-          <p className="font-medium">
-            ใบสมัครของคุณอยู่ระหว่างการพิจารณาของคณะกรรมการชมรม
-          </p>
-        </div>
-      )}
-
-      {applicantVisibleStatus === 'ACCEPTED_PENDING_CONFIRMATION' && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-950">
-          <p className="font-semibold">
-            ยินดีด้วย! คุณผ่านการคัดเลือกเข้าเป็นสมาชิกชมรม
-          </p>
-          {deadlineText && (
-            <p className="mt-1 text-xs font-medium text-emerald-800">
-              กำหนดยืนยันสิทธิ์ภายใน: {deadlineText}
-            </p>
-          )}
-        </div>
-      )}
-
-      {applicantVisibleStatus === 'REJECTED' && (
-        <div className="rounded-lg border border-red-200 bg-red-50/70 px-4 py-3 text-sm text-red-900">
-          <p className="font-medium">
-            ขอขอบคุณที่ให้ความสนใจสมัครเข้าร่วมชมรมในรอบนี้
-          </p>
-        </div>
-      )}
-
-      {applicantVisibleStatus === 'CONFIRMED' && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-4 py-3 text-sm text-blue-950">
-          <p className="font-medium">คุณได้ยืนยันสิทธิ์เข้าร่วมเป็นสมาชิกชมรมนี้แล้ว</p>
-          {respondedText && (
-            <p className="mt-1 text-xs text-blue-800">ยืนยันสิทธิ์เมื่อ: {respondedText}</p>
-          )}
-        </div>
-      )}
-
-      {(applicantVisibleStatus === 'DECLINED' ||
-        applicantVisibleStatus === 'EXPIRED' ||
-        applicantVisibleStatus === 'WITHDRAWN') && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          <p className="font-medium">
-            {applicantVisibleStatus === 'EXPIRED'
-              ? 'หมดเวลาการยืนยันสิทธิ์ภายในกำหนด ระบบจึงบันทึกการสละสิทธิ์อัตโนมัติ'
-              : applicantVisibleStatus === 'WITHDRAWN'
-                ? 'คุณได้ถอนใบสมัครในรอบนี้แล้ว'
-                : 'คุณได้แจ้งสละสิทธิ์การเข้าเป็นสมาชิกชมรมในรอบนี้แล้ว'}
-          </p>
-          {respondedText && (
-            <p className="mt-1 text-xs text-slate-500">ดำเนินการเมื่อ: {respondedText}</p>
-          )}
-        </div>
-      )}
+      <div className={`rounded-lg border px-4 py-3 text-sm ${banner.box}`}>
+        <p className="font-medium">{banner.title}</p>
+        {banner.sub && <p className="mt-1 text-xs opacity-90">{banner.sub}</p>}
+      </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
         <Link
