@@ -9,6 +9,7 @@ interface DataChartsProps {
 
 export const DataCharts: React.FC<DataChartsProps> = ({ categories, topClubs, totalApplications }) => {
   const categoryColors = ['#ef4444', '#2563eb', '#9333ea', '#10b981'];
+  const maxApps = Math.max(1, ...topClubs.map((club) => club.totalApplications));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -86,7 +87,6 @@ export const DataCharts: React.FC<DataChartsProps> = ({ categories, topClubs, to
 
         <div className="space-y-4">
           {topClubs.map((club) => {
-            const maxApps = topClubs[0]?.totalApplications || 1;
             return (
               <div key={club.clubId} className="space-y-1">
                 <div className="flex justify-between text-xs">
@@ -95,13 +95,13 @@ export const DataCharts: React.FC<DataChartsProps> = ({ categories, topClubs, to
                     {club.totalApplications} / {club.confirmedCount}
                   </span>
                 </div>
-                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden flex">
+                <div className="relative w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className="bg-[#c82333] h-full"
+                    className="absolute inset-y-0 left-0 bg-[#c82333]"
                     style={{ width: `${(club.totalApplications / maxApps) * 100}%` }}
                   ></div>
                   <div
-                    className="bg-emerald-500 h-full"
+                    className="absolute inset-y-0 left-0 bg-emerald-500"
                     style={{ width: `${(club.confirmedCount / maxApps) * 100}%` }}
                   ></div>
                 </div>

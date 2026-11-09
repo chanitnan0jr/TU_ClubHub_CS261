@@ -46,14 +46,14 @@ export const StatCards: React.FC<StatCardsProps> = ({ summary }) => {
       {/* การ์ด 3: สมาชิกใหม่ที่ยืนยันสิทธิ์ */}
       <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm relative">
         <div className="flex justify-between items-start mb-2">
-          <span className="text-xs font-medium text-gray-600">สมาชิกใหม่ที่ยืนยันสิทธิ์</span>
+          <span className="text-xs font-medium text-gray-600">สมาชิกภาพใหม่ที่ยืนยันสิทธิ์</span>
           <div className="w-8 h-8 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center text-xs">
             ☑️
           </div>
         </div>
         <div className="flex items-baseline space-x-2">
           <span className="text-3xl font-bold text-gray-900">{summary.confirmedNewMembers.toLocaleString()}</span>
-          <span className="text-xs text-gray-500">คน</span>
+          <span className="text-xs text-gray-500">รายการ</span>
         </div>
         <div className="mt-3 inline-block px-2 py-0.5 rounded bg-teal-50 text-teal-700 text-[11px] font-semibold">
           อัตราตอบรับ {summary.confirmationRatePercent}%
@@ -63,17 +63,17 @@ export const StatCards: React.FC<StatCardsProps> = ({ summary }) => {
       {/* การ์ด 4: สมาชิกชมรมปัจจุบัน */}
       <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm relative">
         <div className="flex justify-between items-start mb-2">
-          <span className="text-xs font-medium text-gray-600">สมาชิกชมรมปัจจุบัน (Active)</span>
+          <span className="text-xs font-medium text-gray-600">สมาชิกภาพชมรมปัจจุบัน (Active)</span>
           <div className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-xs">
             👥
           </div>
         </div>
         <div className="flex items-baseline space-x-2">
           <span className="text-3xl font-bold text-gray-900">{summary.currentActiveMemberships.toLocaleString()}</span>
-          <span className="text-xs text-gray-500">คน</span>
+          <span className="text-xs text-gray-500">รายการ</span>
         </div>
         <div className="mt-3 text-xs text-purple-600 font-medium">
-          ผู้ดำรงสถานะภาพรวมทั้ง มธ.
+          จำนวนสมาชิกภาพในชมรมทั้งหมด
         </div>
       </div>
     </div>

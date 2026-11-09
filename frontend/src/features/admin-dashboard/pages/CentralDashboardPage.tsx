@@ -6,15 +6,25 @@ import { AdminGuard } from '../components/AdminGuard';
 import type { AdminDashboardStatsResponse, ClubCategoryOption } from '../types/dashboard';
 import { apiRequest, describeApiError } from '../../../lib/api';
 
-export const CentralDashboardPage: React.FC = () => {
+export const CentralDashboardPage: React.FC = () => (
+  <AdminGuard>
+    <CentralDashboardContent />
+  </AdminGuard>
+);
+
+const CentralDashboardContent: React.FC = () => {
   const [data, setData] = useState<AdminDashboardStatsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   // Dynamic Filters
   const [categories, setCategories] = useState<ClubCategoryOption[]>([]);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [categoryReload, setCategoryReload] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<string>('');
+  const [yearInput, setYearInput] = useState<string>('');
+  const [yearError, setYearError] = useState<string | null>(null);
   const [selectedSemester, setSelectedSemester] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
 
@@ -23,18 +33,24 @@ export const CentralDashboardPage: React.FC = () => {
   const [appliedQuery, setAppliedQuery] = useState<string>('');
 
   // Pagination State
-  const [page, setPage] = useState<number>(1);
+  const [page, setPage] = useState<number>(0);
 
   // 1. ดึงหมวดหมู่ชมรม master data
   useEffect(() => {
-    apiRequest('/api/v1/public/club-categories')
-      .then((resData: any) => setCategories(resData.items || []))
-      .catch((err) => console.error('Failed to load categories', err));
-  }, []);
+    let active = true;
+    const controller = new AbortController();
+    apiRequest<{ items: ClubCategoryOption[] }>('/api/v1/public/club-categories', { signal: controller.signal })
+      .then((resData) => { if (active) setCategories(resData.items); })
+      .catch((err: unknown) => {
+        if (active) setCategoryError(describeApiError(err, 'กรุณาลองใหม่อีกครั้ง'));
+      });
+    return () => { active = false; controller.abort(); };
+  }, [categoryReload]);
 
   // 2. ดึงสถิติ Dashboard ด้วย apiRequest
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
 
     const fetchDashboardStats = async () => {
       setLoading(true);
@@ -49,14 +65,15 @@ export const CentralDashboardPage: React.FC = () => {
       params.append('page', page.toString());
 
       try {
-        const resData = (await apiRequest(
-          `/api/v1/admin/dashboard/stats?${params.toString()}`
-        )) as AdminDashboardStatsResponse;
+        const resData = await apiRequest<AdminDashboardStatsResponse>(
+          `/api/v1/admin/dashboard/stats?${params.toString()}`,
+          { signal: controller.signal },
+        );
 
         if (isMounted) {
           setData(resData);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (isMounted) {
           setError(describeApiError(err, 'โหลดข้อมูลสถิติไม่สำเร็จ'));
         }
@@ -71,6 +88,7 @@ export const CentralDashboardPage: React.FC = () => {
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, [appliedQuery, selectedCategory, selectedYear, selectedSemester, selectedStatus, page]);
 
@@ -79,24 +97,39 @@ export const CentralDashboardPage: React.FC = () => {
     setAppliedQuery('');
     setSelectedCategory('');
     setSelectedYear('');
+    setYearInput('');
+    setYearError(null);
     setSelectedSemester('');
     setSelectedStatus('ALL');
-    setPage(1);
+    setPage(0);
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       setAppliedQuery(searchQuery);
-      setPage(1);
+      setPage(0);
     }
   };
 
-  // ดึงค่า totalPages และ currentPage อย่างปลอดภัยตาม Type จริง
-  const totalPages = data?.clubs?.page?.totalPages ?? (data?.clubs as any)?.totalPages ?? 1;
-  const currentPage = data?.clubs?.page?.number ?? (data?.clubs as any)?.page ?? page;
+  const applyYearFilter = () => {
+    const value = yearInput.trim();
+    const year = Number(value);
+    if (value && (!/^\d+$/.test(value) || !Number.isInteger(year) || year < 1 || year > 32767)) {
+      setYearError('กรุณาระบุปีการศึกษาเป็นจำนวนเต็มตั้งแต่ 1 ถึง 32767');
+      return;
+    }
+    setYearError(null);
+    const normalizedYear = value ? String(year) : '';
+    if (normalizedYear !== selectedYear) {
+      setSelectedYear(normalizedYear);
+      setPage(0);
+    }
+  };
+
+  const totalPages = data?.clubs.page.totalPages ?? 0;
+  const currentPage = data?.clubs.page.number ?? page;
 
   return (
-    <AdminGuard>
       <div className="min-h-screen bg-[#f8f9fa]">
         <AdminHeader />
 
@@ -136,7 +169,7 @@ export const CentralDashboardPage: React.FC = () => {
               value={selectedCategory}
               onChange={(e) => {
                 setSelectedCategory(e.target.value);
-                setPage(1);
+                setPage(0);
               }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none"
             >
@@ -148,24 +181,29 @@ export const CentralDashboardPage: React.FC = () => {
               ))}
             </select>
 
-            <select
-              value={selectedYear}
-              onChange={(e) => {
-                setSelectedYear(e.target.value);
-                setPage(1);
-              }}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none"
-            >
-              <option value="">ทุกปีการศึกษา</option>
-              <option value="2569">ปีการศึกษา 2569</option>
-              <option value="2568">ปีการศึกษา 2568</option>
-            </select>
+            <label className="flex items-center gap-2 text-xs text-gray-600">
+              ปีการศึกษา
+              <input
+                type="number"
+                min="1"
+                max="32767"
+                step="1"
+                aria-invalid={Boolean(yearError)}
+                aria-describedby={yearError ? 'dashboard-year-error' : undefined}
+                placeholder="ทุกปี"
+                value={yearInput}
+                onChange={(e) => setYearInput(e.target.value)}
+                onBlur={applyYearFilter}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyYearFilter(); }}
+                className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none"
+              />
+            </label>
 
             <select
               value={selectedSemester}
               onChange={(e) => {
                 setSelectedSemester(e.target.value);
-                setPage(1);
+                setPage(0);
               }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none"
             >
@@ -179,7 +217,7 @@ export const CentralDashboardPage: React.FC = () => {
               value={selectedStatus}
               onChange={(e) => {
                 setSelectedStatus(e.target.value);
-                setPage(1);
+                setPage(0);
               }}
               className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none"
             >
@@ -195,6 +233,17 @@ export const CentralDashboardPage: React.FC = () => {
               + ล้างตัวกรอง
             </button>
           </div>
+
+          {yearError && <p id="dashboard-year-error" role="alert" className="text-xs text-red-700 mb-4">{yearError}</p>}
+
+          {categoryError && (
+            <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-xs text-red-700">
+              โหลดหมวดหมู่ชมรมไม่สำเร็จ: {categoryError}{' '}
+              <button type="button" className="font-semibold underline" onClick={() => { setCategoryError(null); setCategoryReload((value) => value + 1); }}>
+                โหลดหมวดหมู่ใหม่
+              </button>
+            </div>
+          )}
 
           {/* แสดง UI Error */}
           {error ? (
@@ -236,6 +285,9 @@ export const CentralDashboardPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
+                      {data.clubs.items.length === 0 && (
+                        <tr><td colSpan={8} className="p-6 text-center text-gray-500">ไม่พบชมรมที่ตรงกับตัวกรอง</td></tr>
+                      )}
                       {data.clubs.items.map((club) => (
                         <tr key={club.clubId} className="hover:bg-gray-50 transition-colors">
                           <td className="p-3 font-medium text-gray-900 flex items-center space-x-2">
@@ -279,18 +331,18 @@ export const CentralDashboardPage: React.FC = () => {
                 {totalPages > 1 && (
                   <div className="p-4 border-t border-gray-100 flex justify-between items-center text-xs">
                     <button
-                      disabled={page === 1}
-                      onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                      disabled={page === 0}
+                      onClick={() => setPage((p) => Math.max(p - 1, 0))}
                       className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
                     >
                       ◀ ก่อนหน้า
                     </button>
                     <span className="text-gray-500 font-medium">
-                      หน้า <strong className="text-gray-900">{currentPage}</strong> จาก{' '}
+                      หน้า <strong className="text-gray-900">{currentPage + 1}</strong> จาก{' '}
                       <strong>{totalPages}</strong>
                     </span>
                     <button
-                      disabled={page >= totalPages}
+                      disabled={page >= totalPages - 1}
                       onClick={() => setPage((p) => p + 1)}
                       className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
                     >
@@ -303,6 +355,5 @@ export const CentralDashboardPage: React.FC = () => {
           ) : null}
         </main>
       </div>
-    </AdminGuard>
   );
 };

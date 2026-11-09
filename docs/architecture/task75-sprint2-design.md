@@ -413,9 +413,9 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
 - **Query Parameters (`US-10.AC-03`, `T74-D08`):**
   - `q` (`string`, optional): ค้นหาชื่อชมรม (`ILIKE`)
   - `categoryId` (`PositiveBigintId`, optional): กรองตามหมวดหมู่ชมรม
-  - `academicYear` (`integer`, optional, min `2500`, max `2700`): กรองสถิติรอบรับสมัครตาม `recruitment_rounds.academic_year`
+  - `academicYear` (`integer`, optional, min `1`, max `32767`): กรองสถิติรอบรับสมัครตาม `recruitment_rounds.academic_year` ให้ตรงกับ API request และช่วงข้อมูลรอบรับสมัครปัจจุบัน
   - `semester` (`integer`, optional, enum: `1` | `2` | `3`): กรองสถิติรอบรับสมัครตาม `recruitment_rounds.semester`
-  - `clubStatus` (`string`, optional, enum: `ACTIVE` | `INACTIVE` | `ALL`, default `ACTIVE`): กรองตามสถานะชมรม
+  - `clubStatus` (`string`, optional, enum: `ACTIVE` | `INACTIVE` | `ALL`, default `ALL`): กรองตามสถานะชมรม
   - `page` (`integer`, default `0`), `size` (`integer`, default `20`, max `100`): สำหรับตารางรายชื่อชมรม (`clubs`)
 - **นิยามหน่วยนับที่ชัดเจน (`T74-D08`):**
   - `totalApplications`: จำนวนใบสมัครทั้งหมด (`COUNT(a.id)`) ในรอบรับสมัครที่ตรงกับตัวกรอง `academicYear` และ `semester` (ไม่รวมรอบ `DRAFT`)

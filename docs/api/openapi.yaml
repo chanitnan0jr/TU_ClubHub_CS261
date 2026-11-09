@@ -4155,8 +4155,8 @@ components:
       properties:
         academicYear:
           type: [integer, 'null']
-          minimum: 2500
-          maximum: 2700
+          minimum: 1
+          maximum: 32767
         semester:
           type: [integer, 'null']
           enum: [1, 2, 3, null]
