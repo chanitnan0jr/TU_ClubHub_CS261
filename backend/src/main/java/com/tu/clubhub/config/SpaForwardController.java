@@ -17,6 +17,9 @@ public class SpaForwardController {
 			"/clubs",
 			"/clubs/**",
 			"/profile",
+			"/profile/**",
+			"/me/applications",
+			"/me/applications/*",
 			"/dashboard",
 			"/dashboard/**"
 	})
