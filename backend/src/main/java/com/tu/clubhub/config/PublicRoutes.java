@@ -28,6 +28,9 @@ final class PublicRoutes {
             get("/open-calls"),
             get("/clubs/**"),
             get("/profile"),
+            get("/profile/**"),
+            get("/me/applications"),
+            get("/me/applications/*"),
             get("/dashboard/**"),
 
             // Authentication bootstrap.

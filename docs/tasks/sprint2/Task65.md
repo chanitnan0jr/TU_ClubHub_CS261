@@ -4,13 +4,15 @@
 |---|---|
 | **Task ID** | `Task65` |
 | **Feature Code** | `REVIEW-01` |
-| **สถานะบน Trello** | `To Do` |
+| **สถานะบน Trello** | `Doing` (In Review — PR #75) |
 | **ผู้รับผิดชอบ (Owner)** | อริยะวีร์ (BE2 - Backend Engineer) |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task74–75 (Permission Matrix) และ Seed Data จาก Task55 |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
 | **สมาชิกบนการ์ด Trello** | ariyawe krittayabunlue|
 | **Trello Card Link** | [https://trello.com/c/f990dC8q](https://trello.com/c/f990dC8q) |
+| **Pull Request** | [PR #75](https://github.com/chanitnan0jr/TU_ClubHub_CS261/pull/75) |
+| **Test Reports** | [`docs/testing/task65-committee-application-review.md`](../../testing/task65-committee-application-review.md), [`docs/testing/qa-task65.md`](../../testing/qa-task65.md) |
 
 ---
 
@@ -40,14 +42,14 @@
 
 ### เกณฑ์ตรวจรับ (Acceptance Criteria)
 
-- [ ] กรรมการชมรมดึงรายการและคำตอบของผู้สมัครในชมรมตนเองได้ครบถ้วน
-- [ ] กรรมการชมรมอื่นหรือผู้ใช้ทั่วไป ไม่สามารถเข้าถึงข้อมูลผู้สมัครได้ (`403 Forbidden`)
+- [x] กรรมการชมรมดึงรายการและคำตอบของผู้สมัครในชมรมตนเองได้ครบถ้วน
+- [x] กรรมการชมรมอื่นหรือผู้ใช้ทั่วไป ไม่สามารถเข้าถึงข้อมูลผู้สมัครได้ (`403 Forbidden`)
 
 ### Definition of Done (Checklist กลาง)
 
-- [ ] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
-- [ ] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
-- [ ] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
-- [ ] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
-- [ ] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
+- [x] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
+- [x] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
+- [x] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
+- [x] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
+- [x] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
 - [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ

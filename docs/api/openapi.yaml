@@ -1395,6 +1395,170 @@ paths:
           $ref: '#/components/responses/ServerError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      tags: [Applications]
+      operationId: submitClubApplication
+      summary: Submit to an explicitly selected recruitment round of this club
+      x-implementation-status: implemented
+      description: >-
+        Task52 adds this club-scoped entry point; the Task42 round-scoped POST
+        remains supported for existing consumers. The requester confirmed on
+        2026-11-08 that roundId is required in the body. Never choose the first,
+        latest, or only open round implicitly. A missing, inactive, or wrong-club
+        target returns the same 404 RESOURCE_NOT_FOUND without disclosing the
+        other club or round. Both routes share the service transaction and
+        uq_applications_round_applicant constraint: using the other route does
+        not permit a second application for the same student and round.
+        Require a valid SESSION, X-CSRF-TOKEN, ACTIVE account and verified ACTIVE
+        student. Committee/Admin callers use Student eligibility, not committee
+        privileges. Derive applicant identity from the session and reject
+        client identity, status, scores, timestamps, attachment IDs and unknown
+        fields at every object level. A suspended account is rejected before
+        body parsing and rechecked under the account lock.
+        Require an ACTIVE club and its PUBLISHED round with published_at set,
+        closed_at IS NULL and opens_at <= now < closes_at. Lock applicant,
+        student profile, club, round and current questions using the same order
+        as the round route. Read Clock once after the round lock, in UTC.
+        Recheck required/blank/duplicate/wrong-round answers, current max lengths,
+        and membership eligibility before writing. Only TEXT questions and
+        HTTPS document links are supported, using ApplicationSubmissionRequest
+        content validation; no options, upload, file IDs or external URL fetch.
+        Atomically insert application, answers, links and one NULL -> SUBMITTED
+        history with session actor and the same server timestamp. Existing
+        applicant/profile data is referenced, not copied or client-editable.
+        Reject a prior application in any status, active membership in this
+        club, or five effective memberships. Pending applications do not count;
+        there is no seat quota. Respond 201 only after commit, or roll back all
+        new rows on failure. Lock timeout/deadlock is 503, not duplicate conflict.
+        All responses use Cache-Control no-store. See API_v1.md section 11.1.
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Club ID as a positive decimal BIGINT string without leading zeroes; maximum 9223372036854775807.
+          schema:
+            $ref: '#/components/schemas/PositiveBigintId'
+          example: '20001'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClubApplicationSubmissionRequest'
+            example:
+              roundId: '70001'
+              motivation: I would like to help organize club activities.
+              answers:
+                - questionId: '81001'
+                  answerText: I have organized student workshops.
+              links:
+                - label: Portfolio
+                  url: https://example.org/portfolio
+      responses:
+        '201':
+          $ref: '#/components/responses/ApplicationSubmissionCreated'
+        '400':
+          description: >-
+            INVALID_RESOURCE_ID for an invalid/out-of-range id or textual
+            roundId. VALIDATION_FAILED for missing/null/numeric roundId,
+            malformed JSON, unknown fields or invalid answers/links. A missing
+            selection never triggers automatic round selection.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                invalidId:
+                  value:
+                    type: urn:tuclubhub:problem:invalid-resource-id
+                    title: Invalid resource identifier
+                    status: 400
+                    detail: A resource identifier has an invalid format.
+                    instance: /api/v1/clubs/abc/applications
+                    code: INVALID_RESOURCE_ID
+                    fieldErrors: []
+                    traceId: 01J9EXAMPLE7K4D5
+                missingRound:
+                  value:
+                    type: urn:tuclubhub:problem:validation-error
+                    title: Request validation failed
+                    status: 400
+                    detail: One or more request fields or parameters are invalid.
+                    instance: /api/v1/clubs/20001/applications
+                    code: VALIDATION_FAILED
+                    fieldErrors:
+                      - field: roundId
+                        code: INVALID
+                        message: Must be a non-null JSON string.
+                    traceId: 01J9EXAMPLE7K4D5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >-
+            CSRF_INVALID for a missing/invalid CSRF header (may precede
+            authentication); ACCOUNT_NOT_ALLOWED for a suspended account
+            (invalidate the session); ACCESS_DENIED without an ACTIVE student
+            profile. No rows are written.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:access-denied
+                title: Access denied
+                status: 403
+                detail: You are not allowed to access this resource.
+                instance: /api/v1/clubs/20001/applications
+                code: ACCESS_DENIED
+                fieldErrors: []
+                traceId: 01J9EXAMPLE7K4D5
+        '404':
+          description: >-
+            Club or round missing, club not ACTIVE, round belongs to a different
+            club, round is DRAFT or has never been published. Use an identical
+            safe response for all these cases; do not disclose the actual owner.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-not-found
+                title: Resource not found
+                status: 404
+                detail: No resource was found for this identifier.
+                instance: /api/v1/clubs/20001/applications
+                code: RESOURCE_NOT_FOUND
+                fieldErrors: []
+                traceId: 01J9EXAMPLE7K4D5
+        '409':
+          description: >-
+            RESOURCE_CONFLICT with reason, in the existing order after visibility:
+            ROUND_CANCELLED, ROUND_NOT_OPEN, ROUND_CLOSED, APPLICATION_ALREADY_EXISTS,
+            ALREADY_MEMBER, MEMBERSHIP_LIMIT_REACHED. Roll back new rows; preserve
+            the prior application/answers/links/history on duplicate submission.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApplicationSubmissionConflict'
+              example:
+                type: urn:tuclubhub:problem:resource-conflict
+                title: Resource state conflict
+                status: 409
+                detail: The request conflicts with the current resource state.
+                instance: /api/v1/clubs/20001/applications
+                code: RESOURCE_CONFLICT
+                reason: APPLICATION_ALREADY_EXISTS
+                fieldErrors: []
+                traceId: 01J9EXAMPLE7K4D5
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/clubs/{id}/applications/{appId}:
     get:
       tags: [Committee Review & Results]
@@ -1504,8 +1668,9 @@ paths:
         Contract defined in API_v1.md section 11. A suspended account receives
         403 ACCOUNT_NOT_ALLOWED even when the request body is missing or malformed,
         and the account is checked again inside the submission.
-        Task42 replaces the earlier contract-only club-nested submission path;
-        it does not define a second submission endpoint or a compatibility alias.
+        Task42's round-scoped submission remains supported for existing consumers.
+        Task52 also offers POST /api/v1/clubs/{id}/applications with an explicit
+        body roundId and verified club ownership; both share this transaction.
         Requires an ACTIVE account, verified ACTIVE student profile, and ACTIVE
         target club; an inactive club returns 404 like a missing one.
         Committee/Admin callers use the same Student permissions;
@@ -1566,30 +1731,7 @@ paths:
                   url: https://example.org/resume.pdf
       responses:
         '201':
-          description: Application, answers, links, and initial status history committed
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                const: no-store
-            Location:
-              description: >-
-                Applicant-facing URI of the created application. US-04 implements
-                GET at this URI and the applicant's list at /api/v1/me/applications.
-              schema:
-                type: string
-                format: uri-reference
-              example: /api/v1/me/applications/90001
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApplicationSubmission'
-              example:
-                id: '90001'
-                clubId: '20001'
-                roundId: '70001'
-                status: SUBMITTED
-                submittedAt: '2026-10-19T09:30:00Z'
+          $ref: '#/components/responses/ApplicationSubmissionCreated'
         '400':
           description: >-
             INVALID_RESOURCE_ID for invalid/out-of-range path IDs;
@@ -2783,6 +2925,26 @@ components:
             starting at 1. No file upload or server-side URL fetch occurs.
           items:
             $ref: '#/components/schemas/ApplicationLinkInput'
+    ClubApplicationSubmissionRequest:
+      type: object
+      additionalProperties: false
+      required: [roundId, motivation, answers, links]
+      description: >-
+        Explicit round selection for the Task52 club route. Only roundId is
+        added to the existing submission content. The round must belong to the
+        path club. No implicit selection, client identity, status, attachment
+        references or uploads. All fields are non-null; answers and links may
+        be empty only under their existing validation rules.
+      properties:
+        roundId:
+          $ref: '#/components/schemas/PositiveBigintId'
+          description: Required explicit round selection, validated against the path club inside the transaction.
+        motivation:
+          $ref: '#/components/schemas/ApplicationSubmissionRequest/properties/motivation'
+        answers:
+          $ref: '#/components/schemas/ApplicationSubmissionRequest/properties/answers'
+        links:
+          $ref: '#/components/schemas/ApplicationSubmissionRequest/properties/links'
     ApplicationAnswerInput:
       type: object
       additionalProperties: false
@@ -2840,7 +3002,12 @@ components:
           type: string
           format: date-time
           pattern: 'Z$'
-          description: Server-generated submission timestamp in UTC.
+          description: >-
+            Server-generated submission timestamp in UTC with at most six fractional
+            second digits. Both submission routes sample the clock once after the
+            round lock and truncate to microseconds before checks and writes. This
+            value equals applications.submitted_at and the initial history changed_at;
+            the inclusive opening and exclusive closing boundaries are unchanged.
     ApplicationSubmissionConflict:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -4476,6 +4643,29 @@ components:
             reason: ROUND_CANCELLED
             fieldErrors: []
             traceId: 01J9EXAMPLE7K4D5
+    ApplicationSubmissionCreated:
+      description: Application, answers, links and initial SUBMITTED history committed
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            const: no-store
+        Location:
+          description: Applicant-facing URI; shared by both submission routes.
+          schema:
+            type: string
+            format: uri-reference
+          example: /api/v1/me/applications/90001
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApplicationSubmission'
+          example:
+            id: '90001'
+            clubId: '20001'
+            roundId: '70001'
+            status: SUBMITTED
+            submittedAt: '2026-10-19T09:30:00Z'
     InvalidResourceId:
       description: The id is not a valid decimal bigint identifier or is out of range
       content:
