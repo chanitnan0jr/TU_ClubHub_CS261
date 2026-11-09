@@ -16,11 +16,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class ApplicationSubmissionValidator {
     public long roundId(String rawRoundId) {
+        return resourceId(rawRoundId, "roundId");
+    }
+
+    public long clubId(String rawClubId) {
+        return resourceId(rawClubId, "clubId");
+    }
+
+    private long resourceId(String raw, String field) {
         try {
-            return positiveId(rawRoundId);
+            return positiveId(raw);
         } catch (IllegalArgumentException exception) {
             throw ApplicationSubmissionException.failure(400, "INVALID_RESOURCE_ID",
-                    "roundId must be a positive decimal bigint without leading zeroes.");
+                    field + " must be a positive decimal bigint without leading zeroes.");
         }
     }
 

@@ -14,6 +14,7 @@ import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -51,8 +52,19 @@ public class ApplicationService {
      */
     @Transactional(rollbackFor = Exception.class)
     public ApplicationSubmission submit(String rawRoundId, ApplicationSubmissionRequest request) {
+        return submitWithLockHandling(null, rawRoundId, request);
+    }
+
+    /** The club path constrains the explicitly selected round; it never chooses a round. */
+    @Transactional(rollbackFor = Exception.class)
+    public ApplicationSubmission submitForClub(String rawClubId, String rawRoundId, ApplicationSubmissionRequest request) {
+        return submitWithLockHandling(rawClubId, rawRoundId, request);
+    }
+
+    private ApplicationSubmission submitWithLockHandling(String rawClubId, String rawRoundId,
+            ApplicationSubmissionRequest request) {
         try {
-            return submitInCurrentTransaction(rawRoundId, request);
+            return submitInCurrentTransaction(rawClubId, rawRoundId, request);
         } catch (DataAccessException exception) {
             // PostgreSQL lock_timeout can be UncategorizedSQLException, so use
             // the exact SQLSTATE rather than depending on Spring's subtype.
@@ -91,21 +103,27 @@ public class ApplicationService {
                 round.opensAt(), round.closesAt()), questions);
     }
 
-    private ApplicationSubmission submitInCurrentTransaction(String rawRoundId, ApplicationSubmissionRequest request) {
+    private ApplicationSubmission submitInCurrentTransaction(String rawClubId, String rawRoundId,
+            ApplicationSubmissionRequest request) {
         long userId = currentUserId();
         repository.setLocalLockTimeout(lockTimeout);
         requireActiveAccount(repository.lockAccount(userId));
+        Long requestedClubId = rawClubId == null ? null : validator.clubId(rawClubId);
         ValidatedApplicationSubmission input = validator.validate(rawRoundId, request);
         if (repository.lockStudentStatus(userId).filter("ACTIVE"::equals).isEmpty()) {
             throw failure(403, "ACCESS_DENIED", "Verified active student status is required.");
         }
-        long clubId = repository.findRoundClubId(input.roundId()).orElseThrow(ApplicationService::notFound);
+        long clubId = repository.findRoundClubId(input.roundId())
+                .filter(id -> requestedClubId == null || id.equals(requestedClubId))
+                .orElseThrow(ApplicationService::notFound);
         if (repository.lockClubStatus(clubId).filter("ACTIVE"::equals).isEmpty()) throw notFound();
-        Round round = repository.lockRound(input.roundId()).orElseThrow(ApplicationService::notFound);
+        Round round = repository.lockRound(input.roundId(), clubId).orElseThrow(ApplicationService::notFound);
         if (round.publishedAt() == null) throw notFound();
 
-        // Sample only after acquiring the round lock, including time spent waiting for it.
-        Instant now = clock.instant();
+        // Sample after the round lock, including time spent waiting. PostgreSQL timestamps
+        // have microsecond precision; truncate once so writes and receipt agree without
+        // rounding a submission forward across the exclusive closing boundary.
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         requireOpenRound(round, now);
         validateQuestions(input, repository.lockQuestions(round.id()));
 

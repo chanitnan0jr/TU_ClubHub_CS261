@@ -14,7 +14,11 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
-@RestControllerAdvice(assignableTypes = {ApplicationController.class, MyApplicationController.class})
+@RestControllerAdvice(assignableTypes = {
+        ApplicationController.class,
+        ClubApplicationController.class,
+        MyApplicationController.class
+})
 @Order(0)
 public class ApplicationExceptionHandler extends ApiExceptionHandler {
     @ExceptionHandler(ApplicationSubmissionException.class)
