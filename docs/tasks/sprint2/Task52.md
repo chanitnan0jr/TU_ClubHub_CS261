@@ -4,7 +4,7 @@
 |---|---|
 | **Task ID** | `Task52` |
 | **Feature Code** | `APP-01` |
-| **สถานะบน Trello** | `Doing` (In Review — PR #74) |
+| **สถานะบน Trello** | `Done` (Merged in PR #74) |
 | **ผู้รับผิดชอบ (Owner)** | อริยะวีร์ (BE2 - Backend Engineer) |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE / QA) |
 | **งานที่ต้องทำก่อน (Dependency)** | Application Data Model จาก Task75 และ Recruitment Question จาก Task51 |
@@ -53,4 +53,4 @@
 - [x] แนบ Pull Request, ผลการทดสอบ (Unit/Integration Tests), และ Artefact ครบถ้วน
 - [x] CI Pipeline รันผ่าน 100% (ทั้ง Frontend และ Backend)
 - [x] ผ่านการ Code Review จาก Reviewer และแก้ไขข้อเสนอแนะครบถ้วน
-- [ ] Merge โค้ดเข้า Branch หลักเรียบร้อย พร้อมอัปเดตเอกสารที่เกี่ยวข้อง
+- [x] Merge โค้ดเข้า Branch หลักเรียบร้อย พร้อมอัปเดตเอกสารที่เกี่ยวข้อง

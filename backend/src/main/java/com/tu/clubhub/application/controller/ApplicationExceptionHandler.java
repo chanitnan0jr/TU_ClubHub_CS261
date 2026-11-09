@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RestControllerAdvice(assignableTypes = {
         ApplicationController.class,
         ClubApplicationController.class,
+        CommitteeApplicationController.class,
         MyApplicationController.class
 })
 @Order(0)
