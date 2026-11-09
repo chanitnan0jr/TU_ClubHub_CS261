@@ -23,30 +23,6 @@ public class ApplicationRepository {
     public record Memberships(boolean alreadyMember, long distinctClubs) {}
     public record FormRound(Round round, String clubStatus, String title, String description, String eligibilityText) {}
     public record FormQuestion(long id, String prompt, boolean required, int displayOrder, int maxLength) {}
-    public record ApplicantApplicationRow(
-            long id,
-            long applicantId,
-            String motivation,
-            String status,
-            Instant submittedAt,
-            String resultMessage,
-            Instant respondedAt,
-            Instant updatedAt,
-            long clubId,
-            String clubName,
-            String clubImageUrl,
-            String clubStatus,
-            long roundId,
-            String roundTitle,
-            int academicYear,
-            int semester,
-            String roundPublicationStatus,
-            Instant opensAt,
-            Instant closesAt,
-            Instant resultsPublishedAt,
-            Instant confirmationDeadline) {}
-    public record QuestionAnswerRow(long questionId, String questionText, boolean required, int displayOrder, String answerText) {}
-    public record LinkRow(String label, String url, int displayOrder) {}
 
     private final JdbcTemplate jdbc;
 
@@ -174,105 +150,6 @@ public class ApplicationRepository {
                     (application_id, from_status, to_status, actor_id, reason, changed_at)
                 VALUES (?, NULL, 'SUBMITTED', ?, NULL, ?)
                 """, applicationId, userId, now.atOffset(ZoneOffset.UTC));
-    }
-
-    public long countByApplicant(long applicantId) {
-        Long count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM applications WHERE applicant_id = ?",
-                Long.class,
-                applicantId);
-        return count == null ? 0L : count;
-    }
-
-    public List<ApplicantApplicationRow> findPageByApplicant(long applicantId, int size, long offset) {
-        return jdbc.query("""
-                SELECT a.id, a.applicant_id, a.motivation, a.status, a.submitted_at, a.result_message, a.responded_at, a.updated_at,
-                       c.id AS club_id, c.name AS club_name, c.image_url AS club_image_url, c.status AS club_status,
-                       r.id AS round_id, r.title AS round_title, r.academic_year, r.semester,
-                       r.publication_status, r.opens_at, r.closes_at, r.results_published_at, r.confirmation_deadline
-                FROM applications a
-                JOIN clubs c ON c.id = a.club_id
-                JOIN recruitment_rounds r ON r.id = a.round_id
-                WHERE a.applicant_id = ?
-                ORDER BY a.submitted_at DESC, a.id DESC
-                LIMIT ? OFFSET ?
-                """, (rs, row) -> applicantApplicationRow(rs), applicantId, size, offset);
-    }
-
-    public Optional<ApplicantApplicationRow> findApplicationById(long applicationId) {
-        return jdbc.query("""
-                SELECT a.id, a.applicant_id, a.motivation, a.status, a.submitted_at, a.result_message, a.responded_at, a.updated_at,
-                       c.id AS club_id, c.name AS club_name, c.image_url AS club_image_url, c.status AS club_status,
-                       r.id AS round_id, r.title AS round_title, r.academic_year, r.semester,
-                       r.publication_status, r.opens_at, r.closes_at, r.results_published_at, r.confirmation_deadline
-                FROM applications a
-                JOIN clubs c ON c.id = a.club_id
-                JOIN recruitment_rounds r ON r.id = a.round_id
-                WHERE a.id = ?
-                """, (rs, row) -> applicantApplicationRow(rs), applicationId).stream().findFirst();
-    }
-
-    public List<QuestionAnswerRow> findQuestionsWithAnswers(long roundId, long applicationId) {
-        return jdbc.query("""
-                SELECT q.id AS question_id, q.prompt AS question_text, q.is_required, q.display_order, aa.answer_text
-                FROM application_questions q
-                LEFT JOIN application_answers aa ON aa.question_id = q.id AND aa.application_id = ?
-                WHERE q.round_id = ?
-                ORDER BY q.display_order ASC, q.id ASC
-                """, (rs, row) -> new QuestionAnswerRow(
-                rs.getLong("question_id"),
-                rs.getString("question_text"),
-                rs.getBoolean("is_required"),
-                rs.getInt("display_order"),
-                rs.getString("answer_text")), applicationId, roundId);
-    }
-
-    public List<LinkRow> findApplicationLinks(long applicationId) {
-        return jdbc.query("""
-                SELECT label, url, display_order
-                FROM application_links
-                WHERE application_id = ?
-                ORDER BY display_order ASC, id ASC
-                """, (rs, row) -> new LinkRow(
-                rs.getString("label"),
-                rs.getString("url"),
-                rs.getInt("display_order")), applicationId);
-    }
-
-    public Optional<Instant> findLatestStatusChangeTime(long applicationId, String toStatus) {
-        return jdbc.query("""
-                SELECT changed_at
-                FROM application_status_history
-                WHERE application_id = ? AND to_status = ?
-                ORDER BY changed_at DESC, id DESC
-                LIMIT 1
-                """, (rs, row) -> instant(rs.getObject("changed_at", OffsetDateTime.class)),
-                applicationId, toStatus).stream().findFirst();
-    }
-
-    private static ApplicantApplicationRow applicantApplicationRow(ResultSet rs) throws SQLException {
-        return new ApplicantApplicationRow(
-                rs.getLong("id"),
-                rs.getLong("applicant_id"),
-                rs.getString("motivation"),
-                rs.getString("status"),
-                instant(rs.getObject("submitted_at", OffsetDateTime.class)),
-                rs.getString("result_message"),
-                instant(rs.getObject("responded_at", OffsetDateTime.class)),
-                instant(rs.getObject("updated_at", OffsetDateTime.class)),
-                rs.getLong("club_id"),
-                rs.getString("club_name"),
-                rs.getString("club_image_url"),
-                rs.getString("club_status"),
-                rs.getLong("round_id"),
-                rs.getString("round_title"),
-                rs.getInt("academic_year"),
-                rs.getInt("semester"),
-                rs.getString("publication_status"),
-                instant(rs.getObject("opens_at", OffsetDateTime.class)),
-                instant(rs.getObject("closes_at", OffsetDateTime.class)),
-                instant(rs.getObject("results_published_at", OffsetDateTime.class)),
-                instant(rs.getObject("confirmation_deadline", OffsetDateTime.class)));
     }
 
     /** Match only the documented duplicate key; never relabel arbitrary integrity failures. */

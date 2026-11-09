@@ -106,6 +106,7 @@ class MyApplicationServiceTest {
             assertEquals("รอพิจารณา", result.displayStatusLabel());
             assertNull(result.resultMessage());
             assertNull(result.round().resultsPublishedAt());
+            assertNull(result.round().confirmationDeadline());
             assertNull(result.respondedAt());
             assertFalse(result.canConfirm());
             assertFalse(result.canDecline());
@@ -114,6 +115,9 @@ class MyApplicationServiceTest {
             assertEquals(
                     VisibleStatus.SUBMITTED,
                     result.statusHistory().getFirst().status());
+            assertEquals(
+                    "ส่งใบสมัครแล้ว",
+                    result.statusHistory().getFirst().displayStatusLabel());
         }
     }
 
@@ -259,6 +263,7 @@ class MyApplicationServiceTest {
                 status,
                 NOW.minusSeconds(5400),
                 null,
+                NOW.minusSeconds(5400),
                 "Original motivation",
                 "Selection result");
     }
