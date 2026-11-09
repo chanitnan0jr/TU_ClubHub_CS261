@@ -60,9 +60,9 @@ Dependency versions are recorded in [frontend/package.json](frontend/package.jso
 
 Use Docker Engine/Desktop with Compose V2. Run from the repository root:
 
-1. On first setup, copy `.env.example` to `.env`; keep an existing local configuration:
+1. On first setup, copy `.example.env` to `.env`; keep an existing local configuration:
    ```sh
-   cp .env.example .env
+   cp .example.env .env
    ```
 2. Build and run all services:
    ```sh
@@ -105,7 +105,7 @@ Use Java 21 and Node 22.14+ on the Node 22 line. Start PostgreSQL from the root:
 docker compose up -d db
 ```
 
-In one terminal, start the backend. This password matches `.env.example`; use your configured `POSTGRES_PASSWORD` if changed:
+In one terminal, start the backend. This password matches `.example.env`; use your configured `POSTGRES_PASSWORD` if changed:
 
 ```sh
 cd backend

@@ -16,9 +16,9 @@ This guide runs the current TU-ClubHub application and PostgreSQL locally using 
 
 ## 2. Environment Configuration
 
-1. On first setup, copy `.env.example` to `.env`. Keep an existing local configuration:
+1. On first setup, copy `.example.env` to `.env`. Keep an existing local configuration:
    ```bash
-   cp .env.example .env
+   cp .example.env .env
    ```
 2. Verify the default settings in `.env`:
    - `PORT=8080`: Application web port.
@@ -151,4 +151,4 @@ docker compose up --build
 2. **Non-Root Execution**:
    - Application containers run under an unprivileged system user (`appuser:appgroup`, UID/GID non-root) for security hardening.
 3. **Local Configuration**:
-   - `.env.example` and Compose include local database defaults. Real TU mode requires the server-side endpoint URL and Application-Key; the fixed mock login does not verify access to TU's live service.
+   - `.example.env` and Compose include local database defaults. Real TU mode requires the server-side endpoint URL and Application-Key; the fixed mock login does not verify access to TU's live service.
