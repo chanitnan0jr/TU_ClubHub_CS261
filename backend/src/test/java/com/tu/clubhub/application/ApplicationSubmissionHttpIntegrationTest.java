@@ -36,6 +36,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,9 +95,11 @@ class ApplicationSubmissionHttpIntegrationTest {
     private final Set<String> sessionIds = new HashSet<>();
     private long userId, categoryId, clubId, roundId, firstQuestion, secondQuestion, unrelatedApplicant;
     private Client client;
+    private boolean clubScoped;
     private final TransactionExecutionListener transactionProbe = new TransactionExecutionListener() {
         @Override public void afterBegin(TransactionExecution transaction, Throwable failure) {
-            if (failure == null && (ApplicationService.class.getName() + ".submit").equals(transaction.getTransactionName())) {
+            if (failure == null && transaction.getTransactionName() != null && Set.of(ApplicationService.class.getName() + ".submit",
+                    ApplicationService.class.getName() + ".submitForClub").contains(transaction.getTransactionName())) {
                 Runnable action = TRANSACTION_BEGIN.get();
                 if (action != null) action.run();
             }
@@ -157,14 +160,18 @@ class ApplicationSubmissionHttpIntegrationTest {
                 .getHikariPoolMXBean().getActiveConnections(), "No worker may leak a connection after test cleanup");
     }
 
-    @Test
-    void sameStudentConcurrentHttpSubmissionsCommitExactlyOnce() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void sameStudentConcurrentHttpSubmissionsCommitExactlyOnce(boolean clubScoped) throws Exception {
+        this.clubScoped = clubScoped;
         var results = overlapping(List.of(client, login(userId)));
         assertSingleSubmission(results);
     }
 
-    @Test
-    void sameStudentFiveConcurrentRequestsUsingOneSessionCommitExactlyOnce() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void sameStudentFiveConcurrentRequestsUsingOneSessionCommitExactlyOnce(boolean clubScoped) throws Exception {
+        this.clubScoped = clubScoped;
         assertSingleSubmission(overlapping(List.of(client, client, client, client, client)));
     }
 
@@ -182,8 +189,10 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertNoOrphans();
     }
 
-    @Test
-    void sameStudentCanSubmitToDifferentRoundsConcurrently() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void sameStudentCanSubmitToDifferentRoundsConcurrently(boolean clubScoped) throws Exception {
+        this.clubScoped = clubScoped;
         long otherRound = round();
         long otherFirst = question(otherRound), otherSecond = question(otherRound);
         var results = overlapping(List.of(client, login(userId)),
@@ -245,8 +254,9 @@ class ApplicationSubmissionHttpIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {60, 61})
-    void waitingHttpRequestRechecksClosingTimeAfterRoundLock(int seconds) throws Exception {
+    @CsvSource({"false,60", "false,61", "true,60", "true,61"})
+    void waitingHttpRequestRechecksClosingTimeAfterRoundLock(boolean clubScoped, int seconds) throws Exception {
+        this.clubScoped = clubScoped;
         try (Connection holder = dataSource.getConnection(); ExecutorService workers = Executors.newFixedThreadPool(1)) {
             holder.setAutoCommit(false);
             int holderPid = pid(holder);
@@ -269,8 +279,9 @@ class ApplicationSubmissionHttpIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"answer", "history"})
-    void injectedWriteFailureRollsBackAndSameStudentCanRetry(String stage) throws Exception {
+    @CsvSource({"false,answer", "false,history", "true,answer", "true,history"})
+    void injectedWriteFailureRollsBackAndSameStudentCanRetry(boolean clubScoped, String stage) throws Exception {
+        this.clubScoped = clubScoped;
         Map<String, List<Map<String, Object>>> unrelated = seedUnrelatedSubmission();
         installFailure(stage, null);
         var failed = submit("failure", client, body("injected-failure"));
@@ -285,8 +296,10 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertNoOrphans();
     }
 
-    @Test
-    void failedHttpLockHolderRollsBackAndWaitingRetrySucceeds() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void failedHttpLockHolderRollsBackAndWaitingRetrySucceeds(boolean clubScoped) throws Exception {
+        this.clubScoped = clubScoped;
         var unrelated = seedUnrelatedSubmission();
         Client waitingClient = login(userId); // commit both login transactions before acquiring any write locks
         long advisoryKey = 450000000000L + roundId;
@@ -426,8 +439,10 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertFalse(responseText(result).contains("deadlock detected"));
     }
 
-    @Test
-    void httpBoundaryUsesSessionsCsrfAndRejectsClientIdentity() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void httpBoundaryUsesSessionsCsrfAndRejectsClientIdentity(boolean clubScoped) throws Exception {
+        this.clubScoped = clubScoped;
         Client anonymous = csrfClient(0);
         assertProblem(submit("anonymous", anonymous, body("valid")), 401, "AUTHENTICATION_REQUIRED", null);
         var noCsrf = mvc.perform(post(path()).cookie(client.cookie()).contentType(MediaType.APPLICATION_JSON)
@@ -438,8 +453,10 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertTargetEmpty();
     }
 
-    @Test
-    void expiredAndSuspendedSessionsCannotSubmitAndAreInvalidated() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void expiredAndSuspendedSessionsCannotSubmitAndAreInvalidated(boolean clubScoped) throws Exception {
+        this.clubScoped = clubScoped;
         expire(sessions, client.cookie());
         assertProblem(submit("expired", client, body("valid")), 401, "AUTHENTICATION_REQUIRED", null);
         assertNull(sessions.findById(sessionId(client.cookie())));
@@ -545,8 +562,10 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertTargetEmpty();
     }
 
-    @Test
-    void wrappedDtoValidationPreservesIndexedFieldErrors() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void wrappedDtoValidationPreservesIndexedFieldErrors(boolean clubScoped) throws Exception {
+        this.clubScoped = clubScoped;
         var result = submit("wrapped-validation", client, body("valid").replace(
                 "\"url\":\"https://example.org/portfolio\"", "\"url\":42"));
         assertProblem(result, 400, "VALIDATION_FAILED", null);
@@ -555,8 +574,10 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertTargetEmpty();
     }
 
-    @Test
-    void invalidHttpsUrlHttpErrorMatchesOpenApiExample() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void invalidHttpsUrlHttpErrorMatchesOpenApiExample(boolean clubScoped) throws Exception {
+        this.clubScoped = clubScoped;
         var result = submit("invalid-url", client, body("valid").replace("https://example.org/portfolio", "http://example.org/portfolio"));
         assertProblem(result, 400, "VALIDATION_FAILED", null);
         var field = json(result).path("fieldErrors").get(0);
@@ -565,8 +586,10 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertTargetEmpty();
     }
 
-    @Test
-    void accountStatusIsRecheckedUnderLockAfterHttpPreflight() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void accountStatusIsRecheckedUnderLockAfterHttpPreflight(boolean clubScoped) throws Exception {
+        this.clubScoped = clubScoped;
         var began = new CountDownLatch(1);
         var proceed = new CountDownLatch(1);
         try (ExecutorService workers = Executors.newFixedThreadPool(1)) {
@@ -598,6 +621,261 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertTargetEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"missing-round", "missing-club", "wrong-club", "inactive-club", "draft",
+            "not-open", "at-close", "after-close", "manual-close", "cancelled"})
+    void clubSubmissionChecksRoundOwnershipVisibilityAndWindow(String scenario) throws Exception {
+        clubScoped = true;
+        String pathClub = Long.toString(clubId);
+        String payload = body("valid");
+        int expected = 404;
+        String reason = null;
+        switch (scenario) {
+            case "missing-round" -> payload = payload.replace("\"roundId\":\"" + roundId + "\"",
+                    "\"roundId\":\"9223372036854775807\"");
+            case "missing-club" -> pathClub = "9223372036854775807";
+            case "wrong-club" -> pathClub = Long.toString(club());
+            case "inactive-club" -> jdbc.update("UPDATE clubs SET status = 'INACTIVE' WHERE id = ?", clubId);
+            case "draft" -> jdbc.update("UPDATE recruitment_rounds SET publication_status = 'DRAFT', published_at = NULL WHERE id = ?", roundId);
+            case "not-open" -> { clock.now.set(NOW.minusSeconds(61)); expected = 409; reason = "ROUND_NOT_OPEN"; }
+            case "at-close" -> { clock.now.set(NOW.plusSeconds(60)); expected = 409; reason = "ROUND_CLOSED"; }
+            case "after-close" -> { clock.now.set(NOW.plusSeconds(61)); expected = 409; reason = "ROUND_CLOSED"; }
+            case "manual-close" -> {
+                jdbc.update("UPDATE recruitment_rounds SET closed_at = ? WHERE id = ?", NOW.atOffset(ZoneOffset.UTC), roundId);
+                expected = 409; reason = "ROUND_CLOSED";
+            }
+            case "cancelled" -> {
+                jdbc.update("UPDATE recruitment_rounds SET publication_status = 'CANCELLED' WHERE id = ?", roundId);
+                expected = 409; reason = "ROUND_CANCELLED";
+            }
+            default -> fail("Unhandled fixture scenario");
+        }
+        var result = clubPost(pathClub, payload);
+        assertProblem(result, expected, expected == 404 ? "RESOURCE_NOT_FOUND" : "RESOURCE_CONFLICT", reason);
+        assertEquals("/api/v1/clubs/" + pathClub + "/applications", json(result).path("instance").asText());
+        assertTargetEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1", "01", "abc", "1.5", "9223372036854775808"})
+    void clubSubmissionRejectsInvalidClubIds(String id) throws Exception {
+        clubScoped = true;
+        assertProblem(clubPost(id, body("valid")), 400, "INVALID_RESOURCE_ID", null);
+        assertTargetEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "null", "number", "invalid", "unknown", "status", "malformed", "media"})
+    void clubSubmissionValidatesItsEnvelopeWithoutCoercion(String scenario) throws Exception {
+        clubScoped = true;
+        String field = "\"roundId\":\"" + roundId + "\"";
+        String payload = switch (scenario) {
+            case "missing" -> body("valid").replace(field + ",", "").replace("," + field, "");
+            case "null" -> body("valid").replace(field, "\"roundId\":null");
+            case "number" -> body("valid").replace(field, "\"roundId\":" + roundId);
+            case "invalid" -> body("valid").replace(field, "\"roundId\":\"0\"");
+            case "unknown" -> body("valid").replace(field, field + ",\"attachmentId\":\"123\"");
+            case "status" -> body("valid").replace(field, field + ",\"status\":\"ACCEPTED\"");
+            case "malformed" -> "{";
+            default -> body("valid");
+        };
+        if (scenario.equals("media")) {
+            var result = mvc.perform(post(path()).cookie(client.cookie()).header("X-CSRF-TOKEN", client.token())
+                    .contentType(MediaType.TEXT_PLAIN).content(payload)).andReturn();
+            assertEquals(415, result.getResponse().getStatus());
+        } else {
+            assertProblem(clubPost(Long.toString(clubId), payload), 400,
+                    scenario.equals("invalid") ? "INVALID_RESOURCE_ID" : "VALIDATION_FAILED", null);
+        }
+        assertTargetEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "whitespace", "foreign-question", "duplicate-question",
+            "null", "empty", "unknown-question", "overlong", "boolean", "zero"})
+    void clubSubmissionValidatesCurrentQuestionSetBeforeWriting(String scenario) throws Exception {
+        clubScoped = true;
+        String payload = body("valid");
+        switch (scenario) {
+            case "missing" -> payload = mapper.writeValueAsString(Map.of("roundId", Long.toString(roundId),
+                    "motivation", "valid", "answers", List.of(), "links", List.of()));
+            case "whitespace" -> payload = payload.replace("First answer", "  ");
+            case "foreign-question" -> payload = payload.replace("\"questionId\":\"" + firstQuestion + "\"",
+                    "\"questionId\":\"" + question(round()) + "\"");
+            case "duplicate-question" -> payload = payload.replace("\"questionId\":\"" + secondQuestion + "\"",
+                    "\"questionId\":\"" + firstQuestion + "\"");
+            case "null" -> payload = payload.replace("\"answerText\":\"First answer\"", "\"answerText\":null");
+            case "empty" -> payload = payload.replace("First answer", "");
+            case "unknown-question" -> payload = payload.replace("\"questionId\":\"" + firstQuestion + "\"",
+                    "\"questionId\":\"9223372036854775807\"");
+            case "overlong" -> payload = payload.replace("First answer", "x".repeat(2001));
+            // This model accepts TEXT only; false/0 are rejected for type, not treated as blank text.
+            case "boolean" -> payload = payload.replace("\"answerText\":\"First answer\"", "\"answerText\":false");
+            case "zero" -> payload = payload.replace("\"answerText\":\"First answer\"", "\"answerText\":0");
+            default -> fail("Unhandled answer scenario");
+        }
+        assertProblem(clubPost(Long.toString(clubId), payload), 400, "VALIDATION_FAILED", null);
+        assertTargetEmpty();
+    }
+
+    @Test
+    void clubSubmissionRequiresVerifiedActiveStudent() throws Exception {
+        clubScoped = true;
+        jdbc.update("UPDATE student_profiles SET student_status = 'INACTIVE' WHERE user_id = ?", userId);
+        assertProblem(submit("inactive-student", client, body("valid")), 403, "ACCESS_DENIED", null);
+        assertTargetEmpty();
+    }
+
+    @Test
+    void clubSubmissionSelectsRequestedRoundAtOpeningWhenSeveralRoundsAreOpen() throws Exception {
+        clubScoped = true;
+        round(); // Another eligible round must not be chosen implicitly.
+        jdbc.update("UPDATE recruitment_rounds SET opens_at = ? WHERE id = ?", NOW.atOffset(ZoneOffset.UTC), roundId);
+        assertComplete(submit("selected-round", client, body("valid")), userId);
+        assertEquals(1, targetRows("applications").size());
+        assertNoOrphans();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"-61,false", "-60,true", "59,true", "60,false", "61,false"})
+    void clubHttpOpeningInclusiveClosingExclusiveMatchesStoredHistory(int seconds, boolean accepted) throws Exception {
+        clubScoped = true;
+        Instant current = NOW.plusSeconds(seconds);
+        clock.now.set(current);
+        var result = submit("qa-boundary", client, body("valid"));
+        if (!accepted) {
+            assertProblem(result, 409, "RESOURCE_CONFLICT", seconds < 0 ? "ROUND_NOT_OPEN" : "ROUND_CLOSED");
+            assertTargetEmpty();
+            return;
+        }
+        assertEquals(201, result.getResponse().getStatus(), responseText(result));
+        var receipt = json(result);
+        long application = Long.parseLong(receipt.path("id").asText());
+        assertEquals(Long.toString(roundId), receipt.path("roundId").asText());
+        assertEquals("SUBMITTED", receipt.path("status").asText());
+        assertEquals(current, Instant.parse(receipt.path("submittedAt").asText()));
+        assertEquals(current, jdbc.queryForObject("SELECT submitted_at FROM applications WHERE id=?", java.time.OffsetDateTime.class, application).toInstant());
+        var history = jdbc.queryForMap("SELECT actor_id,from_status,to_status,changed_at FROM application_status_history WHERE application_id=?", application);
+        assertEquals(userId, history.get("actor_id")); assertNull(history.get("from_status"));
+        assertEquals("SUBMITTED", history.get("to_status"));
+        assertEquals(current, jdbc.queryForObject("SELECT changed_at FROM application_status_history WHERE application_id=?", java.time.OffsetDateTime.class, application).toInstant());
+        assertEquals(2, targetRows("application_answers").size());
+        assertEquals(1, targetRows("application_links").size());
+    }
+
+    @Test
+    void clubSubmissionRechecksAfterFormWasLoadedBeforeClosing() throws Exception {
+        clubScoped = true;
+        assertEquals(200, form(Long.toString(roundId)).getResponse().getStatus());
+        clock.now.set(NOW.plusSeconds(60));
+        assertProblem(submit("qa-form-closed", client, body("valid")), 409, "RESOURCE_CONFLICT", "ROUND_CLOSED");
+        assertTargetEmpty();
+    }
+
+    @Test
+    void clubSubmissionOmitsOptionalAnswersAndUrlsWithoutChangingApplicantProfile() throws Exception {
+        clubScoped = true;
+        jdbc.update("UPDATE application_questions SET is_required=false WHERE id=?", secondQuestion);
+        var userBefore = jdbc.queryForMap("SELECT * FROM users WHERE id=?", userId);
+        var profileBefore = jdbc.queryForMap("SELECT * FROM student_profiles WHERE user_id=?", userId);
+        String payload = mapper.writeValueAsString(Map.of("roundId", Long.toString(roundId), "motivation", "Optional omitted",
+                "answers", List.of(Map.of("questionId", Long.toString(firstQuestion), "answerText", "First answer")), "links", List.of()));
+        var result = submit("qa-optional", client, payload);
+        assertEquals(201, result.getResponse().getStatus(), responseText(result));
+        assertEquals(Long.toString(roundId), json(result).path("roundId").asText());
+        assertEquals("SUBMITTED", json(result).path("status").asText());
+        assertEquals(List.of(firstQuestion), jdbc.queryForList("SELECT question_id FROM application_answers WHERE round_id=?", Long.class, roundId));
+        assertTrue(targetRows("application_links").isEmpty()); assertEquals(1, targetRows("application_status_history").size());
+        assertEquals(userBefore, jdbc.queryForMap("SELECT * FROM users WHERE id=?", userId));
+        assertEquals(profileBefore, jdbc.queryForMap("SELECT * FROM student_profiles WHERE user_id=?", userId));
+    }
+
+    @Test
+    void withdrawnApplicationStillPreventsClubHttpResubmissionWithoutChangingRows() throws Exception {
+        clubScoped = true;
+        assertComplete(submit("qa-first", client, body("valid")), userId);
+        jdbc.update("UPDATE applications SET status='WITHDRAWN' WHERE round_id=? AND applicant_id=?", roundId, userId);
+        Map<String,List<Map<String,Object>>> before = new java.util.LinkedHashMap<>();
+        for (String table : List.of("applications", "application_answers", "application_links", "application_status_history")) before.put(table, targetRows(table));
+        assertProblem(submit("qa-withdrawn", client, body("changed")), 409, "RESOURCE_CONFLICT", "APPLICATION_ALREADY_EXISTS");
+        for (var entry : before.entrySet()) assertEquals(entry.getValue(), targetRows(entry.getKey()));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,1", "true,1", "false,123456123", "true,123456123",
+            "false,123456789", "true,123456789", "false,999999789", "true,999999789"})
+    void clubReceiptAndInitialHistoryMatchPersistedTimeWithNanosecondClock(boolean clubScoped, int nanos) throws Exception {
+        this.clubScoped = clubScoped;
+        Instant expected = NOW.plusNanos(nanos).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        clock.now.set(NOW.plusNanos(nanos));
+        var result = submit("qa-precision", client, body("valid"));
+        assertEquals(201, result.getResponse().getStatus(), responseText(result));
+        Instant receipt = Instant.parse(json(result).path("submittedAt").asText());
+        long application = Long.parseLong(json(result).path("id").asText());
+        Instant stored = jdbc.queryForObject("SELECT submitted_at FROM applications WHERE id=?", java.time.OffsetDateTime.class, application).toInstant();
+        Instant history = jdbc.queryForObject("SELECT changed_at FROM application_status_history WHERE application_id=?", java.time.OffsetDateTime.class, application).toInstant();
+        assertAll("A committed receipt must describe the same submission instant as application and initial history",
+                () -> assertEquals(stored, receipt), () -> assertEquals(history, receipt),
+                () -> assertEquals(expected, receipt),
+                () -> assertEquals(expected, jdbc.queryForObject("SELECT updated_at FROM applications WHERE id=?",
+                        java.time.OffsetDateTime.class, application).toInstant()),
+                () -> assertEquals(expected, jdbc.queryForObject("SELECT created_at FROM application_links WHERE application_id=?",
+                        java.time.OffsetDateTime.class, application).toInstant()));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,-1,false", "true,-1,false", "false,0,true", "true,0,true",
+            "false,59999999999,true", "true,59999999999,true",
+            "false,60000000000,false", "true,60000000000,false"})
+    void nanosecondClockPreservesInclusiveOpeningAndExclusiveClosing(boolean clubScoped, long nanos,
+            boolean accepted) throws Exception {
+        this.clubScoped = clubScoped;
+        jdbc.update("UPDATE recruitment_rounds SET opens_at=? WHERE id=?", NOW.atOffset(ZoneOffset.UTC), roundId);
+        Instant current = NOW.plusNanos(nanos);
+        clock.now.set(current);
+        var result = submit("qa-precision-boundary", client, body("valid"));
+        if (!accepted) {
+            assertProblem(result, 409, "RESOURCE_CONFLICT", nanos < 0 ? "ROUND_NOT_OPEN" : "ROUND_CLOSED");
+            assertTargetEmpty();
+            return;
+        }
+        assertEquals(201, result.getResponse().getStatus(), responseText(result));
+        Instant expected = current.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        long application = Long.parseLong(json(result).path("id").asText());
+        assertEquals(expected, Instant.parse(json(result).path("submittedAt").asText()));
+        assertEquals(expected, jdbc.queryForObject("SELECT submitted_at FROM applications WHERE id=?",
+                java.time.OffsetDateTime.class, application).toInstant());
+        assertEquals(expected, jdbc.queryForObject("SELECT changed_at FROM application_status_history WHERE application_id=?",
+                java.time.OffsetDateTime.class, application).toInstant());
+        assertEquals(2, targetRows("application_answers").size());
+        assertEquals(1, targetRows("application_links").size());
+        assertEquals(1, targetRows("application_status_history").size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void bothSubmissionRoutesShareDuplicateIdentityAndPreserveExistingRows(boolean clubFirst) throws Exception {
+        clubScoped = clubFirst;
+        assertComplete(submit("first-route", client, body("valid")), userId);
+        Map<String, List<Map<String, Object>>> before = new java.util.LinkedHashMap<>();
+        for (String table : List.of("applications", "application_answers", "application_links", "application_status_history"))
+            before.put(table, targetRows(table));
+        clubScoped = !clubFirst;
+        assertProblem(submit("other-route", client, body("changed content")), 409, "RESOURCE_CONFLICT", "APPLICATION_ALREADY_EXISTS");
+        for (var entry : before.entrySet()) assertEquals(entry.getValue(), targetRows(entry.getKey()));
+    }
+
+    @Test
+    void clubAndRoundRoutesSubmittingConcurrentlyCommitExactlyOnce() throws Exception {
+        var target = new SubmissionTarget(roundId, firstQuestion, secondQuestion);
+        assertSingleSubmission(overlapping(List.of(client, login(userId)), List.of(target, target), List.of(true, false)));
+    }
+
+    private MvcResult clubPost(String rawClubId, String payload) throws Exception {
+        return mvc.perform(post("/api/v1/clubs/" + rawClubId + "/applications").cookie(client.cookie())
+                .header("X-CSRF-TOKEN", client.token()).contentType(MediaType.APPLICATION_JSON).content(payload)).andReturn();
+    }
+
     /**
      * Holds the first request inside the real service transaction. Requests from the same applicant
      * must wait on it in the database; other students share the round lock and must finish meanwhile.
@@ -608,13 +886,19 @@ class ApplicationSubmissionHttpIntegrationTest {
     }
 
     private List<MvcResult> overlapping(List<Client> clients, List<SubmissionTarget> targets) throws Exception {
+        return overlapping(clients, targets, java.util.Collections.nCopies(clients.size(), clubScoped));
+    }
+
+    private List<MvcResult> overlapping(List<Client> clients, List<SubmissionTarget> targets,
+            List<Boolean> clubRoutes) throws Exception {
         assertEquals(clients.size(), targets.size());
+        assertEquals(clients.size(), clubRoutes.size());
         clock.gate = new Gate("request-0");
         var ready = new CountDownLatch(clients.size() - 1);
         var start = new CountDownLatch(1);
         try (ExecutorService workers = Executors.newFixedThreadPool(clients.size())) {
             List<Future<MvcResult>> requests = new ArrayList<>();
-            requests.add(workers.submit(() -> submit("request-0", clients.getFirst(), targets.getFirst())));
+            requests.add(workers.submit(() -> submit("request-0", clients.getFirst(), targets.getFirst(), clubRoutes.getFirst())));
             try {
                 await(clock.gate.entered);
                 for (int i = 1; i < clients.size(); i++) {
@@ -622,7 +906,7 @@ class ApplicationSubmissionHttpIntegrationTest {
                     requests.add(workers.submit(() -> {
                         ready.countDown();
                         await(start);
-                        return submit("request-" + index, clients.get(index), targets.get(index));
+                        return submit("request-" + index, clients.get(index), targets.get(index), clubRoutes.get(index));
                     }));
                 }
                 await(ready);
@@ -746,14 +1030,33 @@ class ApplicationSubmissionHttpIntegrationTest {
         assertTrue(result.getResponse().getHeader("Cache-Control").contains("no-store"));
         long id = Long.parseLong(receipt.path("id").asText());
         assertEquals(applicant, jdbc.queryForObject("SELECT applicant_id FROM applications WHERE id = ?", Long.class, id));
+        var application = jdbc.queryForMap("SELECT * FROM applications WHERE id = ?", id);
+        assertEquals(clubId, application.get("club_id"));
+        assertEquals(roundId, application.get("round_id"));
+        assertEquals("valid", application.get("motivation"));
+        assertEquals("SUBMITTED", application.get("status"));
+        assertEquals(0L, application.get("version"));
+        assertEquals(NOW, jdbc.queryForObject("SELECT submitted_at FROM applications WHERE id = ?",
+                java.time.OffsetDateTime.class, id).toInstant());
+        assertNull(application.get("decided_by"));
+        assertNull(application.get("result_message"));
         assertEquals(List.of(firstQuestion, secondQuestion), jdbc.queryForList(
                 "SELECT question_id FROM application_answers WHERE application_id = ? ORDER BY question_id", Long.class, id));
+        assertEquals(List.of("First answer", "Second answer"), jdbc.queryForList(
+                "SELECT answer_text FROM application_answers WHERE application_id = ? ORDER BY question_id", String.class, id));
+        var links = jdbc.queryForList("SELECT * FROM application_links WHERE application_id = ?", id);
+        assertEquals(1, links.size());
+        assertEquals("Portfolio", links.getFirst().get("label"));
+        assertEquals("https://example.org/portfolio", links.getFirst().get("url"));
+        assertEquals(1, links.getFirst().get("display_order"));
         var history = jdbc.queryForList("SELECT * FROM application_status_history WHERE application_id = ?", id);
         assertEquals(1, history.size());
         assertNull(history.getFirst().get("from_status"));
         assertEquals("SUBMITTED", history.getFirst().get("to_status"));
         assertEquals(applicant, history.getFirst().get("actor_id"));
         assertNull(history.getFirst().get("reason"));
+        assertEquals(NOW, jdbc.queryForObject("SELECT changed_at FROM application_status_history WHERE application_id = ?",
+                java.time.OffsetDateTime.class, id).toInstant());
     }
 
     private void assertProblem(MvcResult result, int status, String code, String reason) {
@@ -822,19 +1125,26 @@ class ApplicationSubmissionHttpIntegrationTest {
         return submit(label, caller, roundId, body);
     }
 
-    private MvcResult submit(String label, Client caller, SubmissionTarget target) throws Exception {
-        return submit(label, caller, target.roundId(), body("valid", target));
+    private MvcResult submit(String label, Client caller, SubmissionTarget target, boolean clubRoute) throws Exception {
+        return performSubmission(label, caller, submissionPath(clubRoute, target.roundId()), body("valid", target, clubRoute));
     }
 
     private MvcResult submit(String label, Client caller, long targetRound, String body) throws Exception {
+        return performSubmission(label, caller, submissionPath(clubScoped, targetRound), body);
+    }
+
+    private MvcResult performSubmission(String label, Client caller, String path, String body) throws Exception {
         REQUEST.set(label);
         try {
-            return mvc.perform(post("/api/v1/rounds/" + targetRound + "/applications").cookie(caller.cookie()).header("X-CSRF-TOKEN", caller.token())
+            return mvc.perform(post(path).cookie(caller.cookie()).header("X-CSRF-TOKEN", caller.token())
                     .contentType(MediaType.APPLICATION_JSON).content(body)).andReturn();
         } finally { REQUEST.remove(); }
     }
 
-    private String path() { return "/api/v1/rounds/" + roundId + "/applications"; }
+    private String path() { return submissionPath(clubScoped, roundId); }
+    private String submissionPath(boolean clubRoute, long targetRound) {
+        return clubRoute ? "/api/v1/clubs/" + clubId + "/applications" : "/api/v1/rounds/" + targetRound + "/applications";
+    }
     private static String formPath(String rawRoundId) { return "/api/v1/rounds/" + rawRoundId + "/application-form"; }
     private MvcResult form(String rawRoundId) throws Exception {
         return mvc.perform(get(formPath(rawRoundId)).cookie(client.cookie())).andReturn();
@@ -843,10 +1153,15 @@ class ApplicationSubmissionHttpIntegrationTest {
         return body(motivation, new SubmissionTarget(roundId, firstQuestion, secondQuestion));
     }
     private String body(String motivation, SubmissionTarget target) {
-        return mapper.writeValueAsString(Map.of("motivation", motivation, "answers", List.of(
+        return body(motivation, target, clubScoped);
+    }
+    private String body(String motivation, SubmissionTarget target, boolean clubRoute) {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>(Map.of("motivation", motivation, "answers", List.of(
                 Map.of("questionId", Long.toString(target.firstQuestion()), "answerText", "First answer"),
                 Map.of("questionId", Long.toString(target.secondQuestion()), "answerText", "Second answer")),
                 "links", List.of(Map.of("label", "Portfolio", "url", "https://example.org/portfolio"))));
+        if (clubRoute) payload.put("roundId", Long.toString(target.roundId()));
+        return mapper.writeValueAsString(payload);
     }
     private static String responseText(MvcResult result) { return new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8); }
     private JsonNode json(MvcResult result) { return mapper.readTree(responseText(result)); }
