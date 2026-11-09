@@ -310,3 +310,126 @@ test('review uses available profile data and masks the student code', async () =
     stub.restore()
   }
 })
+
+test('round closing while filling the form shows the conflict alert and stays on the review step', async () => {
+  const stub = stubFetch((request) => {
+    if (request.url === '/api/v1/auth/csrf') return csrfResponse()
+    if (request.url === '/api/v1/auth/me') return json({ user: { id: 'user-001', role: 'STUDENT' } })
+    if (request.url === '/api/v1/rounds/70001/application-form') return json(applicationForm)
+    if (request.url === '/api/v1/public/clubs/20001') return json(club)
+    if (request.method === 'POST' && request.url === '/api/v1/rounds/70001/applications') {
+      return json(
+        {
+          code: 'RESOURCE_CONFLICT',
+          reason: 'ROUND_CLOSED',
+          detail: 'The recruitment round is closed.',
+        },
+        409,
+        { 'Content-Type': 'application/problem+json' },
+      )
+    }
+    return json({ detail: 'Unexpected request' }, 500)
+  })
+  try {
+    renderApplication()
+    fireEvent.change(
+      await screen.findByLabelText(/เหตุผลที่สนใจเข้าร่วมชมรมนี้/),
+      { target: { value: 'อยากร่วมทำกิจกรรมอาสา' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(/เหตุใดจึงสนใจเข้าร่วมกิจกรรมของชมรม/),
+      { target: { value: 'อยากช่วยพัฒนาชุมชน' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
+    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: 'ยืนยันและส่งใบสมัคร' }))
+
+    const alert = await screen.findByRole('alert')
+    assert.match(alert.textContent ?? '', /รอบรับสมัครนี้ปิดรับใบสมัครแล้ว/)
+    assert.equal(
+      screen.getByTestId('current-path').textContent,
+      '/clubs/20001/rounds/70001/apply',
+    )
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
+test('special characters submit intact with SUBMITTED receipt and duplicate submit shows conflict alert', async () => {
+  let attempt = 0
+  const stub = stubFetch((request) => {
+    if (request.url === '/api/v1/auth/csrf') return csrfResponse()
+    if (request.url === '/api/v1/auth/me') return json({ user: { id: 'user-001', role: 'STUDENT' } })
+    if (request.url === '/api/v1/rounds/70001/application-form') return json(applicationForm)
+    if (request.url === '/api/v1/public/clubs/20001') return json(club)
+    if (request.method === 'POST' && request.url === '/api/v1/rounds/70001/applications') {
+      attempt += 1
+      if (attempt === 1) {
+        return json(
+          {
+            code: 'RESOURCE_CONFLICT',
+            reason: 'APPLICATION_ALREADY_EXISTS',
+            detail: 'Duplicate application.',
+          },
+          409,
+          { 'Content-Type': 'application/problem+json' },
+        )
+      }
+      return json(
+        {
+          id: '90002',
+          clubId: '20001',
+          roundId: '70001',
+          status: 'SUBMITTED',
+          submittedAt: '2026-10-30T12:00:00Z',
+        },
+        201,
+      )
+    }
+    return json({ detail: 'Unexpected request' }, 500)
+  })
+  const specialMotivation = 'สนใจ <script>alert("xss")</script> & \' "-- 🚀 100%'
+  const specialAnswer = 'คำตอบพิเศษ: "C++ / C#" & SQL \'OR 1=1\' 🌱'
+  try {
+    renderApplication()
+    fireEvent.change(
+      await screen.findByLabelText(/เหตุผลที่สนใจเข้าร่วมชมรมนี้/),
+      { target: { value: `  ${specialMotivation}  ` } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(/เหตุใดจึงสนใจเข้าร่วมกิจกรรมของชมรม/),
+      { target: { value: `  ${specialAnswer}  ` } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /เพิ่มลิงก์เอกสาร/ }))
+    fireEvent.change(screen.getByLabelText(/ชื่อ\/คำอธิบายเอกสาร/), {
+      target: { value: '  พอร์ตโฟลิโอ & ผลงาน  ' },
+    })
+    fireEvent.change(screen.getByLabelText(/URL ลิงก์เอกสาร/), {
+      target: { value: '  https://example.edu/portfolio?tag=a&b=1  ' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
+    fireEvent.click(screen.getByRole('checkbox'))
+
+    // First attempt simulates concurrent/existing application conflict (409 APPLICATION_ALREADY_EXISTS)
+    fireEvent.click(screen.getByRole('button', { name: 'ยืนยันและส่งใบสมัคร' }))
+    const conflictAlert = await screen.findByRole('alert')
+    assert.match(conflictAlert.textContent ?? '', /คุณได้ส่งใบสมัครในรอบรับสมัครนี้ไปแล้ว/)
+
+    // Second attempt succeeds and navigates to the SUBMITTED receipt
+    fireEvent.click(screen.getByRole('button', { name: 'ยืนยันและส่งใบสมัคร' }))
+    await waitFor(() => {
+      assert.ok(screen.getByRole('heading', { name: 'ผลการส่งใบสมัคร' }))
+    })
+    assert.ok(screen.getByText(/เลขที่ใบสมัคร 90002 · SUBMITTED/))
+    const postReq = stub.requests.find((r) => r.method === 'POST')
+    assert.deepEqual(postReq?.body, {
+      motivation: specialMotivation,
+      answers: [{ questionId: '81001', answerText: specialAnswer }],
+      links: [{ label: 'พอร์ตโฟลิโอ & ผลงาน', url: 'https://example.edu/portfolio?tag=a&b=1' }],
+    })
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
