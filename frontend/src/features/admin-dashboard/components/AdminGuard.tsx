@@ -6,34 +6,10 @@ interface AdminGuardProps {
 }
 
 export const AdminGuard: React.FC<AdminGuardProps> = ({ children }) => {
-  const { user, isLoading, notice } = useAuth();
+  const { user } = useAuth();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500 text-sm">กำลังตรวจสอบสิทธิ์การเข้าถึง...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center shadow-sm border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900 mb-2">กรุณาเข้าสู่ระบบ</h2>
-          <p role="alert" className="text-sm text-gray-600 mb-6">
-            {notice ?? 'กรุณาเข้าสู่ระบบเพื่อเข้าถึงแดชบอร์ด'}
-          </p>
-          <a href="/login?next=%2Fadmin%2Fdashboard" className="inline-flex py-2 px-4 rounded-lg bg-[#c82333] text-white text-sm font-semibold">
-            เข้าสู่ระบบ
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  // การตรวจสิทธิ์ที่ Backend ยังคงเป็นข้อบังคับสำหรับทุกคำขอ
-  if (user.role !== 'ADMIN') {
+  // ponytail: RequireAuth handles the session; the backend still checks every request.
+  if (user?.role !== 'ADMIN') {
     return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center shadow-2xl border border-gray-100">

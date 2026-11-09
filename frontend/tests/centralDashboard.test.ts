@@ -15,9 +15,10 @@ Object.assign(globalThis, {
 Object.defineProperty(globalThis, 'navigator', { configurable: true, value: dom.window.navigator })
 
 const { act, cleanup, fireEvent, render, screen, waitFor, within } = await import('@testing-library/react')
+const { MemoryRouter, useLocation } = await import('react-router')
 const { AuthProvider } = await import('../src/features/auth/AuthContext.tsx')
 const { resetAuthFailureNotification } = await import('../src/lib/api.ts')
-const { CentralDashboardPage } = await import('../src/features/admin-dashboard/pages/CentralDashboardPage.tsx')
+const { default: AppRoutes } = await import('../src/app/AppRoutes.tsx')
 
 const categories = { items: [{ id: '1', name: 'เทคโนโลยี' }, { id: '2', name: 'กีฬา' }] }
 function dashboard(page: number): AdminDashboardStatsResponse {
@@ -44,7 +45,12 @@ function dashboard(page: number): AdminDashboardStatsResponse {
     },
   }
 }
-const renderPage = () => render(createElement(AuthProvider, null, createElement(CentralDashboardPage)))
+function CurrentLocation() {
+  const location = useLocation()
+  return createElement('output', { 'data-testid': 'location' }, location.pathname + location.search)
+}
+const renderPage = () => render(createElement(MemoryRouter, { initialEntries: ['/admin/dashboard'] },
+  createElement(AuthProvider, null, createElement(AppRoutes), createElement(CurrentLocation))))
 const statsRequests = (requests: { url: string }[]) => requests.filter(r => r.url.startsWith('/api/v1/admin/dashboard/stats?'))
 const pageOf = (url: string) => new URL(url, 'http://localhost').searchParams
 function cleanupAfter(restore: () => void) { cleanup(); resetAuthFailureNotification(); restore() }
@@ -97,7 +103,7 @@ test('stats API error is shown to an ADMIN without unmounting the page', async (
   } finally { cleanupAfter(stub.restore) }
 })
 
-test('expired ADMIN session shows a login prompt instead of 403', async () => {
+test('expired ADMIN session redirects to login with its notice and return path', async () => {
   let finish!: (response: Response) => void
   const pending = new Promise<Response>(resolve => { finish = resolve })
   const stub = stubFetch(req => req.url === '/api/v1/auth/me'
@@ -108,8 +114,19 @@ test('expired ADMIN session shows a login prompt instead of 403', async () => {
     await screen.findByText(/แดชบอร์ดสถิติภาพรวมส่วนกลาง \(Admin Dashboard\)/)
     await act(async () => { finish(problem(401, 'AUTHENTICATION_REQUIRED', 'expired')) })
     await screen.findByText(/เซสชันหมดอายุหรือยังไม่ได้เข้าสู่ระบบ/)
-    assert.ok(screen.getByRole('link', { name: /เข้าสู่ระบบ/ }))
+    assert.ok(screen.getByRole('heading', { name: 'เข้าสู่ระบบ' }))
+    assert.equal(screen.getByTestId('location').textContent, '/login?next=%2Fadmin%2Fdashboard')
     assert.equal(screen.queryByText(/403 - ไม่สามารถเข้าถึงหน้านี้ได้/), null)
+  } finally { cleanupAfter(stub.restore) }
+})
+
+test('a visitor without a session goes to login without requesting admin statistics', async () => {
+  const stub = stubFetch(() => problem(401, 'AUTHENTICATION_REQUIRED', 'no session'))
+  try {
+    renderPage()
+    await screen.findByRole('heading', { name: 'เข้าสู่ระบบ' })
+    assert.equal(screen.getByTestId('location').textContent, '/login?next=%2Fadmin%2Fdashboard')
+    assert.equal(statsRequests(stub.requests).length, 0)
   } finally { cleanupAfter(stub.restore) }
 })
 

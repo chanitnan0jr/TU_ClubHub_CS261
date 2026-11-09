@@ -37,19 +37,18 @@ const CentralDashboardContent: React.FC = () => {
 
   // 1. ดึงหมวดหมู่ชมรม master data
   useEffect(() => {
-    let active = true;
     const controller = new AbortController();
     apiRequest<{ items: ClubCategoryOption[] }>('/api/v1/public/club-categories', { signal: controller.signal })
-      .then((resData) => { if (active) setCategories(resData.items); })
+      .then((resData) => { if (!controller.signal.aborted) setCategories(resData.items); })
       .catch((err: unknown) => {
-        if (active) setCategoryError(describeApiError(err, 'กรุณาลองใหม่อีกครั้ง'));
+        if (!controller.signal.aborted) setCategoryError(describeApiError(err, 'กรุณาลองใหม่อีกครั้ง'));
       });
-    return () => { active = false; controller.abort(); };
+    return () => controller.abort();
   }, [categoryReload]);
 
   // 2. ดึงสถิติ Dashboard ด้วย apiRequest
   useEffect(() => {
-    let isMounted = true;
+    // ponytail: the abort signal also marks obsolete responses.
     const controller = new AbortController();
 
     const fetchDashboardStats = async () => {
@@ -70,15 +69,15 @@ const CentralDashboardContent: React.FC = () => {
           { signal: controller.signal },
         );
 
-        if (isMounted) {
+        if (!controller.signal.aborted) {
           setData(resData);
         }
       } catch (err: unknown) {
-        if (isMounted) {
+        if (!controller.signal.aborted) {
           setError(describeApiError(err, 'โหลดข้อมูลสถิติไม่สำเร็จ'));
         }
       } finally {
-        if (isMounted) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
@@ -86,10 +85,7 @@ const CentralDashboardContent: React.FC = () => {
 
     fetchDashboardStats();
 
-    return () => {
-      isMounted = false;
-      controller.abort();
-    };
+    return () => controller.abort();
   }, [appliedQuery, selectedCategory, selectedYear, selectedSemester, selectedStatus, page]);
 
   const handleClearFilters = () => {

@@ -28,7 +28,7 @@ export default function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/open-calls" element={<OpenCallsPage />} />
       <Route path="/clubs/:clubId" element={<ClubDetailRoutePage />} />
-      <Route path="/admin/dashboard" element={<CentralDashboardPage />} />
+      <Route path="/admin/dashboard" element={<RequireAuth><CentralDashboardPage /></RequireAuth>} />
       <Route
         path="/clubs/:clubId/rounds/:roundId/apply"
         element={
