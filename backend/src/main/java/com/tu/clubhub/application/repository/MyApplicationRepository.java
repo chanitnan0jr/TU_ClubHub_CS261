@@ -44,6 +44,7 @@ public class MyApplicationRepository {
             String status,
             Instant submittedAt,
             Instant respondedAt,
+            Instant updatedAt,
             String motivation,
             String resultMessage) {
     }
@@ -69,13 +70,14 @@ public class MyApplicationRepository {
                 a.status,
                 a.submitted_at,
                 a.responded_at,
+                a.updated_at,
                 a.motivation,
                 a.result_message
             FROM applications a
             JOIN clubs c ON c.id = a.club_id
             JOIN recruitment_rounds r
                 ON r.id = a.round_id AND r.club_id = a.club_id
-            JOIN student_profiles sp ON sp.user_id = a.applicant_id
+            LEFT JOIN student_profiles sp ON sp.user_id = a.applicant_id
             """;
 
     public long countByApplicant(long applicantId) {
@@ -223,6 +225,7 @@ public class MyApplicationRepository {
                 rs.getString("status"),
                 instant(rs, "submitted_at"),
                 instant(rs, "responded_at"),
+                instant(rs, "updated_at"),
                 rs.getString("motivation"),
                 rs.getString("result_message"));
     }

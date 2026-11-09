@@ -24,22 +24,6 @@ public class ApplicationSubmissionValidator {
         }
     }
 
-    public long applicationId(String rawApplicationId) {
-        try {
-            return positiveId(rawApplicationId);
-        } catch (IllegalArgumentException exception) {
-            throw ApplicationSubmissionException.failure(400, "INVALID_RESOURCE_ID",
-                    "applicationId must be a positive decimal bigint without leading zeroes.");
-        }
-    }
-
-    public void validatePage(int page, int size) {
-        List<FieldError> errors = new ArrayList<>();
-        if (page < 0) errors.add(error("page", "Must be zero or greater."));
-        if (size < 1 || size > 100) errors.add(error("size", "Must be between 1 and 100."));
-        if (!errors.isEmpty()) throw ApplicationSubmissionException.validation(errors);
-    }
-
     public ValidatedApplicationSubmission validate(String rawRoundId, ApplicationSubmissionRequest request) {
         long roundId = roundId(rawRoundId);
         List<FieldError> errors = new ArrayList<>();

@@ -104,11 +104,15 @@ class MyApplicationHttpIntegrationTest {
                         org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$.round.resultsPublishedAt").value(
                         org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.round.confirmationDeadline").value(
+                        org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$.canConfirm").value(false))
                 .andExpect(jsonPath("$.canDecline").value(false))
                 .andExpect(jsonPath("$.statusHistory.length()").value(1))
                 .andExpect(jsonPath("$.statusHistory[0].status")
                         .value("SUBMITTED"))
+                .andExpect(jsonPath("$.statusHistory[0].displayStatusLabel")
+                        .value("ส่งใบสมัครแล้ว"))
                 .andExpect(jsonPath("$.decidedAt").doesNotExist())
                 .andExpect(jsonPath("$.decidedBy").doesNotExist())
                 .andExpect(jsonPath("$.reviews").doesNotExist())
@@ -189,11 +193,12 @@ class MyApplicationHttpIntegrationTest {
         Fixture f = fixture(false);
 
         for (String id : List.of(
-                "abc", "0", "-1", "9223372036854775808")) {
+                "abc", "0", "-1", "0123", "9223372036854775808")) {
 
             mvc.perform(get(PATH + "/" + id)
                             .with(authentication(auth(f.ownerId()))))
                     .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_RESOURCE_ID"))
                     .andExpect(content().contentTypeCompatibleWith(
                             MediaType.APPLICATION_PROBLEM_JSON));
         }

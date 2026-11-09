@@ -147,7 +147,9 @@ public class MyApplicationService {
                         resultsPublished(row, now)
                                 ? row.resultsPublishedAt()
                                 : null,
-                        row.confirmationDeadline()),
+                        resultsPublished(row, now)
+                                ? row.confirmationDeadline()
+                                : null),
                 row.submittedAt(),
                 visible,
                 label(visible),
@@ -203,8 +205,7 @@ public class MyApplicationService {
         if ("WITHDRAWN".equals(row.status())) {
             Instant withdrawnAt = repository
                     .findOwnedWithdrawalTime(row.id(), row.applicantId())
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Withdrawal history is missing"));
+                    .orElse(row.updatedAt() != null ? row.updatedAt() : row.submittedAt());
 
             entries.add(event(VisibleStatus.WITHDRAWN, withdrawnAt));
         } else if (resultsPublished(row, now)) {
@@ -270,7 +271,7 @@ public class MyApplicationService {
 
         return new StatusHistoryEntry(
                 status,
-                label(status),
+                timelineLabel(status),
                 occurredAt);
     }
 
@@ -295,8 +296,18 @@ public class MyApplicationService {
         };
     }
 
+    private String timelineLabel(VisibleStatus status) {
+        return switch (status) {
+            case SUBMITTED -> "ส่งใบสมัครแล้ว";
+            case ACCEPTED_PENDING_CONFIRMATION ->
+                    "ประกาศผลคัดเลือก (ผ่านการคัดเลือก)";
+            case REJECTED -> "ประกาศผลคัดเลือก (ไม่ผ่านการคัดเลือก)";
+            default -> label(status);
+        };
+    }
+
     private long positiveId(String rawId) {
-        if (rawId == null || !rawId.matches("[0-9]+")) {
+        if (rawId == null || !rawId.matches("[1-9][0-9]{0,18}")) {
             throw invalidId();
         }
 
