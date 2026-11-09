@@ -23,12 +23,19 @@ final class PublicRoutes {
             get("/*.ico"),
             get("/*.json"),
 
-            // Existing SPA routes.
+            // Existing SPA routes (Task75 §5.1 & PR Review).
             get("/login"),
-            get("/open-calls"),
+            get("/clubs"),
             get("/clubs/**"),
+            get("/open-calls"),
             get("/profile"),
+            get("/profile/**"),
+            get("/me/applications"),
+            get("/me/applications/*"),
+            get("/dashboard"),
             get("/dashboard/**"),
+            get("/admin/dashboard"),
+            get("/admin/dashboard/**"),
 
             // Authentication bootstrap.
             get("/api/v1/auth/csrf"),

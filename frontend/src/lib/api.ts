@@ -59,6 +59,7 @@ interface RequestOptions {
   method?: HttpMethod
   body?: unknown
   notifyAuthFailure?: boolean
+  signal?: AbortSignal
 }
 
 type AuthFailure = 'session-expired' | 'account-not-allowed'
@@ -132,8 +133,8 @@ async function readProblem(response: Response): Promise<ApiError> {
 }
 
 /** Fetches the session's CSRF header, which every write request must send. */
-export async function getCsrfHeaders(notifyAuthFailure = true): Promise<Record<string, string>> {
-  const csrf = await apiRequest<{ headerName: string; token: string }>('/api/v1/auth/csrf', { notifyAuthFailure })
+export async function getCsrfHeaders(notifyAuthFailure = true, signal?: AbortSignal): Promise<Record<string, string>> {
+  const csrf = await apiRequest<{ headerName: string; token: string }>('/api/v1/auth/csrf', { notifyAuthFailure, signal })
   if (csrf?.headerName !== 'X-CSRF-TOKEN' || typeof csrf.token !== 'string' || !csrf.token.trim()) {
     throw new Error('ไม่สามารถเตรียมข้อมูลความปลอดภัยของคำขอได้')
   }
@@ -146,22 +147,23 @@ export async function getCsrfHeaders(notifyAuthFailure = true): Promise<Record<s
  */
 export async function apiRequest<T>(
   url: string,
-  { method = 'GET', body, notifyAuthFailure = true }: RequestOptions = {},
+  { method = 'GET', body, notifyAuthFailure = true, signal }: RequestOptions = {},
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
-  if (method !== 'GET') Object.assign(headers, await getCsrfHeaders(notifyAuthFailure))
+  if (method !== 'GET') Object.assign(headers, await getCsrfHeaders(notifyAuthFailure, signal))
 
   const response = await fetch(url, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'same-origin',
+    signal,
   })
 
   if (!response.ok) {
     const error = await readProblem(response)
-    if (notifyAuthFailure) notifyFailure(error, url)
+    if (notifyAuthFailure && !signal?.aborted) notifyFailure(error, url)
     throw error
   }
   if (response.status === 204) return undefined as T
