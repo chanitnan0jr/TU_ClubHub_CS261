@@ -1,11 +1,11 @@
 package com.tu.clubhub.dashboard.repository;
 
+import com.tu.clubhub.club.dto.PublicClubCategoryDto;
+import com.tu.clubhub.club.dto.PublicPageMetadataDto;
 import com.tu.clubhub.dashboard.dto.AdminDashboardFilter;
-import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.Category;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.CategoryStats;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.ClubStats;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.ClubStatsPage;
-import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.PageMetadata;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.SummaryMetrics;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.TopClub;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -321,21 +321,12 @@ public class AdminDashboardRepository {
 
     public ClubStatsPage clubs(
             AdminDashboardFilter filter,
-            Instant now) {
+            Instant now,
+            long total) {
 
-        MapSqlParameterSource params = parameters(filter, now);
-
-        Long count = jdbc.queryForObject(
-                FILTERED_DATA + """
-                        SELECT COUNT(*) FROM filtered_clubs
-                        """,
-                params,
-                Long.class);
-
-        long total = count == null ? 0L : count;
-
-        params.addValue("limit", filter.size(), Types.INTEGER);
-        params.addValue("offset", filter.offset(), Types.BIGINT);
+        MapSqlParameterSource params = parameters(filter, now)
+                .addValue("limit", filter.size(), Types.INTEGER)
+                .addValue("offset", filter.offset(), Types.BIGINT);
 
         List<ClubStats> items = jdbc.query(
                 CLUB_DATA + """
@@ -352,18 +343,18 @@ public class AdminDashboardRepository {
 
         return new ClubStatsPage(
                 items,
-                new PageMetadata(
+                new PublicPageMetadataDto(
                         filter.page(),
                         filter.size(),
                         total,
-                        Math.toIntExact(totalPages)));
+                        totalPages));
     }
 
     private ClubStats mapClub(ResultSet rs) throws SQLException {
         return new ClubStats(
                 Long.toString(rs.getLong("club_id")),
                 rs.getString("club_name"),
-                new Category(
+                new PublicClubCategoryDto(
                         Long.toString(rs.getLong("category_id")),
                         rs.getString("category_name")),
                 rs.getString("club_status"),

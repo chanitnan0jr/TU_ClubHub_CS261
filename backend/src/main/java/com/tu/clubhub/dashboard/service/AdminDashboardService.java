@@ -54,13 +54,14 @@ public class AdminDashboardService {
 
         // All metrics use the same time and database snapshot.
         Instant now = clock.instant();
+        var summary = repository.summary(filter, now);
 
         return new AdminDashboardStatsResponse(
                 now,
                 filter.appliedFilters(),
-                repository.summary(filter, now),
+                summary,
                 repository.categoryBreakdown(filter, now),
                 repository.topClubs(filter, now),
-                repository.clubs(filter, now));
+                repository.clubs(filter, now, summary.totalClubs()));
     }
 }

@@ -2598,7 +2598,7 @@ paths:
     get:
       tags: [Admin Dashboard]
       operationId: getAdminDashboardStats
-      x-implementation-status: pending
+      x-implementation-status: implemented
       x-contract-status: specified-in-task75
       summary: Get university-wide club recruitment and membership statistics for Admin (US-10 / Task71)
       description: >-

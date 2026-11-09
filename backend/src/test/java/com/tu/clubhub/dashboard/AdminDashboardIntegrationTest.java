@@ -23,18 +23,9 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties = {
-        "spring.datasource.url=${ROUNDS_TEST_DATABASE_URL:jdbc:postgresql://localhost:5432/tu_clubhub_test}",
-        "spring.datasource.username=postgres",
-        "spring.datasource.password=${DB_PASSWORD}",
-        "spring.flyway.enabled=true",
-        "spring.flyway.locations=classpath:db/migration",
-        "spring.jpa.hibernate.ddl-auto=validate",
-        "spring.session.jdbc.initialize-schema=never",
-        "tu.auth.mode=mock"
-})
+@SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
+@ActiveProfiles({"test", "seedtest"})
 @Transactional
 class AdminDashboardIntegrationTest {
 
@@ -226,7 +217,9 @@ class AdminDashboardIntegrationTest {
                             .with(authentication(auth(admin, "ADMIN"))))
                     .andExpect(status().isBadRequest())
                     .andExpect(content().contentTypeCompatibleWith(
-                            "application/problem+json"));
+                            "application/problem+json"))
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.fieldErrors").isNotEmpty());
         }
     }
 

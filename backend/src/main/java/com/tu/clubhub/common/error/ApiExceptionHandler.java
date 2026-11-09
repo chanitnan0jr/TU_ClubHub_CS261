@@ -59,7 +59,13 @@ public class ApiExceptionHandler {
             "questionIds must list every question in this round exactly once", "Question order could not be updated; reload and retry",
             "Only open draft rounds can have their questions edited", "Rounds with applications cannot have questions edited",
             "questionText must not be blank", "isRequired is required", "Round changed during question edit; reload and retry",
-            "Question has answers", "Round was modified");
+            "Question has answers", "Round was modified",
+            "q must not exceed 200 characters", "categoryId must be positive",
+            "academicYear must be between 1 and 32767", "semester must be between 1 and 3",
+            "clubStatus must be ALL, ACTIVE or INACTIVE", "page must be non-negative",
+            "size must be between 1 and 100");
+    private static final Set<String> VALIDATED_QUERY_PARAMS = Set.of(
+            "q", "categoryId", "academicYear", "semester", "clubStatus", "page", "size");
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemResponse> invalidBody(MethodArgumentNotValidException exception, HttpServletRequest request) {
@@ -108,7 +114,10 @@ public class ApiExceptionHandler {
         String code = ProblemResponse.codeFor(status);
         String detail = status == 400 || status == 409
                 ? SAFE_SERVICE_DETAILS.stream().filter(value -> value.equals(exception.getReason())).findFirst().orElse(null) : null;
-        var response = problem(request, status, code, detail, List.of(), exception.getHeaders(), exception);
+        String param = detail == null ? null : detail.split(" ", 2)[0];
+        var fields = status == 400 && param != null && VALIDATED_QUERY_PARAMS.contains(param)
+                ? List.of(new ProblemResponse.FieldError(param, "INVALID", detail)) : List.<ProblemResponse.FieldError>of();
+        var response = problem(request, status, code, detail, fields, exception.getHeaders(), exception);
         if (status == 409 && detail != null && CONFLICT_REASONS.containsKey(detail))
             response.getBody().setProperty("reason", CONFLICT_REASONS.get(detail));
         return response;

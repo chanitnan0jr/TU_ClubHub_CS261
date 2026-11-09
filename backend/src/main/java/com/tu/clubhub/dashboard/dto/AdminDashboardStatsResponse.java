@@ -1,5 +1,7 @@
 package com.tu.clubhub.dashboard.dto;
 
+import com.tu.clubhub.club.dto.PublicClubCategoryDto;
+import com.tu.clubhub.club.dto.PublicPageMetadataDto;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -59,7 +61,7 @@ public record AdminDashboardStatsResponse(
     public record ClubStats(
             String clubId,
             String clubName,
-            Category category,
+            PublicClubCategoryDto category,
             String clubStatus,
             boolean hasOpenRecruitment,
             long roundCount,
@@ -75,20 +77,8 @@ public record AdminDashboardStatsResponse(
             long activeMemberCount) {
     }
 
-    public record Category(
-            String id,
-            String name) {
-    }
-
     public record ClubStatsPage(
             List<ClubStats> items,
-            PageMetadata page) {
-    }
-
-    public record PageMetadata(
-            int number,
-            int size,
-            long totalElements,
-            int totalPages) {
+            PublicPageMetadataDto page) {
     }
 }

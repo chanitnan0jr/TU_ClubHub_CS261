@@ -1,5 +1,6 @@
 package com.tu.clubhub.dashboard;
 
+import com.tu.clubhub.club.dto.PublicPageMetadataDto;
 import com.tu.clubhub.dashboard.dto.AdminDashboardFilter;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse;
 import com.tu.clubhub.dashboard.repository.AdminDashboardRepository;
@@ -48,17 +49,17 @@ class AdminDashboardServiceTest {
 
         var summary = mock(
                 AdminDashboardStatsResponse.SummaryMetrics.class);
+        when(summary.totalClubs()).thenReturn(6L);
 
         var clubs = new AdminDashboardStatsResponse.ClubStatsPage(
                 List.of(),
-                new AdminDashboardStatsResponse.PageMetadata(
-                        0, 20, 0, 0));
+                new PublicPageMetadataDto(0, 20, 6, 1));
 
         when(repository.summary(filter, NOW)).thenReturn(summary);
         when(repository.categoryBreakdown(filter, NOW))
                 .thenReturn(List.of());
         when(repository.topClubs(filter, NOW)).thenReturn(List.of());
-        when(repository.clubs(filter, NOW)).thenReturn(clubs);
+        when(repository.clubs(filter, NOW, 6L)).thenReturn(clubs);
 
         var result = service.stats(
                 "  Music  ", 2L, 2569, 1, "ACTIVE", 0, 20);
@@ -73,7 +74,7 @@ class AdminDashboardServiceTest {
         order.verify(repository).summary(filter, NOW);
         order.verify(repository).categoryBreakdown(filter, NOW);
         order.verify(repository).topClubs(filter, NOW);
-        order.verify(repository).clubs(filter, NOW);
+        order.verify(repository).clubs(filter, NOW, 6L);
 
         verifyNoMoreInteractions(repository);
     }
