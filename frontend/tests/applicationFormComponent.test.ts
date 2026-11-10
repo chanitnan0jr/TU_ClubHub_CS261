@@ -356,26 +356,13 @@ test('round closing while filling the form shows the conflict alert and stays on
   }
 })
 
-test('special characters submit intact with SUBMITTED receipt and duplicate submit shows conflict alert', async () => {
-  let attempt = 0
+test('special characters and trimmed HTTPS links submit intact and display the SUBMITTED receipt', async () => {
   const stub = stubFetch((request) => {
     if (request.url === '/api/v1/auth/csrf') return csrfResponse()
     if (request.url === '/api/v1/auth/me') return json({ user: { id: 'user-001', role: 'STUDENT' } })
     if (request.url === '/api/v1/rounds/70001/application-form') return json(applicationForm)
     if (request.url === '/api/v1/public/clubs/20001') return json(club)
     if (request.method === 'POST' && request.url === '/api/v1/rounds/70001/applications') {
-      attempt += 1
-      if (attempt === 1) {
-        return json(
-          {
-            code: 'RESOURCE_CONFLICT',
-            reason: 'APPLICATION_ALREADY_EXISTS',
-            detail: 'Duplicate application.',
-          },
-          409,
-          { 'Content-Type': 'application/problem+json' },
-        )
-      }
       return json(
         {
           id: '90002',
@@ -410,14 +397,8 @@ test('special characters submit intact with SUBMITTED receipt and duplicate subm
     })
     fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
     fireEvent.click(screen.getByRole('checkbox'))
-
-    // First attempt simulates concurrent/existing application conflict (409 APPLICATION_ALREADY_EXISTS)
     fireEvent.click(screen.getByRole('button', { name: 'ยืนยันและส่งใบสมัคร' }))
-    const conflictAlert = await screen.findByRole('alert')
-    assert.match(conflictAlert.textContent ?? '', /คุณได้ส่งใบสมัครในรอบรับสมัครนี้ไปแล้ว/)
 
-    // Second attempt succeeds and navigates to the SUBMITTED receipt
-    fireEvent.click(screen.getByRole('button', { name: 'ยืนยันและส่งใบสมัคร' }))
     await waitFor(() => {
       assert.ok(screen.getByRole('heading', { name: 'ผลการส่งใบสมัคร' }))
     })
@@ -428,6 +409,85 @@ test('special characters submit intact with SUBMITTED receipt and duplicate subm
       answers: [{ questionId: '81001', answerText: specialAnswer }],
       links: [{ label: 'พอร์ตโฟลิโอ & ผลงาน', url: 'https://example.edu/portfolio?tag=a&b=1' }],
     })
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
+test('submitting again after a 201 submission shows the 409 APPLICATION_ALREADY_EXISTS conflict alert', async () => {
+  let hasExistingApplication = false
+  const stub = stubFetch((request) => {
+    if (request.url === '/api/v1/auth/csrf') return csrfResponse()
+    if (request.url === '/api/v1/auth/me') return json({ user: { id: 'user-001', role: 'STUDENT' } })
+    if (request.url === '/api/v1/rounds/70001/application-form') return json(applicationForm)
+    if (request.url === '/api/v1/public/clubs/20001') return json(club)
+    if (request.method === 'POST' && request.url === '/api/v1/rounds/70001/applications') {
+      if (!hasExistingApplication) {
+        hasExistingApplication = true
+        return json(
+          {
+            id: '90003',
+            clubId: '20001',
+            roundId: '70001',
+            status: 'SUBMITTED',
+            submittedAt: '2026-10-30T12:00:00Z',
+          },
+          201,
+        )
+      }
+      return json(
+        {
+          code: 'RESOURCE_CONFLICT',
+          reason: 'APPLICATION_ALREADY_EXISTS',
+          detail: 'Duplicate application.',
+        },
+        409,
+        { 'Content-Type': 'application/problem+json' },
+      )
+    }
+    return json({ detail: 'Unexpected request' }, 500)
+  })
+  try {
+    // 1. First submission succeeds (201 SUBMITTED)
+    renderApplication()
+    fireEvent.change(
+      await screen.findByLabelText(/เหตุผลที่สนใจเข้าร่วมชมรมนี้/),
+      { target: { value: 'อยากร่วมทำกิจกรรมอาสา' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(/เหตุใดจึงสนใจเข้าร่วมกิจกรรมของชมรม/),
+      { target: { value: 'อยากช่วยพัฒนาชุมชน' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
+    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: 'ยืนยันและส่งใบสมัคร' }))
+
+    await waitFor(() => {
+      assert.ok(screen.getByText(/เลขที่ใบสมัคร 90003 · SUBMITTED/))
+    })
+    cleanup()
+
+    // 2. Re-opening the same round form and submitting again receives 409 APPLICATION_ALREADY_EXISTS
+    renderApplication()
+    fireEvent.change(
+      await screen.findByLabelText(/เหตุผลที่สนใจเข้าร่วมชมรมนี้/),
+      { target: { value: 'ส่งซ้ำในรอบเดิม' } },
+    )
+    fireEvent.change(
+      screen.getByLabelText(/เหตุใดจึงสนใจเข้าร่วมกิจกรรมของชมรม/),
+      { target: { value: 'คำตอบรอบเดิม' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /ตรวจสอบข้อมูลใบสมัคร/ }))
+    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: 'ยืนยันและส่งใบสมัคร' }))
+
+    const conflictAlert = await screen.findByRole('alert')
+    assert.match(conflictAlert.textContent ?? '', /คุณได้ส่งใบสมัครในรอบรับสมัครนี้ไปแล้ว/)
+    assert.equal(
+      screen.getByTestId('current-path').textContent,
+      '/clubs/20001/rounds/70001/apply',
+    )
   } finally {
     cleanup()
     stub.restore()

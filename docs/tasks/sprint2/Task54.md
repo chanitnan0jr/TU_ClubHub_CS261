@@ -4,13 +4,14 @@
 |---|---|
 | **Task ID** | `Task54` |
 | **Feature Code** | `APP-03` |
-| **สถานะบน Trello** | `Done` |
+| **สถานะบน Trello** | `Reviewing & Testing` |
 | **ผู้รับผิดชอบ (Owner)** | ณัฐชนินทร์ (Boom) & สิรวิชญ์ (QA Lead) |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (QA Lead) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task52 (Backend API) และ Task53 (Frontend Form) |
 | **SDLC Labels** | 4. Testing & QA |
 | **สมาชิกบนการ์ด Trello** | Sirawich Kridatikanwut, boom boom|
 | **Trello Card Link** | [https://trello.com/c/JzyJS9c6](https://trello.com/c/JzyJS9c6) |
+| **Pull Request** | [#79](https://github.com/chanitnan0jr/TU_ClubHub_CS261/pull/79) |
 | **Test Report** | [docs/testing/task54-app03-e2e-report.md](../../testing/task54-app03-e2e-report.md) |
 
 ---
@@ -50,5 +51,5 @@
 - [x] พัฒนาและทดสอบผ่านครบตามเกณฑ์ Acceptance Criteria เฉพาะของการ์ด
 - [x] แนบ Pull Request, ผลการทดสอบ (Unit/Integration Tests), และ Artefact ครบถ้วน
 - [x] CI Pipeline รันผ่าน 100% (ทั้ง Frontend และ Backend)
-- [x] ผ่านการ Code Review จาก Reviewer และแก้ไขข้อเสนอแนะครบถ้วน
-- [x] Merge โค้ดเข้า Branch หลักเรียบร้อย พร้อมอัปเดตเอกสารที่เกี่ยวข้อง
+- [ ] ผ่านการ Code Review จาก Reviewer และแก้ไขข้อเสนอแนะครบถ้วน
+- [ ] Merge โค้ดเข้า Branch หลักเรียบร้อย พร้อมอัปเดตเอกสารที่เกี่ยวข้อง

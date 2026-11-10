@@ -4,13 +4,14 @@
 |---|---|
 | **Task ID** | `Task53` |
 | **Feature Code** | `APP-02` |
-| **สถานะบน Trello** | `To Do` |
+| **สถานะบน Trello** | `Complete (Sprint2)` |
 | **ผู้รับผิดชอบ (Owner)** | ภูบดี (FE1 - Frontend Engineer) |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE / QA) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task52 (Application API) และ UI Wireframe จาก Task75 |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
 | **สมาชิกบนการ์ด Trello** | Phubordee Srithan |
 | **Trello Card Link** | [https://trello.com/c/XcEGL2lj](https://trello.com/c/XcEGL2lj) |
+| **Pull Request** | [#68](https://github.com/chanitnan0jr/TU_ClubHub_CS261/pull/68) |
 
 ---
 
@@ -50,4 +51,4 @@
 - [x] แนบ Pull Request, ผลการทดสอบ (Unit/Integration Tests), และ Artefact ครบถ้วน
 - [x] CI Pipeline รันผ่าน 100% (ทั้ง Frontend และ Backend)
 - [x] ผ่านการ Code Review จาก Reviewer และแก้ไขข้อเสนอแนะครบถ้วน
-- [ ] Merge โค้ดเข้า Branch หลักเรียบร้อย พร้อมอัปเดตเอกสารที่เกี่ยวข้อง
+- [x] Merge โค้ดเข้า Branch หลักเรียบร้อย พร้อมอัปเดตเอกสารที่เกี่ยวข้อง
