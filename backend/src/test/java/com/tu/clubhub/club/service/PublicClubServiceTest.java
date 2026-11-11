@@ -137,6 +137,122 @@ class PublicClubServiceTest {
         assertEquals(clockReadsBefore, clockReads.get(), "Invalid paging is rejected before querying");
     }
 
+    @Test
+    void searchesThaiClubNameWithDefaultFilters() {
+        queries.total = 1L;
+
+        var result = service.searchPublicClubs(
+                "  ชมรมดนตรี  ",
+                null,
+                null,
+                null,
+                0,
+                20,
+                null
+        );
+
+        assertEquals("ชมรมดนตรี", queries.searchTerm);
+        assertEquals(null, queries.searchCategoryId);
+        assertEquals(null, queries.searchTagId);
+        assertEquals("ALL", queries.searchStatus);
+        assertEquals(false, queries.descending);
+        assertEquals(0L, queries.offset);
+        assertEquals(20, queries.searchSize);
+        assertEquals(1L, result.page().totalElements());
+        assertEquals(1L, result.page().totalPages());
+        assertEquals(1, clockReads.get());
+        assertEquals(NOW, queries.pageNow);
+        assertEquals(NOW, queries.countNow);
+    }
+
+    @Test
+    void combinesEnglishSearchFiltersAndPagination() {
+        queries.total = 11L;
+
+        var result = service.searchPublicClubs(
+                "  Coding  ",
+                "3",
+                "4",
+                "OPEN",
+                2,
+                5,
+                "name,desc"
+        );
+
+        assertEquals("Coding", queries.searchTerm);
+        assertEquals(3L, queries.searchCategoryId);
+        assertEquals(4L, queries.searchTagId);
+        assertEquals("OPEN", queries.searchStatus);
+        assertEquals(true, queries.descending);
+        assertEquals(10L, queries.offset);
+        assertEquals(5, queries.searchSize);
+
+        assertEquals(2, result.page().number());
+        assertEquals(5, result.page().size());
+        assertEquals(11L, result.page().totalElements());
+        assertEquals(3L, result.page().totalPages());
+        assertEquals(1, clockReads.get());
+    }
+
+    @Test
+    void supportsClosedStatusAndBlankSearch() {
+        service.searchPublicClubs(
+                "   ",
+                null,
+                null,
+                "CLOSED",
+                0,
+                20,
+                "name,asc"
+        );
+
+        assertEquals(null, queries.searchTerm);
+        assertEquals("CLOSED", queries.searchStatus);
+        assertEquals(false, queries.descending);
+    }
+
+    @Test
+    void rejectsInvalidSearchParametersBeforeQuerying() {
+        assertThrows(ClubValidationException.class,
+                () -> service.searchPublicClubs(
+                        null, null, null, "ALL",
+                        -1, 20, "name,asc"));
+
+        assertThrows(ClubValidationException.class,
+                () -> service.searchPublicClubs(
+                        null, null, null, "ALL",
+                        0, 101, "name,asc"));
+
+        assertThrows(ClubValidationException.class,
+                () -> service.searchPublicClubs(
+                        null, "0", null, "ALL",
+                        0, 20, "name,asc"));
+
+        assertThrows(ClubValidationException.class,
+                () -> service.searchPublicClubs(
+                        null, null, "abc", "ALL",
+                        0, 20, "name,asc"));
+
+        assertThrows(ClubValidationException.class,
+                () -> service.searchPublicClubs(
+                        null, null, null, "INVALID",
+                        0, 20, "name,asc"));
+
+        assertThrows(ClubValidationException.class,
+                () -> service.searchPublicClubs(
+                        null, null, null, "ALL",
+                        0, 20, "id,desc"));
+
+        assertThrows(ClubValidationException.class,
+                () -> service.searchPublicClubs(
+                        "a".repeat(201), null, null, "ALL",
+                        0, 20, "name,asc"));
+
+        assertEquals(0, queries.searchCalls);
+        assertEquals(0, queries.countCalls);
+        assertEquals(0, clockReads.get());
+    }
+
     private static void setId(Club club, Long id) throws Exception {
         Field field = Club.class.getDeclaredField("id");
         field.setAccessible(true);
@@ -148,6 +264,14 @@ class PublicClubServiceTest {
         private Instant countNow;
         private long offset;
         private long total;
+        private String searchTerm;
+        private Long searchCategoryId;
+        private Long searchTagId;
+        private String searchStatus;
+        private boolean descending;
+        private int searchSize;
+        private int searchCalls;
+        private int countCalls;
 
         private FixtureQueries() { super(null); }
 
@@ -164,6 +288,44 @@ class PublicClubServiceTest {
             this.pageNow = now;
             this.offset = offset;
             return List.of();
+        }
+
+        @Override
+        public List<com.tu.clubhub.club.dto.PublicClubSearchItemDto>
+                searchPublicClubs(
+                        String q,
+                        Long categoryId,
+                        Long tagId,
+                        String recruitmentStatus,
+                        Instant now,
+                        boolean descending,
+                        int size,
+                        long offset
+                ) {
+            this.searchTerm = q;
+            this.searchCategoryId = categoryId;
+            this.searchTagId = tagId;
+            this.searchStatus = recruitmentStatus;
+            this.pageNow = now;
+            this.descending = descending;
+            this.searchSize = size;
+            this.offset = offset;
+            this.searchCalls++;
+
+            return List.of();
+        }
+
+        @Override
+        public long countPublicClubs(
+                String q,
+                Long categoryId,
+                Long tagId,
+                String recruitmentStatus,
+                Instant now
+        ) {
+            this.countNow = now;
+            this.countCalls++;
+            return total;
         }
 
         @Override public long countOpenPublicRounds(Long clubId, Instant now) {

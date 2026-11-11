@@ -4,6 +4,9 @@ import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -13,6 +16,7 @@ import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import com.tu.clubhub.club.dto.PublicClubSearchItemDto;
 import com.tu.clubhub.club.dto.ClubResponseDto.ClubCategoryDto;
 import com.tu.clubhub.club.dto.ClubResponseDto.ClubTagDto;
 import com.tu.clubhub.club.dto.ClubResponseDto.PublicRecruitmentRoundDto;
@@ -269,7 +273,237 @@ public class ClubProfileQueryRepository {
         );
         return count == null ? 0L : count;
     }
+    /** Search active clubs with filters and deterministic pagination. */
+    public List<PublicClubSearchItemDto> searchPublicClubs(
+            String q,
+            Long categoryId,
+            Long tagId,
+            String recruitmentStatus,
+            Instant now,
+            boolean descending,
+            int size,
+            long offset
+    ) {
+        ClubSearchFilter filter = buildSearchFilter(
+                q, categoryId, tagId, recruitmentStatus, now);
 
+        String direction = descending ? "DESC" : "ASC";
+
+        String sql = """
+                SELECT c.id, c.name, c.description,
+                       c.affiliation_level, c.affiliation_name,
+                       c.image_url,
+                       cc.id AS category_id,
+                       cc.name AS category_name,
+                       EXISTS (
+                           SELECT 1
+                           FROM recruitment_rounds r
+                           WHERE r.club_id = c.id
+                             AND %s
+                       ) AS has_open_recruitment
+                FROM clubs c
+                JOIN club_categories cc ON cc.id = c.category_id
+                %s
+                ORDER BY c.name %s, c.id ASC
+                LIMIT ? OFFSET ?
+                """.formatted(
+                        OPEN_ROUND,
+                        filter.whereClause(),
+                        direction
+                );
+
+        OffsetDateTime evaluationTime = utc(now);
+
+        List<Object> params = new ArrayList<>();
+        params.add(evaluationTime);
+        params.add(evaluationTime);
+        params.addAll(filter.params());
+        params.add(size);
+        params.add(offset);
+
+        List<PublicClubSearchItemDto> items = jdbcTemplate.query(
+                sql,
+                (rs, rowNum) -> new PublicClubSearchItemDto(
+                        rs.getString("id"),
+                        rs.getString("name"),
+                        rs.getString("description"),
+                        rs.getString("affiliation_level"),
+                        rs.getString("affiliation_name"),
+                        rs.getString("image_url"),
+                        new PublicClubCategoryDto(
+                                rs.getString("category_id"),
+                                rs.getString("category_name")
+                        ),
+                        List.of(),
+                        rs.getBoolean("has_open_recruitment")
+                ),
+                params.toArray()
+        );
+
+        if (items.isEmpty()) {
+            return items;
+        }
+
+        Map<String, List<PublicClubTagDto>> tagsByClub =
+                findSearchClubTags(items);
+
+        return items.stream()
+                .map(item -> new PublicClubSearchItemDto(
+                        item.id(),
+                        item.name(),
+                        item.description(),
+                        item.affiliationLevel(),
+                        item.affiliationName(),
+                        item.imageUrl(),
+                        item.category(),
+                        tagsByClub.getOrDefault(item.id(), List.of()),
+                        item.hasOpenRecruitment()
+                ))
+                .toList();
+    }
+
+    /** Count matching clubs before pagination. */
+    public long countPublicClubs(
+            String q,
+            Long categoryId,
+            Long tagId,
+            String recruitmentStatus,
+            Instant now
+    ) {
+        ClubSearchFilter filter = buildSearchFilter(
+                q, categoryId, tagId, recruitmentStatus, now);
+
+        String sql = """
+                SELECT COUNT(*)
+                FROM clubs c
+                %s
+                """.formatted(filter.whereClause());
+
+        Long count = jdbcTemplate.queryForObject(
+                sql,
+                Long.class,
+                filter.params().toArray()
+        );
+
+        return count == null ? 0L : count;
+    }
+
+    /** Load tags for the entire page in one query. */
+    private Map<String, List<PublicClubTagDto>> findSearchClubTags(
+            List<PublicClubSearchItemDto> items
+    ) {
+        List<Long> clubIds = items.stream()
+                .map(item -> Long.valueOf(item.id()))
+                .toList();
+
+        String placeholders = String.join(
+                ", ", Collections.nCopies(clubIds.size(), "?"));
+
+        String sql = """
+                SELECT ct.club_id, t.id AS tag_id, t.name AS tag_name
+                FROM club_tags ct
+                JOIN tags t ON t.id = ct.tag_id
+                WHERE ct.club_id IN (%s)
+                ORDER BY ct.club_id, t.id
+                """.formatted(placeholders);
+
+        Map<String, List<PublicClubTagDto>> result = new HashMap<>();
+
+        jdbcTemplate.query(
+                sql,
+                rs -> {
+                    String clubId = rs.getString("club_id");
+
+                    result.computeIfAbsent(
+                            clubId, ignored -> new ArrayList<>()
+                    ).add(new PublicClubTagDto(
+                            rs.getString("tag_id"),
+                            rs.getString("tag_name")
+                    ));
+                },
+                clubIds.toArray()
+        );
+
+        return result;
+    }
+
+    /** Shared WHERE clause for page and count queries. */
+    private ClubSearchFilter buildSearchFilter(
+            String q,
+            Long categoryId,
+            Long tagId,
+            String recruitmentStatus,
+            Instant now
+    ) {
+        StringBuilder where = new StringBuilder(
+                "WHERE c.status = 'ACTIVE'");
+
+        List<Object> params = new ArrayList<>();
+
+        if (q != null && !q.isBlank()) {
+            String escaped = q.strip()
+                    .replace("!", "!!")
+                    .replace("%", "!%")
+                    .replace("_", "!_");
+
+            where.append(" AND c.name ILIKE ? ESCAPE '!'");
+            params.add("%" + escaped + "%");
+        }
+
+        if (categoryId != null) {
+            where.append(" AND c.category_id = ?");
+            params.add(categoryId);
+        }
+
+        if (tagId != null) {
+            where.append("""
+                     AND EXISTS (
+                         SELECT 1
+                         FROM club_tags ct
+                         WHERE ct.club_id = c.id
+                           AND ct.tag_id = ?
+                     )
+                    """);
+            params.add(tagId);
+        }
+
+        String status = recruitmentStatus == null
+                ? "ALL" : recruitmentStatus;
+
+        if (!Set.of("ALL", "OPEN", "CLOSED").contains(status)) {
+            throw new IllegalArgumentException(
+                    "Invalid recruitment status");
+        }
+
+        if (!"ALL".equals(status)) {
+            where.append(" AND ");
+
+            if ("CLOSED".equals(status)) {
+                where.append("NOT ");
+            }
+
+            where.append("""
+                    EXISTS (
+                        SELECT 1
+                        FROM recruitment_rounds r
+                        WHERE r.club_id = c.id
+                          AND %s
+                    )
+                    """.formatted(OPEN_ROUND));
+
+            OffsetDateTime evaluationTime = utc(now);
+            params.add(evaluationTime);
+            params.add(evaluationTime);
+        }
+
+        return new ClubSearchFilter(where.toString(), params);
+    }
+
+    private record ClubSearchFilter(
+            String whereClause,
+            List<Object> params
+    ) {
+    }
     private static OffsetDateTime utc(Instant now) {
         return OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
     }
