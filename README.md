@@ -16,6 +16,7 @@ TU-ClubHub is a web platform in development for Thammasat University students to
 | Applications (US-03) | `GET /api/v1/rounds/{roundId}/application-form`; `POST /api/v1/rounds/{roundId}/applications` and Task52 `POST /api/v1/clubs/{id}/applications` (required body `roundId`) share one atomic submission transaction, session/CSRF checks, `SUBMITTED` history and duplicate protection; see [contract §11.1](docs/api/API_v1.md#111-club-scoped-submission-task52) | Task52 adds no upload system, seat quota or frontend route migration; PO/team review of the club-scoped addition remains pending |
 | Committee review (US-09 / Task65) | `GET /api/v1/clubs/{id}/applications` and `GET /api/v1/clubs/{id}/applications/{appId}`; current club/term grants, self-review exclusion before pagination/count, dedicated DTOs without internal notes; [contract §13](docs/api/API_v1.md#13-committee-application-reads-task65) | Task66 UI integration, PO/team review and release CI |
 | Admin dashboard (US-10 / Task71 & Task72) | `GET /api/v1/admin/dashboard/stats` with database `ADMIN` recheck, CTE aggregation without join multiplication, and `/admin/dashboard` UI (`CentralDashboardPage`) | End-to-end verification with Task69/Task70 confirmation flow |
+| Admin assignments (Task78) | Session/CSRF Admin create/read/replace/revoke APIs; fresh DB role, expected versions, PostgreSQL locks, retained history and durable audit; [contract](docs/api/API_v1.md#admin-committee-assignments-task78) and [local test report](docs/testing/task78-assignment-concurrency.md) | Team review, deployment, Admin UI and membership bootstrap; dashboards remain separate |
 | Later workflows | Schema and design for results, membership, and notifications | Decisions, result publication, and membership confirmation/decline |
 | Runtime | Flyway migrations, health endpoint, Docker/Compose, and CI workflow | Deployment and verification of the selected release |
 
@@ -27,7 +28,7 @@ See the [permission matrix implementation gaps](docs/security/permission-matrix.
 |---|---|
 | Frontend | React 19, TypeScript 6, Vite 8, Tailwind CSS 4; client-rendered SPA |
 | Backend | Java 21, Spring Boot 4.1.1, Spring Security; feature packages in one application |
-| Database | PostgreSQL; JPA and JDBC repositories; Flyway V1 business schema and V3 session tables |
+| Database | PostgreSQL; JPA and JDBC repositories; Flyway V1 business schema, V3 session tables and V4 assignment integrity/audit |
 | Authentication | TU Authentication API with server-side Spring Session JDBC and CSRF protection |
 | API | REST JSON under `/api/v1`; Markdown and OpenAPI contracts include implementation status |
 | Local delivery | Root Dockerfile embeds the frontend in Spring Boot; Compose uses PostgreSQL 17 |
