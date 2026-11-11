@@ -32,14 +32,14 @@ Compose supplies database credentials to the containers. Spring Boot started dir
 
 ---
 
-## 3. Starting the Full-Stack System
+## 3. Starting the Full-Stack System (2-Container Architecture)
 
-### Primary Mode: Unified Monolith (Recommended)
+### Two-Container Stack (`backend-frontend` + `database`)
 
-This mode builds React assets into the Spring Boot JAR, matching the planned Render packaging. It uses local `dev` settings; it is not a production deployment:
+This configuration runs the system across **2 Docker containers**:
 
-- **Database (`db`)**: PostgreSQL 17 Alpine container with persistent storage in named volume `postgres_data`.
-- **Application (`app`)**: Spring Boot Java 21 container serving both REST API endpoints and embedded React frontend assets.
+1. **`database` (`tu-clubhub-db`)**: PostgreSQL 17 Alpine container (built from [`database/Dockerfile`](../../database/Dockerfile)) with persistent storage in named volume `postgres_data`.
+2. **`backend-frontend` (`tu-clubhub-backend-frontend`)**: Unified Spring Boot Java 21 + embedded React 19 SPA container (built from root [`Dockerfile`](../../Dockerfile)) serving both REST API endpoints (`/api/v1/**`) and Frontend static assets.
 
 Execute from the repository root:
 ```bash
@@ -51,21 +51,6 @@ To run in the background (detached mode):
 docker compose up --build -d
 ```
 
-### Alternative Mode: Split Architecture (Separate Nginx Frontend)
-
-If you wish to test with standalone Frontend and Backend services:
-
-- **`db`**: PostgreSQL 17
-- **`backend`**: Standalone Spring Boot
-- **`frontend`**: Nginx Alpine serving React assets and proxying `/api` requests to backend
-
-Execute:
-```bash
-docker compose --profile split up --build db backend frontend
-```
-
-Select these services explicitly: enabling the profile without a service list also starts the default `app` service. If switching from unified mode, stop its existing container with `docker compose stop app`. The split frontend is at `http://localhost`; Nginx proxies `/api`, not `/actuator`, and the backend port is internal to Compose.
-
 ---
 
 ## 4. Verifying the Deployment
@@ -74,7 +59,7 @@ Select these services explicitly: enabling the profile without a service list al
    ```bash
    docker compose ps
    ```
-   In unified mode, expect `tu-clubhub-db` to be `healthy` and `tu-clubhub-app` to be `running`. In split mode, check `backend` and `frontend` instead of `app`.
+   Expect both containers (`tu-clubhub-db` for `database` and `tu-clubhub-backend-frontend` for `backend-frontend`) to be `running (healthy)`.
 
 2. **Access the Application**:
    - Open your web browser and navigate to: [http://localhost:8080](http://localhost:8080)

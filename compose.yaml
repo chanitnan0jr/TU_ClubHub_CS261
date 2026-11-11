@@ -2,16 +2,25 @@ name: tu-clubhub
 
 services:
   # ============================================================================
-  # Database Service: PostgreSQL 17 Alpine
+  # Container 1/2 — Database Service: PostgreSQL 17 Alpine
   # ============================================================================
-  db:
-    image: postgres:17-alpine
+  database:
+    build:
+      context: ./database
+      dockerfile: Dockerfile
+    image: ${DATABASE_IMAGE:-tu-clubhub-database:latest}
     container_name: tu-clubhub-db
+    hostname: database
     restart: unless-stopped
+    networks:
+      default:
+        aliases:
+          - db
+          - database
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-tu_clubhub}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tu_clubhub_dev_secret}
     ports:
       # Bind to loopback interface only to prevent exposing database port to public network
       - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
@@ -26,71 +35,45 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # Application Service: Spring Boot with embedded React frontend
-  # Default service when running: docker compose up --build
-  # Demo data (dev only): run scripts/seed-dev-data.sh after the app has started
+  # Container 2/2 — Backend-Frontend Service: Spring Boot API + React SPA
+  # Default 2-container stack when running: docker compose up --build
+  # Demo data (dev only): run scripts/seed-dev-data.sh after the stack has started
   # ============================================================================
-  app:
+  backend-frontend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: tu-clubhub-app
+    image: ${BACKEND_FRONTEND_IMAGE:-tu-clubhub-backend-frontend:latest}
+    container_name: tu-clubhub-backend-frontend
+    hostname: backend-frontend
     restart: unless-stopped
     depends_on:
-      db:
+      database:
         condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - app
+          - backend-frontend
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       # The container always listens on 8080; .env PORT only picks the host port below.
       PORT: 8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-tu_clubhub}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/${POSTGRES_DB:-tu_clubhub}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-tu_clubhub_dev_secret}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-tu_clubhub_dev_secret}
       TU_AUTH_MODE: ${TU_AUTH_MODE:-mock}
       TU_AUTH_ENDPOINT_URL: ${TU_AUTH_ENDPOINT_URL:-}
       TU_AUTH_APPLICATION_KEY: ${TU_AUTH_APPLICATION_KEY:-}
     ports:
       - "${PORT:-8080}:8080"
-
-  # ============================================================================
-  # Split Architecture Option: Standalone Backend + Frontend Nginx Reverse Proxy
-  # Run via: docker compose --profile split up --build
-  # ============================================================================
-  backend:
-    profiles: ["split"]
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: tu-clubhub-backend
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      PORT: 8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-tu_clubhub}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
-      TU_AUTH_MODE: ${TU_AUTH_MODE:-mock}
-      TU_AUTH_ENDPOINT_URL: ${TU_AUTH_ENDPOINT_URL:-}
-      TU_AUTH_APPLICATION_KEY: ${TU_AUTH_APPLICATION_KEY:-}
-    expose:
-      - "8080"
-
-  frontend:
-    profiles: ["split"]
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: tu-clubhub-frontend
-    restart: unless-stopped
-    depends_on:
-      - backend
-    ports:
-      - "80:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
 
 volumes:
   # Named volume for PostgreSQL persistence

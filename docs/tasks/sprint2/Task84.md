@@ -4,13 +4,14 @@
 |---|---|
 | **Task ID** | `Task84` |
 | **Feature Code** | `PIPELINE-03` |
-| **สถานะบน Trello** | `To Do` |
+| **สถานะบน Trello** | `Done` |
 | **ผู้รับผิดชอบ (Owner)** | สิรวิชญ์ (DevOps Lead) |
 | **ผู้ตรวจรับ (Reviewer)** | วรพล (DevOps) |
 | **งานที่ต้องทำก่อน (Dependency)** | Staging Server จาก Task56 และ CI จาก Task82–83 |
 | **SDLC Labels** | 5. Deployment & DevOps |
-| **สมาชิกบนการ์ด Trello** | - |
+| **สมาชิกบนการ์ด Trello** | Sirawich Kridatikanwut_6809660027, 34Woraphon Pupatanun |
 | **Trello Card Link** | [https://trello.com/c/nIuNToIt](https://trello.com/c/nIuNToIt) |
+| **Artefacts** | [`.github/workflows/cd-deploy.yml`](../../../.github/workflows/cd-deploy.yml), [`compose.yaml`](../../../compose.yaml), [`Dockerfile`](../../../Dockerfile), [`database/Dockerfile`](../../../database/Dockerfile), [`docs/testing/task84-cd-staging-deploy-report.md`](../../testing/task84-cd-staging-deploy-report.md) |
 
 ---
 
@@ -39,14 +40,14 @@
 
 ### เกณฑ์ตรวจรับ (Acceptance Criteria)
 
-- [ ] เมื่อโค้ดถูก Merge เข้า `main` หรือติด Release Tag ระบบจะ Deploy ขึ้น Staging อัตโนมัติ
-- [ ] มีขั้นตอน Health Check ตรวจสอบหลัง Deploy หากล้มเหลวจะแจ้งเตือนทันที
+- [x] เมื่อโค้ดถูก Merge เข้า `main` หรือติด Release Tag ระบบจะ Deploy ขึ้น Staging อัตโนมัติ
+- [x] มีขั้นตอน Health Check ตรวจสอบหลัง Deploy หากล้มเหลวจะแจ้งเตือนทันที
 
 ### Definition of Done (Checklist กลาง)
 
-- [ ] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
-- [ ] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
-- [ ] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
-- [ ] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
+- [x] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
+- [x] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
+- [x] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
+- [x] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
 - [ ] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
 - [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ

@@ -6,6 +6,7 @@ set -uo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
 DB_CONTAINER="${DB_CONTAINER:-tu-clubhub-db}"
+APP_CONTAINER="${APP_CONTAINER:-tu-clubhub-backend-frontend}"
 SMOKE_USER="${SMOKE_USER-student-demo}"
 SMOKE_PASSWORD="${SMOKE_PASSWORD:-tu-clubhub-demo}"
 jar="$(mktemp)"
@@ -20,6 +21,7 @@ status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 check "health is UP" "$(curl -s "$BASE_URL/actuator/health")" '{"status":"UP"}'
 check "home page" "$(curl -s "$BASE_URL/" | grep -c '<div id="root">')" "1"
 check "SPA deep link /clubs/1" "$(status "$BASE_URL/clubs/1")" "200"
+check "public club search API" "$(status "$BASE_URL/api/v1/public/clubs")" "200"
 # A missing club is a Problem 404 only if the API reached the database.
 check "public API and database" "$(curl -s -o /dev/null -w '%{http_code} %{content_type}' "$BASE_URL/api/v1/public/clubs/999999999")" "404 application/problem+json"
 check "protected API needs a session" "$(status "$BASE_URL/api/v1/auth/me")" "401"
@@ -35,6 +37,10 @@ if command -v docker >/dev/null && docker container inspect "$DB_CONTAINER" >/de
   check "database port bound to loopback only" "$(docker port "$DB_CONTAINER" 5432 | cut -d: -f1 | sort -u | tr '\n' ' ')" "127.0.0.1 "
 else
   echo "SKIP  database port check ($DB_CONTAINER not found)"
+fi
+
+if command -v docker >/dev/null && docker container inspect "$APP_CONTAINER" >/dev/null 2>&1; then
+  check "backend-frontend container is running" "$(docker inspect --format='{{.State.Running}}' "$APP_CONTAINER")" "true"
 fi
 
 echo "$failures failure(s)"

@@ -1,0 +1,272 @@
+name: CD Staging Deploy
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+      - '.editorconfig'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile'
+      - 'database/**'
+      - 'compose.yaml'
+      - 'scripts/smoke-test.sh'
+      - 'scripts/seed-dev-data.sh'
+      - '.github/workflows/cd-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target deployment environment'
+        required: false
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_FRONTEND_IMAGE_NAME: tu-clubhub-backend-frontend
+  DATABASE_IMAGE_NAME: tu-clubhub-database
+
+jobs:
+  build-and-push:
+    name: Build & Push 2 Containers (backend-frontend + database)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      backend_frontend_image: ${{ steps.image-names.outputs.backend_frontend_image }}
+      database_image: ${{ steps.image-names.outputs.database_image }}
+      image_tag: ${{ steps.image-names.outputs.image_tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compute lower-case image names and tags
+        id: image-names
+        run: |
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="sha-${SHORT_SHA}"
+          fi
+          BF_IMAGE="${REGISTRY}/${OWNER_LC}/${BACKEND_FRONTEND_IMAGE_NAME}"
+          DB_IMAGE="${REGISTRY}/${OWNER_LC}/${DATABASE_IMAGE_NAME}"
+          echo "backend_frontend_image=${BF_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "database_image=${DB_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push Container 1/2 — database (PostgreSQL 17)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./database
+          file: ./database/Dockerfile
+          load: true
+          tags: |
+            tu-clubhub-database:latest
+            ${{ steps.image-names.outputs.database_image }}:${{ steps.image-names.outputs.image_tag }}
+            ${{ steps.image-names.outputs.database_image }}:staging
+          cache-from: type=gha,scope=database
+          cache-to: type=gha,mode=max,scope=database
+
+      - name: Push database image to GHCR on main / release tag
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push "${{ steps.image-names.outputs.database_image }}:${{ steps.image-names.outputs.image_tag }}"
+          docker push "${{ steps.image-names.outputs.database_image }}:staging"
+
+      - name: Build & Push Container 2/2 — backend-frontend (Spring Boot + React SPA)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: |
+            tu-clubhub-backend-frontend:latest
+            ${{ steps.image-names.outputs.backend_frontend_image }}:${{ steps.image-names.outputs.image_tag }}
+            ${{ steps.image-names.outputs.backend_frontend_image }}:staging
+          cache-from: type=gha,scope=backend-frontend
+          cache-to: type=gha,mode=max,scope=backend-frontend
+
+      - name: Push backend-frontend image to GHCR on main / release tag
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push "${{ steps.image-names.outputs.backend_frontend_image }}:${{ steps.image-names.outputs.image_tag }}"
+          docker push "${{ steps.image-names.outputs.backend_frontend_image }}:staging"
+
+      - name: Save built images for Staging Deployment verification
+        run: |
+          mkdir -p /tmp/docker-images
+          docker save tu-clubhub-database:latest tu-clubhub-backend-frontend:latest -o /tmp/docker-images/tu-clubhub-stack.tar
+
+      - name: Upload built 2-container stack tar
+        uses: actions/upload-artifact@v4
+        with:
+          name: tu-clubhub-2container-images
+          path: /tmp/docker-images/tu-clubhub-stack.tar
+          retention-days: 1
+
+  deploy-staging:
+    name: Deploy 2-Container Stack to Staging & Health Check
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download built 2-container images
+        uses: actions/download-artifact@v4
+        with:
+          name: tu-clubhub-2container-images
+          path: /tmp/docker-images
+
+      - name: Load 2-container Docker images (`database` + `backend-frontend`)
+        run: |
+          docker load -i /tmp/docker-images/tu-clubhub-stack.tar
+          docker images
+
+      - name: Validate Docker Compose 2-container configuration
+        run: |
+          docker compose config --services
+          SERVICE_COUNT=$(docker compose config --services | wc -l | tr -d ' ')
+          if [[ "$SERVICE_COUNT" != "2" ]]; then
+            echo "::error::Expected exactly 2 Docker Compose services (database + backend-frontend), found ${SERVICE_COUNT}"
+            exit 1
+          fi
+
+      - name: Deploy 2-container Staging stack (`database` + `backend-frontend`)
+        run: |
+          cp .example.env .env
+          docker compose up -d --no-build
+          docker compose ps
+
+      - name: Wait for both containers (`tu-clubhub-db` & `tu-clubhub-backend-frontend`) to be healthy
+        run: |
+          mkdir -p staging-logs
+          for attempt in $(seq 1 36); do
+            DB_HEALTH=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' tu-clubhub-db 2>/dev/null || echo "starting")
+            APP_HEALTH=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' tu-clubhub-backend-frontend 2>/dev/null || echo "starting")
+            echo "Attempt ${attempt}/36: database=${DB_HEALTH}, backend-frontend=${APP_HEALTH}"
+            if [[ "$DB_HEALTH" == "healthy" && "$APP_HEALTH" == "healthy" ]]; then
+              echo "Both containers are healthy!"
+              break
+            fi
+            if [[ "$attempt" -eq 36 ]]; then
+              echo "::error::Staging deployment timed out waiting for containers to become healthy (database=${DB_HEALTH}, backend-frontend=${APP_HEALTH})"
+              docker compose logs > staging-logs/compose-failure.log || true
+              cat staging-logs/compose-failure.log
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Seed Staging verification data & run Post-Deploy Health Check (`smoke-test.sh`)
+        run: |
+          chmod +x scripts/seed-dev-data.sh scripts/smoke-test.sh
+          ./scripts/seed-dev-data.sh | tee staging-logs/seed-output.log
+          ./scripts/smoke-test.sh | tee staging-logs/smoke-test.log
+          docker compose ps | tee staging-logs/compose-ps.log
+          docker compose logs --no-color > staging-logs/compose.log
+
+      - name: Trigger external Staging webhook (when configured)
+        if: env.STAGING_DEPLOY_HOOK_URL != ''
+        env:
+          STAGING_DEPLOY_HOOK_URL: ${{ secrets.STAGING_DEPLOY_HOOK_URL }}
+          STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+        run: |
+          echo "Triggering external staging deploy hook..."
+          HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$STAGING_DEPLOY_HOOK_URL")
+          if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+            echo "::error::External staging deploy hook returned HTTP ${HTTP_CODE}"
+            exit 1
+          fi
+          if [[ -n "$STAGING_BASE_URL" ]]; then
+            for i in $(seq 1 24); do
+              STATUS=$(curl -s "${STAGING_BASE_URL}/actuator/health" || true)
+              if echo "$STATUS" | grep -q '"status":"UP"'; then
+                echo "External staging health check UP: ${STATUS}"
+                break
+              fi
+              if [[ "$i" -eq 24 ]]; then
+                echo "::error::External staging health check failed at ${STAGING_BASE_URL}/actuator/health"
+                exit 1
+              fi
+              sleep 10
+            done
+          fi
+
+      - name: Alert & diagnostics on deployment or health check failure
+        if: failure()
+        run: |
+          echo "::error::Staging deployment or post-deploy health check FAILED for commit ${{ github.sha }}. Inspect staging-logs artifact and workflow summary immediately."
+          mkdir -p staging-logs
+          docker compose ps > staging-logs/compose-ps.log 2>&1 || true
+          docker compose logs --no-color > staging-logs/compose.log 2>&1 || true
+
+      - name: Write Staging Deployment & Health Check Summary
+        if: always()
+        run: |
+          DB_STATE=$(docker inspect --format='{{.State.Status}} ({{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}})' tu-clubhub-db 2>/dev/null || echo "not running")
+          APP_STATE=$(docker inspect --format='{{.State.Status}} ({{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}})' tu-clubhub-backend-frontend 2>/dev/null || echo "not running")
+          HEALTH_JSON=$(curl -s http://localhost:8080/actuator/health || echo '{"status":"DOWN"}')
+          {
+            echo "## CD Staging Deployment & Post-Deploy Health Check (${{ job.status }})"
+            echo ""
+            echo "### 1. 2-Container Architecture Status"
+            echo "| # | Service Name | Container Name | Role | Image Tag | Status (Health) |"
+            echo "|---:|---|---|---|---|---|"
+            echo "| 1 | \`database\` | \`tu-clubhub-db\` | PostgreSQL 17 Database | \`${{ needs.build-and-push.outputs.database_image }}:${{ needs.build-and-push.outputs.image_tag }}\` | \`${DB_STATE}\` |"
+            echo "| 2 | \`backend-frontend\` | \`tu-clubhub-backend-frontend\` | Spring Boot 4 + React 19 SPA | \`${{ needs.build-and-push.outputs.backend_frontend_image }}:${{ needs.build-and-push.outputs.image_tag }}\` | \`${APP_STATE}\` |"
+            echo ""
+            echo "### 2. Post-Deploy Health Check & Smoke Test"
+            echo "- **Health Endpoint (\`GET /actuator/health\`):** \`${HEALTH_JSON}\`"
+            echo ""
+            if [[ -f staging-logs/smoke-test.log ]]; then
+              echo "\`\`\`text"
+              cat staging-logs/smoke-test.log
+              echo "\`\`\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Staging Deployment & Smoke Test Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-deployment-report
+          path: staging-logs/
+          if-no-files-found: warn
+
+      - name: Tear down verification stack
+        if: always()
+        run: docker compose down -v
