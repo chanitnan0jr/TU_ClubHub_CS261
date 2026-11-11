@@ -18,7 +18,7 @@ TU-ClubHub is a web platform in development for Thammasat University students to
 | Admin dashboard (US-10 / Task71 & Task72) | `GET /api/v1/admin/dashboard/stats` with database `ADMIN` recheck, CTE aggregation without join multiplication, and `/admin/dashboard` UI (`CentralDashboardPage`) | End-to-end verification with Task69/Task70 confirmation flow |
 | Admin assignments (Task78) | Session/CSRF Admin create/read/replace/revoke APIs; fresh DB role, expected versions, PostgreSQL locks, retained history and durable audit; [contract](docs/api/API_v1.md#admin-committee-assignments-task78) and [local test report](docs/testing/task78-assignment-concurrency.md) | Team review, deployment, Admin UI and membership bootstrap; dashboards remain separate |
 | Later workflows | Schema and design for results, membership, and notifications | Decisions, result publication, and membership confirmation/decline |
-| Runtime | Flyway migrations, health endpoint, Docker/Compose, and CI workflow | Deployment and verification of the selected release |
+| Runtime | Flyway migrations, health endpoint, 2-container Docker Compose stack (`backend-frontend` + `database`), CI workflow, and CD Staging workflow (`cd-deploy.yml`) | Production release verification |
 
 See the [permission matrix implementation gaps](docs/security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย). An implemented endpoint does not mean the entire story or adopted authorization policy is complete.
 
@@ -103,7 +103,7 @@ After `admin` or `user`, log out and in again: the session keeps the role it had
 Use Java 21 and Node 22.14+ on the Node 22 line. Start PostgreSQL from the root:
 
 ```sh
-docker compose up -d db
+docker compose up -d database
 ```
 
 In one terminal, start the backend. This password matches `.example.env`; use your configured `POSTGRES_PASSWORD` if changed:

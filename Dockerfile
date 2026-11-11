@@ -52,4 +52,7 @@ EXPOSE 8080
 ENV PORT=8080 \
     SPRING_PROFILES_ACTIVE=prod
 
+HEALTHCHECK --interval=10s --timeout=5s --retries=6 --start-period=30s \
+  CMD wget -qO- http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"' || exit 1
+
 ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
