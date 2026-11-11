@@ -12,7 +12,7 @@ psql_db() {
     psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-tu_clubhub}" -q -v ON_ERROR_STOP=1 "$@"
 }
 
-[[ -n "$(psql_db -At -c "SELECT to_regclass('public.clubs')")" ]] || {
+[[ -n "$(psql_db -At -c "SELECT tofeat_regclass('public.clubs')")" ]] || {
   echo "error: cannot read the clubs table. Is the db container up and the app started once (docker compose up --build)?" >&2
   exit 1
 }
