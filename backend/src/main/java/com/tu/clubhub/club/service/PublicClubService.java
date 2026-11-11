@@ -123,7 +123,7 @@ public class PublicClubService {
     ) {
         validatePage(page, size);
 
-        if (q != null && q.length() > 200) {
+        if (q != null && q.codePointCount(0, q.length()) > 200) {
             throw new ClubValidationException(
                     Map.of("q", "Must not exceed 200 characters"));
         }
@@ -232,10 +232,10 @@ public class PublicClubService {
         return null;
     }
 
-    if (!rawId.matches("[0-9]{1,19}")) {
-        throw new ClubValidationException(
-                Map.of(fieldName, "Must be a positive integer"));
-    }
+        if (!rawId.matches("[1-9][0-9]{0,18}")) {
+            throw new ClubValidationException(
+                    Map.of(fieldName, "Must be a positive integer"));
+        }
 
     try {
         long id = Long.parseLong(rawId);

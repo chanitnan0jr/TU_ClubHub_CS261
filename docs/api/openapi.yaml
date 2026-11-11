@@ -996,7 +996,7 @@ paths:
     get:
       tags: [Public Clubs]
       operationId: searchPublicClubs
-      x-implementation-status: pending
+      x-implementation-status: implemented
       x-contract-status: specified-in-task75
       summary: Search and filter active public clubs (US-01 / Task62)
       description: >-

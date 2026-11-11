@@ -9,7 +9,7 @@ TU-ClubHub is a web platform in development for Thammasat University students to
 | Area | Present in the repository | Remaining work |
 |---|---|---|
 | Authentication | TU real/mock adapters; session login/logout/me, CSRF, 30-minute idle and 8-hour absolute expiry; every authenticated request rechecks the account and a suspended account loses its session (`403 ACCOUNT_NOT_ALLOWED`); login creates/updates `student_profiles` from documented TU status values (unknown → `UNKNOWN`); public routes are one method + path list; connected login UI | Verify with real TU access (student-profile sync has passed automated tests only) and read the current global role from the database |
-| Public clubs (US-02) | Public profile and paginated currently open rounds APIs backed by the database; `/clubs/:clubId` shows their data | Club listing/search is absent; the apply buttons stay disabled until the application form is integrated |
+| Public clubs (US-01 / US-02) | `GET /api/v1/public/clubs` search/filter/pagination API (`q`, `categoryId`, `tagId`, `recruitmentStatus`, `sort`), `GET /api/v1/public/club-categories`, `GET /api/v1/public/interest-tags`, public profile, and paginated currently open rounds APIs backed by the database; `/clubs/:clubId` shows their data | Frontend directory integration (`Task63`) and application form connection |
 | Club profile (US-06) | `PUT /api/v1/clubs/{clubId}` with committee guard, rechecked inside the service transaction; `/clubs/:clubId/edit` prefills from the public profile and saves | `GET /api/v1/clubs/{clubId}` is contract-only; category/tag writes |
 | Recruitment (US-07) | Create, replace, publish, and close APIs with version checks and the self-review restriction; responses follow the `Round` schema, including questions; `/clubs/:clubId/rounds/new` creates and optionally publishes a round | Committee list/detail `GET`, `CANCEL` (effective `PRESIDENT`), and publishing a draft from the UI after editing its questions |
 | Questions (US-08) | Question writes enforce committee/self-review guards. Answered content and positions are protected by `409 RESOURCE_CONFLICT` with `reason: QUESTION_HAS_ANSWERS`, including whole-round replacement. Unanswered existing questions remain editable in mixed open drafts; creation/full replacement still require no applications. The question page shows the specific conflict alert | Team review of the limited Task51 mixed-draft exception; see [test report](docs/testing/task51-answered-question-lock.md) |
@@ -28,7 +28,7 @@ See the [permission matrix implementation gaps](docs/security/permission-matrix.
 |---|---|
 | Frontend | React 19, TypeScript 6, Vite 8, Tailwind CSS 4; client-rendered SPA |
 | Backend | Java 21, Spring Boot 4.1.1, Spring Security; feature packages in one application |
-| Database | PostgreSQL; JPA and JDBC repositories; Flyway V1 business schema, V3 session tables and V4 assignment integrity/audit |
+| Database | PostgreSQL; JPA and JDBC repositories; Flyway V1 business schema, V3 session tables, V4 assignment integrity/audit, and V5 club name search trigram index |
 | Authentication | TU Authentication API with server-side Spring Session JDBC and CSRF protection |
 | API | REST JSON under `/api/v1`; Markdown and OpenAPI contracts include implementation status |
 | Local delivery | Root Dockerfile embeds the frontend in Spring Boot; Compose uses PostgreSQL 17 |

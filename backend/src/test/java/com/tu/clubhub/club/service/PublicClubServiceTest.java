@@ -230,6 +230,16 @@ class PublicClubServiceTest {
 
         assertThrows(ClubValidationException.class,
                 () -> service.searchPublicClubs(
+                        null, "01", null, "ALL",
+                        0, 20, "name,asc"));
+
+        assertThrows(ClubValidationException.class,
+                () -> service.searchPublicClubs(
+                        null, null, "002", "ALL",
+                        0, 20, "name,asc"));
+
+        assertThrows(ClubValidationException.class,
+                () -> service.searchPublicClubs(
                         null, null, "abc", "ALL",
                         0, 20, "name,asc"));
 

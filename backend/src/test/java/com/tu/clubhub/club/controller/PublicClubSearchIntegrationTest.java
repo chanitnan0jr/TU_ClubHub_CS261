@@ -27,7 +27,7 @@ class PublicClubSearchIntegrationTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;  
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void anonymousUserCanSearchClubs() throws Exception {
@@ -65,8 +65,6 @@ class PublicClubSearchIntegrationTest {
                 .andExpect(jsonPath("$.page.size").value(5));
     }
 
-    
-    
     @Test
     void rejectsInvalidPageSize() throws Exception {
         mockMvc.perform(get("/api/v1/public/clubs")
@@ -149,7 +147,6 @@ class PublicClubSearchIntegrationTest {
                         )));
     }
 
-    
     // ทดสอบค้นหาชมรมที่ไม่ได้เปิดรับสมัคร
     @Test
     void filtersClosedRecruitmentCorrectly() throws Exception {
