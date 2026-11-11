@@ -18,7 +18,8 @@ public class AssignmentExceptionHandler extends ApiExceptionHandler {
     @ExceptionHandler(AssignmentException.class)
     public ResponseEntity<ProblemResponse> assignment(AssignmentException exception, HttpServletRequest request) {
         if ("ACCOUNT_NOT_ALLOWED".equals(exception.code())) {
-            if (request.getSession(false) != null) request.getSession(false).invalidate();
+            var session = request.getSession(false);
+            if (session != null) session.invalidate();
             SecurityContextHolder.clearContext();
         }
         var response = problem(request, exception.status(), exception.code(), null, exception.fields(), new HttpHeaders(), exception);

@@ -13,9 +13,11 @@ TU-ClubHub is a web platform in development for Thammasat University students to
 | Club profile (US-06) | `PUT /api/v1/clubs/{clubId}` with committee guard, rechecked inside the service transaction; `/clubs/:clubId/edit` prefills from the public profile and saves | `GET /api/v1/clubs/{clubId}` is contract-only; category/tag writes |
 | Recruitment (US-07) | Create, replace, publish, and close APIs with version checks and the self-review restriction; responses follow the `Round` schema, including questions; `/clubs/:clubId/rounds/new` creates and optionally publishes a round | Committee list/detail `GET`, `CANCEL` (effective `PRESIDENT`), and publishing a draft from the UI after editing its questions |
 | Questions (US-08) | Question writes enforce committee/self-review guards. Answered content and positions are protected by `409 RESOURCE_CONFLICT` with `reason: QUESTION_HAS_ANSWERS`, including whole-round replacement. Unanswered existing questions remain editable in mixed open drafts; creation/full replacement still require no applications. The question page shows the specific conflict alert | Team review of the limited Task51 mixed-draft exception; see [test report](docs/testing/task51-answered-question-lock.md) |
-| Applications (US-03) | `GET /api/v1/rounds/{roundId}/application-form` returns an open round's questions; `POST /api/v1/rounds/{roundId}/applications` saves the application, answers, links, and initial history in one transaction, with session/CSRF checks and Problem errors; database tables; a form prototype | A submission client and real question data in the form; the prototype does not persist applications |
+| Applications (US-03) | `GET /api/v1/rounds/{roundId}/application-form`; `POST /api/v1/rounds/{roundId}/applications` and Task52 `POST /api/v1/clubs/{id}/applications` (required body `roundId`) share one atomic submission transaction, session/CSRF checks, `SUBMITTED` history and duplicate protection; see [contract §11.1](docs/api/API_v1.md#111-club-scoped-submission-task52) | Task52 adds no upload system, seat quota or frontend route migration; PO/team review of the club-scoped addition remains pending |
+| Committee review (US-09 / Task65) | `GET /api/v1/clubs/{id}/applications` and `GET /api/v1/clubs/{id}/applications/{appId}`; current club/term grants, self-review exclusion before pagination/count, dedicated DTOs without internal notes; [contract §13](docs/api/API_v1.md#13-committee-application-reads-task65) | Task66 UI integration, PO/team review and release CI |
+| Admin dashboard (US-10 / Task71 & Task72) | `GET /api/v1/admin/dashboard/stats` with database `ADMIN` recheck, CTE aggregation without join multiplication, and `/admin/dashboard` UI (`CentralDashboardPage`) | End-to-end verification with Task69/Task70 confirmation flow |
 | Admin assignments (Task78) | Session/CSRF Admin create/read/replace/revoke APIs; fresh DB role, expected versions, PostgreSQL locks, retained history and durable audit; [contract](docs/api/API_v1.md#admin-committee-assignments-task78) and [local test report](docs/testing/task78-assignment-concurrency.md) | Team review, deployment, Admin UI and membership bootstrap; dashboards remain separate |
-| Later workflows | Schema and design for review, results, membership, notifications, and reporting | Application history, decisions, confirmation/decline, other Admin workflows, and dashboards |
+| Later workflows | Schema and design for results, membership, and notifications | Decisions, result publication, and membership confirmation/decline |
 | Runtime | Flyway migrations, health endpoint, Docker/Compose, and CI workflow | Deployment and verification of the selected release |
 
 See the [permission matrix implementation gaps](docs/security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย). An implemented endpoint does not mean the entire story or adopted authorization policy is complete.
@@ -59,9 +61,9 @@ Dependency versions are recorded in [frontend/package.json](frontend/package.jso
 
 Use Docker Engine/Desktop with Compose V2. Run from the repository root:
 
-1. On first setup, copy `.env.example` to `.env`; keep an existing local configuration:
+1. On first setup, copy `.example.env` to `.env`; keep an existing local configuration:
    ```sh
-   cp .env.example .env
+   cp .example.env .env
    ```
 2. Build and run all services:
    ```sh
@@ -104,7 +106,7 @@ Use Java 21 and Node 22.14+ on the Node 22 line. Start PostgreSQL from the root:
 docker compose up -d db
 ```
 
-In one terminal, start the backend. This password matches `.env.example`; use your configured `POSTGRES_PASSWORD` if changed:
+In one terminal, start the backend. This password matches `.example.env`; use your configured `POSTGRES_PASSWORD` if changed:
 
 ```sh
 cd backend

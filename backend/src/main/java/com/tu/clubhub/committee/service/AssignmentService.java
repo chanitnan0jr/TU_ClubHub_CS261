@@ -140,7 +140,7 @@ public class AssignmentService {
         for (Instant time : new Instant[] {start, end}) {
             if (time.getNano() % 1000 != 0 || time.isBefore(Instant.parse("0001-01-01T00:00:00Z"))
                     || !time.isBefore(Instant.parse("+10000-01-01T00:00:00Z")))
-                throw AssignmentException.invalid("endsAt", "Use supported offset timestamps with microsecond precision.");
+                throw AssignmentException.invalid(time == start ? "startsAt" : "endsAt", "Use supported offset timestamps with microsecond precision.");
         }
         return new ValidGrant(position, request.permissionRole(), start, end, reason);
     }
