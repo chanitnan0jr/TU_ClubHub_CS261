@@ -104,7 +104,7 @@ The frontend must not read, copy, or persist the session cookie. The backend mus
 
 ### `GET /api/v1/auth/csrf`
 
-Creates or uses the browser session and returns the CSRF token for that session. It is public and must return `Cache-Control: no-store`.
+Creates or uses the browser session and returns the CSRF token for that session. It is public and must return `Cache-Control: no-store`. If an existing authenticated session belongs to a suspended account, it is invalidated and this request returns `403 ACCOUNT_NOT_ALLOWED`; an anonymous request can obtain a new token.
 
 **`200 OK`**
 
@@ -165,6 +165,10 @@ Returns the authenticated account as it is stored now. `role`, `studentStatus`, 
   "user": {
     "id": "10001",
     "role": "USER",
+    "displayName": "Example Student",
+    "studentCode": "6600000001",
+    "email": "student@example.edu",
+    "facultyName": "Example Faculty",
     "studentStatus": "ACTIVE",
     "activeCommitteeAssignments": [
       {
@@ -183,6 +187,7 @@ Returns the authenticated account as it is stored now. `role`, `studentStatus`, 
 | Field | Meaning |
 |---|---|
 | `role` | `USER` or `ADMIN`. Do not infer student or committee access from it. |
+| `displayName`, `studentCode`, `email`, `facultyName` | The current authenticated account's own display information, read from its account and student profile. Student code and faculty are `null` without a student profile; email or faculty may be `null` if unavailable. These fields are returned by `/auth/me`, not the login response. |
 | `studentStatus` | `ACTIVE`, `INACTIVE`, `GRADUATED`, or `UNKNOWN`, refreshed at each TU login; `null` when the account has no student profile. Only `ACTIVE` grants student or committee rights. |
 | `activeCommitteeAssignments` | Assignments that grant committee rights at the time of the call, in every club, ordered by club name; `[]` when there are none. An entry is listed only while the committee authorization rule in [§7](#7-authorization-rules) holds: the assignment is unrevoked and `startsAt <= now < endsAt`, the membership has started and not ended, and the account, student status, and club are all Active. Two overlapping assignments in one club give two entries. |
 
