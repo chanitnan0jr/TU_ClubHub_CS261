@@ -147,7 +147,9 @@ export default function ClubProfileForm({ profile, categories, tags, onSave }: C
       setErrors(error instanceof ApiError ? fromServerFieldErrors(error.fieldErrors) : {})
       setNotice({
         type: 'error',
-        message: describeApiError(error, 'บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'),
+        message: error instanceof ApiError && error.status === 403 && error.code === 'ACCESS_DENIED'
+          ? 'คุณไม่มีสิทธิ์แก้ไขข้อมูลชมรมนี้แล้ว กรุณากลับไปยังหน้าโปรไฟล์ชมรม'
+          : describeApiError(error, 'บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'),
         focus: true,
       })
     } finally {

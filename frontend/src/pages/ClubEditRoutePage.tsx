@@ -1,5 +1,6 @@
-import { Link, useParams } from "react-router";
+import { Link, Navigate, useParams } from "react-router";
 import CommitteeLayout from "../components/layout/CommitteeLayout";
+import PublicLayout from "../components/layout/PublicLayout";
 import { Button } from "../components/ui/Button";
 import { buttonClass } from "../components/ui/classes";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -15,6 +16,44 @@ export default function ClubEditRoutePage() {
 
   if (!isValidId(clubId)) return <NotFoundPage />;
 
+  return <ClubProfileEditor key={clubId} clubId={clubId} />;
+}
+
+function ClubProfileEditor({ clubId }: { clubId: string }) {
+  const { data, isLoading, errorMessage, refetch } = useClubProfile(clubId);
+
+  if (isLoading) {
+    return (
+      <PublicLayout>
+        <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+          กำลังตรวจสอบสิทธิ์และโหลดข้อมูลชมรม...
+        </p>
+      </PublicLayout>
+    );
+  }
+
+  // Never show an empty form: saving it would overwrite the club with blank values.
+  if (!data) {
+    return (
+      <PublicLayout>
+        <EmptyState
+          icon={<CircleAlertIcon className="size-6" />}
+          title="โหลดข้อมูลชมรมไม่สำเร็จ"
+          description={errorMessage ?? "ไม่สามารถโหลดข้อมูลชมรมได้"}
+          action={
+            <Button variant="primary" onClick={refetch}>
+              ลองใหม่
+            </Button>
+          }
+        />
+      </PublicLayout>
+    );
+  }
+
+  if (data.profile.id !== clubId || data.profile.canEditProfile !== true) {
+    return <Navigate to={`/clubs/${clubId}`} replace />;
+  }
+
   return (
     <CommitteeLayout
       clubId={clubId}
@@ -28,44 +67,12 @@ export default function ClubEditRoutePage() {
         </Link>
       }
     >
-      <ClubProfileEditor key={clubId} clubId={clubId} />
-    </CommitteeLayout>
-  );
-}
-
-function ClubProfileEditor({ clubId }: { clubId: string }) {
-  const { data, isLoading, errorMessage, refetch } = useClubProfile(clubId);
-
-  if (isLoading) {
-    return (
-      <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
-        กำลังโหลดข้อมูลชมรม...
-      </p>
-    );
-  }
-
-  // Never show an empty form: saving it would overwrite the club with blank values.
-  if (!data) {
-    return (
-      <EmptyState
-        icon={<CircleAlertIcon className="size-6" />}
-        title="โหลดข้อมูลชมรมไม่สำเร็จ"
-        description={errorMessage ?? "ไม่สามารถโหลดข้อมูลชมรมได้"}
-        action={
-          <Button variant="primary" onClick={refetch}>
-            ลองใหม่
-          </Button>
-        }
+      <ClubProfileForm
+        profile={data.profile}
+        categories={data.categories}
+        tags={data.tags}
+        onSave={(request) => updateClubProfile(clubId, request)}
       />
-    );
-  }
-
-  return (
-    <ClubProfileForm
-      profile={data.profile}
-      categories={data.categories}
-      tags={data.tags}
-      onSave={(request) => updateClubProfile(clubId, request)}
-    />
+    </CommitteeLayout>
   );
 }
