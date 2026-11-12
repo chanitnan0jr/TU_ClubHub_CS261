@@ -24,6 +24,88 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  task54-browser:
+    name: Task54 Browser E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: task54_e2e_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: task54_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d task54_e2e_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_PASSWORD: task54_test_password
+      PGPASSWORD: task54_test_password
+      SEEDTEST_DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/task54_e2e_ci
+      TASK54_TEST_DB_NAME: task54_e2e_ci
+      TASK54_TEST_DB_PORT: 5432
+      TASK54_DISPOSABLE_TEST_ENV: '1'
+      APP_URL: http://127.0.0.1:18080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+      - name: Build frontend and install Chromium
+        working-directory: frontend
+        run: |
+          command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+      - name: Migrate and seed disposable database
+        working-directory: backend
+        run: |
+          chmod +x mvnw
+          ./mvnw -Dtest=ApplicationServiceIntegrationTest test
+          ./mvnw -DskipTests package
+      - name: Start isolated mock-auth application
+        working-directory: backend
+        env:
+          SPRING_PROFILES_ACTIVE: dev
+          TU_AUTH_MODE: mock
+          SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/task54_e2e_ci
+          SPRING_FLYWAY_ENABLED: 'false'
+          SPRING_WEB_RESOURCES_STATIC_LOCATIONS: file:${{ github.workspace }}/frontend/dist/
+          SERVER_ADDRESS: 127.0.0.1
+          PORT: 18080
+        run: |
+          java -jar target/clubhub-0.0.1-SNAPSHOT.jar > "$RUNNER_TEMP/task54-app.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS "$APP_URL/actuator/health" > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/task54-app.log"
+          exit 1
+      - name: Run browser E2E
+        working-directory: frontend
+        run: npm run test:task54:e2e
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: task54-browser-failure
+          path: |
+            /tmp/task54-browser-*/
+            ${{ runner.temp }}/task54-app.log
+          if-no-files-found: ignore
+
   frontend:
     name: Frontend CI (Lint, Test & Build)
     runs-on: ubuntu-latest

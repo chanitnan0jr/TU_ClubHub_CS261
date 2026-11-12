@@ -16,9 +16,14 @@ import { createElement } from 'react'
 
 const baseUrl = (process.env.APP_URL ?? 'http://127.0.0.1:18080').replace(/\/$/, '')
 const nativeFetch = globalThis.fetch.bind(globalThis)
+const target = new URL(baseUrl)
+if (process.env.TASK54_DISPOSABLE_TEST_ENV !== '1' || !['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname)) {
+  throw new Error('Use a disposable test database and local mock backend; set TASK54_DISPOSABLE_TEST_ENV=1')
+}
 
 class HttpCookieSession {
   private cookies = new Map<string, string>()
+  readonly submissions: { status: number; reason?: string }[] = []
 
   async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const rawUrl =
@@ -38,6 +43,10 @@ class HttpCookieSession {
       )
     }
     const response = await nativeFetch(targetUrl, { ...init, headers, redirect: 'manual' })
+    if ((init?.method ?? 'GET') === 'POST' && /^\/api\/v1\/rounds\/\d+\/applications$/.test(new URL(targetUrl).pathname)) {
+      const body = await response.clone().json().catch(() => ({})) as { reason?: string }
+      this.submissions.push({ status: response.status, reason: body.reason })
+    }
     const setCookies = response.headers.getSetCookie?.() ?? []
     for (const raw of setCookies) {
       const [pair] = raw.split(';')
@@ -269,12 +278,16 @@ test('Task54 Live E2E: happy path submission, duplicate conflict (201 -> 409), a
     const match = receiptBadge.textContent?.match(/เลขที่ใบสมัคร (\d+) · SUBMITTED/)
     assert.ok(match, `Expected receipt ID in "${receiptBadge.textContent}"`)
     const applicationId = match[1]
+    assert.equal(applicantSession.submissions.at(-1)?.status, 201)
 
     // Navigate from Receipt to My Applications (/profile/applications) and verify persisted data
     fireEvent.click(screen.getByRole('link', { name: 'ไปยังประวัติการสมัคร' }))
     await waitFor(() => {
       assert.equal(screen.getByTestId('current-path').textContent, '/profile/applications')
-      assert.ok(screen.getAllByText('รอพิจารณา').length >= 1)
+      const links = screen.getAllByRole('link', { name: /ดูรายละเอียดใบสมัคร/ })
+      const link = links.find(element => element.getAttribute('href') === `/me/applications/${applicationId}`)
+      assert.ok(link, 'new application must appear in history')
+      assert.match(link.closest('article')?.textContent ?? '', /รอพิจารณา/)
     })
 
     // Verify full persisted record via live GET /api/v1/me/applications/{id}
@@ -314,6 +327,7 @@ test('Task54 Live E2E: happy path submission, duplicate conflict (201 -> 409), a
     fireEvent.click(screen.getByRole('button', { name: 'ยืนยันและส่งใบสมัคร' }))
 
     const duplicateAlert = await screen.findByRole('alert')
+    assert.deepEqual(applicantSession.submissions.at(-1), { status: 409, reason: 'APPLICATION_ALREADY_EXISTS' })
     assert.match(duplicateAlert.textContent ?? '', /คุณได้ส่งใบสมัครในรอบรับสมัครนี้ไปแล้ว/)
     assert.equal(
       screen.getByTestId('current-path').textContent,
@@ -347,6 +361,7 @@ test('Task54 Live E2E: happy path submission, duplicate conflict (201 -> 409), a
     fireEvent.click(screen.getByRole('button', { name: 'ยืนยันและส่งใบสมัคร' }))
 
     const closedAlert = await screen.findByRole('alert')
+    assert.deepEqual(applicantSession.submissions.at(-1), { status: 409, reason: 'ROUND_CLOSED' })
     assert.match(closedAlert.textContent ?? '', /รอบรับสมัครนี้ปิดรับใบสมัครแล้ว/)
     assert.equal(
       screen.getByTestId('current-path').textContent,
@@ -354,16 +369,24 @@ test('Task54 Live E2E: happy path submission, duplicate conflict (201 -> 409), a
     )
 
     // Confirm in PostgreSQL via API that roundA has 1 application and roundB has 0 applications
-    const myApps = await applicantSession.jsonRequest<ApplicantApplicationPage>(
-      '/api/v1/me/applications?page=0&size=50',
-    )
+    const items: ApplicantApplicationPage['items'] = []
+    let page = 0
+    let totalPages = 0
+    do {
+      const myApps = await applicantSession.jsonRequest<ApplicantApplicationPage>(
+        `/api/v1/me/applications?page=${page}&size=50`,
+      )
+      items.push(...myApps.items)
+      totalPages = myApps.page.totalPages
+      page += 1
+    } while (page < totalPages)
     assert.equal(
-      myApps.items.filter((item) => item.round.id === roundA.id).length,
+      items.filter((item) => item.round.id === roundA.id).length,
       1,
       'roundA must have exactly 1 persisted application',
     )
     assert.equal(
-      myApps.items.filter((item) => item.round.id === roundB.id).length,
+      items.filter((item) => item.round.id === roundB.id).length,
       0,
       'roundB must have 0 persisted applications after closing',
     )
