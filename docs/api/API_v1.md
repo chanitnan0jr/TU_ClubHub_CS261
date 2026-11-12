@@ -22,9 +22,10 @@ Initial source review on 2026-10-19; application POST status updated on 2026-10-
 | API | Backend status | Frontend status |
 |---|---|---|
 | Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout; `me` returns `studentStatus` and `activeCommitteeAssignments` read on every call | Login/account/logout connected; committee pages do not read assignments yet |
+| `GET /api/v1/public/clubs` | Task62 public directory: active clubs, name/category/tag/recruitment filters and pagination | Club search page calls the public directory API |
 | `GET /api/v1/public/clubs/{id}` and `.../{id}/recruitment-rounds` | Implemented; active clubs and currently open rounds from DB | Club detail still uses mock data and is not mounted |
 | `GET /api/v1/public/recruitment-rounds` (Open Call Board) | Implemented; open rounds across all active clubs | `/open-calls` page pending |
-| `GET /api/v1/public/club-categories` and `GET /api/v1/public/interest-tags` | Implemented; complete lists ordered by name, then id | Profile editor fills its category select and tag chips from them; search filters pending (Task62) |
+| `GET /api/v1/public/club-categories` and `GET /api/v1/public/interest-tags` | Implemented; complete lists ordered by name, then id | Profile editor uses both; club search page uses categories |
 | `GET /api/v1/clubs/{clubId}` | Contract-only; no handler | Editor client calls this missing endpoint |
 | `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard; `categoryId` and `tagIds` are required and saved with the profile in one transaction | Profile editor at `/clubs/:clubId/edit` sends `categoryId` and `tagIds` |
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
@@ -48,7 +49,7 @@ The foundation contract covers:
 - Applicant-facing form schemas and the read policy in [section 12](#12-round-application-form-task42).
 - A minimal health endpoint for operations.
 
-Application review, membership decisions, notifications, search, and dashboards remain product backlog work; their request and response schemas must be defined before implementation. Recruitment management is specified separately in [rounds.openapi.yaml](rounds.openapi.yaml). The application form and submission contracts are defined below and implemented. A not-yet-implemented endpoint must not return a success response as a stub.
+Other Sprint 2 work includes application review, membership decisions, notifications, and dashboards; consult endpoint implementation status and the individual contracts. Recruitment management is specified separately in [rounds.openapi.yaml](rounds.openapi.yaml). A not-yet-implemented endpoint must not return a success response as a stub.
 
 ## 2. API conventions
 
@@ -213,6 +214,12 @@ An upstream timeout or outage must never result in a successful login or an auto
 ### Public club API
 
 The following read-only endpoints are public and do not require a session cookie or CSRF token. They return data only for clubs whose `clubs.status` is `ACTIVE`. For the two per-club endpoints, an unknown or inactive club returns the same `404 CLUB_NOT_FOUND` response to avoid disclosing whether an inactive club exists. The `id` path parameter is a decimal string for a positive signed 64-bit database `bigint`, matching the project's wire convention. Non-decimal values and values outside the supported integer range return `400 INVALID_RESOURCE_ID`.
+
+#### `GET /api/v1/public/clubs`
+
+Returns an anonymous, paginated directory of active clubs. `q` is a trimmed, case-insensitive substring of the club name (maximum 200 characters); an empty value means no name filter and `%`, `_`, and `\` are treated as literal text. Optional `categoryId` and `tagId` are positive bigint IDs. `recruitmentStatus` is `ALL` (default), `OPEN`, or `CLOSED`; open means at least one published round has `closed_at IS NULL` and `opens_at <= now < closes_at`. All supplied filters apply together.
+
+`page` is zero-based (default 0), `size` defaults to 20 and is limited to 1–100, and `sort` is `name,asc` (default) or `name,desc`, with `id ASC` as a tie-breaker. The `items`/`page` response, fields, and errors are defined by [`searchPublicClubs` in OpenAPI](openapi.yaml). Category and tag fields contain public summaries; filtering by a tag must not duplicate a club in the results or totals.
 
 #### `GET /api/v1/public/clubs/{id}`
 

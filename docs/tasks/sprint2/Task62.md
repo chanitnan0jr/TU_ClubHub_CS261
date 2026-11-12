@@ -12,6 +12,10 @@
 | **สมาชิกบนการ์ด Trello** | 34Woraphon Pupatanun|
 | **Trello Card Link** | [https://trello.com/c/VY017bis](https://trello.com/c/VY017bis) |
 
+> สถานะใน repository: งานพัฒนาอยู่ระหว่างตรวจสอบ ผลทดสอบและการอนุมัติจาก Reviewer ต้องตรวจจริงก่อนปิด Task; สถานะการ์ด Trello ข้างต้นไม่ได้อัปเดตอัตโนมัติ
+
+การตรวจในเครื่องวันที่ 12 พฤศจิกายน 2026 ใช้ Java 21 และ PostgreSQL 17 ฐานข้อมูลทดสอบแยก: unit test ของ search ผ่าน 3 กรณี และชุด search/public club integration กับ service regression ผ่าน 75 กรณี; HTTP GET แบบไม่ login ตอบ 200 พร้อมข้อมูล seed ทดสอบ ผลนี้ยังไม่ใช่ผล CI หรือการอนุมัติ มีการใช้ index เดิมสำหรับ category, tag และรอบรับสมัคร โดยยังไม่ได้ benchmark ปริมาณข้อมูลระดับ production
+
 ---
 
 ## 1. รายละเอียดงาน (Card Description)
