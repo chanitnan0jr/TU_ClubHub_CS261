@@ -54,8 +54,702 @@ tags:
     description: Committee read-only application review (US-09), internal selection decisions (S2-DECISION-DRAFT), and PRESIDENT result publication (S2-PUBLICATION-DRAFT).
   - name: Admin Dashboard
     description: University-wide aggregate recruitment and membership statistics for ADMIN (US-10).
+  - name: Admin Assignments
+    description: Current ACTIVE Admin appointment, replacement and revocation with durable audit (Task78).
   - name: Operations
 paths:
+  /api/v1/admin/clubs/{clubId}/committee-assignments:
+    post:
+      tags:
+      - Admin Assignments
+      operationId: createCommitteeAssignment
+      x-implementation-status: implemented
+      summary: Appoint a committee member
+      description: Requires a session and current ACTIVE global ADMIN from the database; session authorities are not
+        trusted. Admin cannot create, replace or revoke their own assignment. Existing unauthorized scope returns
+        403; missing resources return 404. All responses use no-store. No applicant answers, documents or source-application
+        content are exposed. Requires X-CSRF-TOKEN. Each command is one transaction, including assignment reasons
+        and durable audit. Conflicts are rejected without automatic retries. Actor, timestamps, status and audit identifiers
+        are server-owned. Recipient account, student profile, club and effective membership must be ACTIVE. startsAt
+        omitted or null means server time sampled once after obtaining locks; explicit startsAt cannot precede that
+        instant. endsAt must follow startsAt. Terms use [startsAt, endsAt); equivalent offsets compare as instants.
+        Only microsecond precision and UTC years 0001-9999 are supported. Active unrevoked terms for the same membership
+        and permissionRole cannot overlap; adjacent terms and different roles are allowed.
+      security:
+      - SessionCookie: []
+        CsrfHeader: []
+      parameters:
+      - name: clubId
+        in: path
+        required: true
+        description: Club scope. A real membership/assignment in another club returns 403 to an authenticated Admin.
+        schema:
+          $ref: '#/components/schemas/PositiveBigintId'
+      responses:
+        '201':
+          description: New assignment created; replacement returns the new resource, not the old ID.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+            Location:
+              description: GET URI for the newly created assignment ID.
+              schema:
+                type: string
+                format: uri-reference
+              example: /api/v1/admin/clubs/20001/committee-assignments/60002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAssignment'
+              example:
+                id: '60002'
+                clubId: '20001'
+                membershipId: '50001'
+                userId: '10003'
+                positionName: กรรมการฝ่ายกิจกรรม
+                permissionRole: COMMITTEE
+                startsAt: '2026-11-09T09:00:00Z'
+                endsAt: '2027-11-09T09:00:00Z'
+                status: ACTIVE
+                assignedBy: '10001'
+                assignmentReason: แต่งตั้งตามมติชมรมจำลอง
+                replacesAssignmentId: null
+                revokedBy: null
+                revokedAt: null
+                revocationReason: null
+                createdAt: '2026-11-09T09:00:00Z'
+                updatedAt: '2026-11-09T09:00:00Z'
+                version: 0
+        '400':
+          description: INVALID_RESOURCE_ID for malformed/out-of-range path or membership IDs; VALIDATION_FAILED for
+            strict body, version, term, reason or role errors. Unknown fields and scalar coercion are rejected.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:validation-error
+                title: Request validation failed
+                status: 400
+                detail: One or more request fields or parameters are invalid.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: VALIDATION_FAILED
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: ACCESS_DENIED for non-Admin, self-management or wrong club; ACCOUNT_NOT_ALLOWED for suspended
+            actor; CSRF_INVALID may precede authentication on POST.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:access-denied
+                title: Access denied
+                status: 403
+                detail: You are not allowed to access this resource.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: ACCESS_DENIED
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '404':
+          description: 'RESOURCE_NOT_FOUND after authentication and Admin checks: missing assignment, membership,
+            club, account or student profile required by this command. Inactive history is retained and is not hidden
+            from authorized Admin reads/revocations.'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-not-found
+                title: Resource not found
+                status: 404
+                detail: No resource was found for this identifier.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: RESOURCE_NOT_FOUND
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '409':
+          description: RESOURCE_CONFLICT with root reason; no partial assignment/audit writes. VERSION_MISMATCH precedes
+            already-revoked state. ASSIGNMENT_RECIPIENT_INELIGIBLE applies to appointment/replacement; overlap is
+            per membership and permission role.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AdminAssignmentConflict'
+              examples:
+                version_mismatch:
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Resource state conflict
+                    status: 409
+                    detail: The request conflicts with the current resource state.
+                    instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                    code: RESOURCE_CONFLICT
+                    traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                    fieldErrors: []
+                    reason: VERSION_MISMATCH
+                assignment_already_revoked:
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Resource state conflict
+                    status: 409
+                    detail: The request conflicts with the current resource state.
+                    instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                    code: RESOURCE_CONFLICT
+                    traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                    fieldErrors: []
+                    reason: ASSIGNMENT_ALREADY_REVOKED
+                assignment_term_overlap:
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Resource state conflict
+                    status: 409
+                    detail: The request conflicts with the current resource state.
+                    instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                    code: RESOURCE_CONFLICT
+                    traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                    fieldErrors: []
+                    reason: ASSIGNMENT_TERM_OVERLAP
+                assignment_recipient_ineligible:
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Resource state conflict
+                    status: 409
+                    detail: The request conflicts with the current resource state.
+                    instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                    code: RESOURCE_CONFLICT
+                    traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                    fieldErrors: []
+                    reason: ASSIGNMENT_RECIPIENT_INELIGIBLE
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminAssignmentCreate'
+            example:
+              membershipId: '50001'
+              positionName: กรรมการฝ่ายกิจกรรม
+              permissionRole: COMMITTEE
+              startsAt: null
+              endsAt: '2027-11-09T09:00:00Z'
+              reason: แต่งตั้งตามมติชมรมจำลอง
+  /api/v1/admin/clubs/{clubId}/committee-assignments/{assignmentId}:
+    get:
+      tags:
+      - Admin Assignments
+      operationId: getCommitteeAssignment
+      x-implementation-status: implemented
+      summary: Read an assignment and its current version
+      description: Requires a session and current ACTIVE global ADMIN from the database; session authorities are not
+        trusted. Admin cannot create, replace or revoke their own assignment. Existing unauthorized scope returns
+        403; missing resources return 404. All responses use no-store. No applicant answers, documents or source-application
+        content are exposed. Read permission includes inactive and revoked history and the Admin own assignment; the
+        self-management prohibition applies to mutations.
+      security:
+      - SessionCookie: []
+      parameters:
+      - name: clubId
+        in: path
+        required: true
+        description: Club scope. A real membership/assignment in another club returns 403 to an authenticated Admin.
+        schema:
+          $ref: '#/components/schemas/PositiveBigintId'
+      - name: assignmentId
+        in: path
+        required: true
+        description: Retained assignment identifier; use GET to refresh its current version before a new user decision.
+        schema:
+          $ref: '#/components/schemas/PositiveBigintId'
+      responses:
+        '200':
+          description: Current retained assignment, including revocation state.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAssignment'
+              example:
+                id: '60002'
+                clubId: '20001'
+                membershipId: '50001'
+                userId: '10003'
+                positionName: กรรมการฝ่ายกิจกรรม
+                permissionRole: COMMITTEE
+                startsAt: '2026-11-09T09:00:00Z'
+                endsAt: '2027-11-09T09:00:00Z'
+                status: ACTIVE
+                assignedBy: '10001'
+                assignmentReason: แต่งตั้งตามมติชมรมจำลอง
+                replacesAssignmentId: null
+                revokedBy: null
+                revokedAt: null
+                revocationReason: null
+                createdAt: '2026-11-09T09:00:00Z'
+                updatedAt: '2026-11-09T09:00:00Z'
+                version: 0
+        '400':
+          description: INVALID_RESOURCE_ID for malformed/out-of-range path or membership IDs; VALIDATION_FAILED for
+            strict body, version, term, reason or role errors. Unknown fields and scalar coercion are rejected.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:validation-error
+                title: Request validation failed
+                status: 400
+                detail: One or more request fields or parameters are invalid.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: VALIDATION_FAILED
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: ACCESS_DENIED for non-Admin, self-management or wrong club; ACCOUNT_NOT_ALLOWED for suspended
+            actor; CSRF_INVALID may precede authentication on POST.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:access-denied
+                title: Access denied
+                status: 403
+                detail: You are not allowed to access this resource.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: ACCESS_DENIED
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '404':
+          description: 'RESOURCE_NOT_FOUND after authentication and Admin checks: missing assignment, membership,
+            club, account or student profile required by this command. Inactive history is retained and is not hidden
+            from authorized Admin reads/revocations.'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-not-found
+                title: Resource not found
+                status: 404
+                detail: No resource was found for this identifier.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: RESOURCE_NOT_FOUND
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/admin/clubs/{clubId}/committee-assignments/{assignmentId}/replace:
+    post:
+      tags:
+      - Admin Assignments
+      operationId: replaceCommitteeAssignment
+      x-implementation-status: implemented
+      summary: Revoke an assignment and appoint its replacement
+      description: Requires a session and current ACTIVE global ADMIN from the database; session authorities are not
+        trusted. Admin cannot create, replace or revoke their own assignment. Existing unauthorized scope returns
+        403; missing resources return 404. All responses use no-store. No applicant answers, documents or source-application
+        content are exposed. Requires X-CSRF-TOKEN. Each command is one transaction, including assignment reasons
+        and durable audit. Conflicts are rejected without automatic retries. Actor, timestamps, status and audit identifiers
+        are server-owned. Recipient account, student profile, club and effective membership must be ACTIVE. startsAt
+        omitted or null means server time sampled once after obtaining locks; explicit startsAt cannot precede that
+        instant. endsAt must follow startsAt. Terms use [startsAt, endsAt); equivalent offsets compare as instants.
+        Only microsecond precision and UTC years 0001-9999 are supported. Active unrevoked terms for the same membership
+        and permissionRole cannot overlap; adjacent terms and different roles are allowed. version must match the
+        old row. Revoke old row, increment its version, retain its original title/role/term, then create a new row
+        with a new ID, version 0 and replacesAssignmentId. Old REVOKED and new ASSIGNED audit records share one command
+        trace ID. Any write failure rolls back the whole operation.
+      security:
+      - SessionCookie: []
+        CsrfHeader: []
+      parameters:
+      - name: clubId
+        in: path
+        required: true
+        description: Club scope. A real membership/assignment in another club returns 403 to an authenticated Admin.
+        schema:
+          $ref: '#/components/schemas/PositiveBigintId'
+      - name: assignmentId
+        in: path
+        required: true
+        description: Retained assignment identifier; use GET to refresh its current version before a new user decision.
+        schema:
+          $ref: '#/components/schemas/PositiveBigintId'
+      responses:
+        '201':
+          description: New assignment created; replacement returns the new resource, not the old ID.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+            Location:
+              description: GET URI for the newly created assignment ID.
+              schema:
+                type: string
+                format: uri-reference
+              example: /api/v1/admin/clubs/20001/committee-assignments/60002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAssignment'
+              example:
+                id: '60002'
+                clubId: '20001'
+                membershipId: '50001'
+                userId: '10003'
+                positionName: กรรมการฝ่ายกิจกรรม
+                permissionRole: COMMITTEE
+                startsAt: '2026-11-09T09:00:00Z'
+                endsAt: '2027-11-09T09:00:00Z'
+                status: ACTIVE
+                assignedBy: '10001'
+                assignmentReason: แต่งตั้งตามมติชมรมจำลอง
+                replacesAssignmentId: '60001'
+                revokedBy: null
+                revokedAt: null
+                revocationReason: null
+                createdAt: '2026-11-09T09:00:00Z'
+                updatedAt: '2026-11-09T09:00:00Z'
+                version: 0
+        '400':
+          description: INVALID_RESOURCE_ID for malformed/out-of-range path or membership IDs; VALIDATION_FAILED for
+            strict body, version, term, reason or role errors. Unknown fields and scalar coercion are rejected.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:validation-error
+                title: Request validation failed
+                status: 400
+                detail: One or more request fields or parameters are invalid.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: VALIDATION_FAILED
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: ACCESS_DENIED for non-Admin, self-management or wrong club; ACCOUNT_NOT_ALLOWED for suspended
+            actor; CSRF_INVALID may precede authentication on POST.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:access-denied
+                title: Access denied
+                status: 403
+                detail: You are not allowed to access this resource.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: ACCESS_DENIED
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '404':
+          description: 'RESOURCE_NOT_FOUND after authentication and Admin checks: missing assignment, membership,
+            club, account or student profile required by this command. Inactive history is retained and is not hidden
+            from authorized Admin reads/revocations.'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-not-found
+                title: Resource not found
+                status: 404
+                detail: No resource was found for this identifier.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: RESOURCE_NOT_FOUND
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '409':
+          description: RESOURCE_CONFLICT with root reason; no partial assignment/audit writes. VERSION_MISMATCH precedes
+            already-revoked state. ASSIGNMENT_RECIPIENT_INELIGIBLE applies to appointment/replacement; overlap is
+            per membership and permission role.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AdminAssignmentConflict'
+              examples:
+                version_mismatch:
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Resource state conflict
+                    status: 409
+                    detail: The request conflicts with the current resource state.
+                    instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                    code: RESOURCE_CONFLICT
+                    traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                    fieldErrors: []
+                    reason: VERSION_MISMATCH
+                assignment_already_revoked:
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Resource state conflict
+                    status: 409
+                    detail: The request conflicts with the current resource state.
+                    instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                    code: RESOURCE_CONFLICT
+                    traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                    fieldErrors: []
+                    reason: ASSIGNMENT_ALREADY_REVOKED
+                assignment_term_overlap:
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Resource state conflict
+                    status: 409
+                    detail: The request conflicts with the current resource state.
+                    instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                    code: RESOURCE_CONFLICT
+                    traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                    fieldErrors: []
+                    reason: ASSIGNMENT_TERM_OVERLAP
+                assignment_recipient_ineligible:
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Resource state conflict
+                    status: 409
+                    detail: The request conflicts with the current resource state.
+                    instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                    code: RESOURCE_CONFLICT
+                    traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                    fieldErrors: []
+                    reason: ASSIGNMENT_RECIPIENT_INELIGIBLE
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminAssignmentReplace'
+            example:
+              version: 0
+              positionName: กรรมการฝ่ายกิจกรรม
+              permissionRole: COMMITTEE
+              startsAt: null
+              endsAt: '2027-11-09T09:00:00Z'
+              reason: แต่งตั้งตามมติชมรมจำลอง
+  /api/v1/admin/clubs/{clubId}/committee-assignments/{assignmentId}/revoke:
+    post:
+      tags:
+      - Admin Assignments
+      operationId: revokeCommitteeAssignment
+      x-implementation-status: implemented
+      summary: Revoke a retained assignment
+      description: Requires a session and current ACTIVE global ADMIN from the database; session authorities are not
+        trusted. Admin cannot create, replace or revoke their own assignment. Existing unauthorized scope returns
+        403; missing resources return 404. All responses use no-store. No applicant answers, documents or source-application
+        content are exposed. Requires X-CSRF-TOKEN. Each command is one transaction, including assignment reasons
+        and durable audit. Conflicts are rejected without automatic retries. Actor, timestamps, status and audit identifiers
+        are server-owned. version must match; revocation remains allowed for an inactive recipient, membership or
+        club. A previously revoked row at its current version returns ASSIGNMENT_ALREADY_REVOKED; a stale version
+        returns VERSION_MISMATCH first. No hard delete or reactivation.
+      security:
+      - SessionCookie: []
+        CsrfHeader: []
+      parameters:
+      - name: clubId
+        in: path
+        required: true
+        description: Club scope. A real membership/assignment in another club returns 403 to an authenticated Admin.
+        schema:
+          $ref: '#/components/schemas/PositiveBigintId'
+      - name: assignmentId
+        in: path
+        required: true
+        description: Retained assignment identifier; use GET to refresh its current version before a new user decision.
+        schema:
+          $ref: '#/components/schemas/PositiveBigintId'
+      responses:
+        '200':
+          description: Current retained assignment, including revocation state.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAssignment'
+              example:
+                id: '60001'
+                clubId: '20001'
+                membershipId: '50001'
+                userId: '10003'
+                positionName: กรรมการฝ่ายกิจกรรม
+                permissionRole: COMMITTEE
+                startsAt: '2026-11-09T09:00:00Z'
+                endsAt: '2027-11-09T09:00:00Z'
+                status: REVOKED
+                assignedBy: '10001'
+                assignmentReason: แต่งตั้งตามมติชมรมจำลอง
+                replacesAssignmentId: null
+                revokedBy: '10002'
+                revokedAt: '2026-11-09T09:00:00Z'
+                revocationReason: ถอนตามมติชมรมจำลอง
+                createdAt: '2026-11-09T09:00:00Z'
+                updatedAt: '2026-11-09T09:00:00Z'
+                version: 1
+        '400':
+          description: INVALID_RESOURCE_ID for malformed/out-of-range path or membership IDs; VALIDATION_FAILED for
+            strict body, version, term, reason or role errors. Unknown fields and scalar coercion are rejected.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:validation-error
+                title: Request validation failed
+                status: 400
+                detail: One or more request fields or parameters are invalid.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: VALIDATION_FAILED
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: ACCESS_DENIED for non-Admin, self-management or wrong club; ACCOUNT_NOT_ALLOWED for suspended
+            actor; CSRF_INVALID may precede authentication on POST.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:access-denied
+                title: Access denied
+                status: 403
+                detail: You are not allowed to access this resource.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: ACCESS_DENIED
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '404':
+          description: 'RESOURCE_NOT_FOUND after authentication and Admin checks: missing assignment, membership,
+            club, account or student profile required by this command. Inactive history is retained and is not hidden
+            from authorized Admin reads/revocations.'
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: urn:tuclubhub:problem:resource-not-found
+                title: Resource not found
+                status: 404
+                detail: No resource was found for this identifier.
+                instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                code: RESOURCE_NOT_FOUND
+                traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                fieldErrors: []
+        '500':
+          $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '409':
+          description: RESOURCE_CONFLICT with root reason; no partial assignment/audit writes. VERSION_MISMATCH precedes
+            already-revoked state. ASSIGNMENT_RECIPIENT_INELIGIBLE applies to appointment/replacement; overlap is
+            per membership and permission role.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/AdminAssignmentNoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AdminAssignmentConflict'
+              examples:
+                version_mismatch:
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Resource state conflict
+                    status: 409
+                    detail: The request conflicts with the current resource state.
+                    instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                    code: RESOURCE_CONFLICT
+                    traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                    fieldErrors: []
+                    reason: VERSION_MISMATCH
+                assignment_already_revoked:
+                  value:
+                    type: urn:tuclubhub:problem:resource-conflict
+                    title: Resource state conflict
+                    status: 409
+                    detail: The request conflicts with the current resource state.
+                    instance: /api/v1/admin/clubs/20001/committee-assignments/60001/replace
+                    code: RESOURCE_CONFLICT
+                    traceId: 09d4d750-a78c-4d33-b7b8-0f8bdc861c52
+                    fieldErrors: []
+                    reason: ASSIGNMENT_ALREADY_REVOKED
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminAssignmentRevoke'
+            example:
+              version: 0
+              reason: ถอนตามมติชมรมจำลอง
   /api/v1/auth/csrf:
     get:
       tags: [Authentication]
@@ -302,7 +996,7 @@ paths:
     get:
       tags: [Public Clubs]
       operationId: searchPublicClubs
-      x-implementation-status: pending
+      x-implementation-status: implemented
       x-contract-status: specified-in-task75
       summary: Search and filter active public clubs (US-01 / Task62)
       description: >-
@@ -2779,6 +3473,11 @@ paths:
           description: Unexpected health endpoint failure
 components:
   headers:
+    AdminAssignmentNoStore:
+      description: Never cache Admin assignment resources or errors.
+      schema:
+        type: string
+        const: no-store
     ApplicationNoStore:
       description: Do not cache applicant form or submission responses, including failures.
       schema:
@@ -2796,6 +3495,223 @@ components:
       name: X-CSRF-TOKEN
       description: Current opaque token returned by GET /api/v1/auth/csrf or a successful POST /api/v1/auth/login.
   schemas:
+    AdminAssignmentCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - membershipId
+      - positionName
+      - permissionRole
+      - endsAt
+      - reason
+      properties:
+        membershipId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        positionName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: \S
+          description: Must contain a non-whitespace character; Unicode length is counted in code points.
+        permissionRole:
+          type: string
+          enum:
+          - COMMITTEE
+          - PRESIDENT
+        startsAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$
+          description: Optional; missing/null selects server time after all locks. Explicit value must not be backdated.
+        endsAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$
+          description: ISO offset timestamp, at most six fractional digits; UTC instant must be within years 0001-9999.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+          description: Must contain a non-whitespace character; Unicode length is counted in code points.
+    AdminAssignmentReplace:
+      type: object
+      additionalProperties: false
+      required:
+      - version
+      - positionName
+      - permissionRole
+      - endsAt
+      - reason
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9223372036854775807
+          description: Expected version of the original row, not a requested new version.
+        positionName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: \S
+          description: Must contain a non-whitespace character; Unicode length is counted in code points.
+        permissionRole:
+          type: string
+          enum:
+          - COMMITTEE
+          - PRESIDENT
+        startsAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$
+          description: Optional; missing/null selects server time after all locks. Explicit value must not be backdated.
+        endsAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$
+          description: ISO offset timestamp, at most six fractional digits; UTC instant must be within years 0001-9999.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+          description: Must contain a non-whitespace character; Unicode length is counted in code points.
+    AdminAssignmentRevoke:
+      type: object
+      additionalProperties: false
+      required:
+      - version
+      - reason
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9223372036854775807
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+          description: Must contain a non-whitespace character; Unicode length is counted in code points.
+    AdminAssignment:
+      type: object
+      additionalProperties: false
+      description: Admin-only allowlist for assignment management; never embeds an Entity, membership source application,
+        applicant answers or internal review objects. Legacy appointment reason is null because no reason is fabricated
+        during migration.
+      required:
+      - id
+      - clubId
+      - membershipId
+      - userId
+      - positionName
+      - permissionRole
+      - startsAt
+      - endsAt
+      - status
+      - assignedBy
+      - assignmentReason
+      - replacesAssignmentId
+      - revokedBy
+      - revokedAt
+      - revocationReason
+      - createdAt
+      - updatedAt
+      - version
+      properties:
+        id:
+          $ref: '#/components/schemas/PositiveBigintId'
+        clubId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        membershipId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        userId:
+          $ref: '#/components/schemas/PositiveBigintId'
+        assignedBy:
+          $ref: '#/components/schemas/PositiveBigintId'
+        positionName:
+          type: string
+          maxLength: 100
+        permissionRole:
+          type: string
+          enum:
+          - COMMITTEE
+          - PRESIDENT
+        startsAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$
+          description: ISO offset timestamp, at most six fractional digits; UTC instant must be within years 0001-9999.
+        endsAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$
+          description: ISO offset timestamp, at most six fractional digits; UTC instant must be within years 0001-9999.
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - REVOKED
+        assignmentReason:
+          type:
+          - string
+          - 'null'
+          maxLength: 2000
+        replacesAssignmentId:
+          anyOf:
+          - $ref: '#/components/schemas/PositiveBigintId'
+          - type: 'null'
+        revokedBy:
+          anyOf:
+          - $ref: '#/components/schemas/PositiveBigintId'
+          - type: 'null'
+        revokedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$
+          description: ISO offset timestamp, at most six fractional digits; UTC instant must be within years 0001-9999.
+        revocationReason:
+          type:
+          - string
+          - 'null'
+          maxLength: 2000
+        createdAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$
+          description: ISO offset timestamp, at most six fractional digits; UTC instant must be within years 0001-9999.
+        updatedAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$
+          description: ISO offset timestamp, at most six fractional digits; UTC instant must be within years 0001-9999.
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9223372036854775807
+    AdminAssignmentConflict:
+      allOf:
+      - $ref: '#/components/schemas/Problem'
+      - type: object
+        required:
+        - reason
+        properties:
+          reason:
+            type: string
+            enum:
+            - VERSION_MISMATCH
+            - ASSIGNMENT_ALREADY_REVOKED
+            - ASSIGNMENT_TERM_OVERLAP
+            - ASSIGNMENT_RECIPIENT_INELIGIBLE
     PositiveBigintId:
       type: string
       minLength: 1
@@ -4568,7 +5484,9 @@ components:
             RESULTS_ALREADY_PUBLISHED, CONFIRMATION_DEADLINE_EXPIRED,
             APPLICATIONS_INCOMPLETE, INVALID_STATUS_TRANSITION, VERSION_MISMATCH,
             ALREADY_RESPONDED, RESULTS_NOT_PUBLISHED, APPLICATION_NOT_ACCEPTED,
-            ALREADY_MEMBER, EXISTING_CLUB_MEMBERSHIP, MEMBERSHIP_LIMIT_REACHED).
+            ALREADY_MEMBER, EXISTING_CLUB_MEMBERSHIP, MEMBERSHIP_LIMIT_REACHED,
+            ASSIGNMENT_ALREADY_REVOKED, ASSIGNMENT_TERM_OVERLAP,
+            ASSIGNMENT_RECIPIENT_INELIGIBLE).
         fieldErrors:
           type: array
           items:

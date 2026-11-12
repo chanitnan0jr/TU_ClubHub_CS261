@@ -2,6 +2,7 @@ package com.tu.clubhub.club.controller;
 
 import com.tu.clubhub.club.dto.PublicClubCategoryDto;
 import com.tu.clubhub.club.dto.PublicClubProfileDto;
+import com.tu.clubhub.club.dto.PublicClubSearchPageDto;
 import com.tu.clubhub.club.dto.PublicClubTagDto;
 import com.tu.clubhub.club.dto.PublicItemListDto;
 import com.tu.clubhub.club.dto.PublicOpenCallPageDto;
@@ -32,6 +33,30 @@ public class PublicClubController {
     @GetMapping("/interest-tags")
     public ResponseEntity<PublicItemListDto<PublicClubTagDto>> listTags() {
         return ResponseEntity.ok(publicClubService.listTags());
+    }
+
+    /** Public club search and filter (US-01 / Task62). */
+    @GetMapping("/clubs")
+    public ResponseEntity<PublicClubSearchPageDto> searchClubs(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String categoryId,
+            @RequestParam(required = false) String tagId,
+            @RequestParam(defaultValue = "ALL") String recruitmentStatus,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "name,asc") String sort
+    ) {
+        return ResponseEntity.ok(
+                publicClubService.searchPublicClubs(
+                        q,
+                        categoryId,
+                        tagId,
+                        recruitmentStatus,
+                        page,
+                        size,
+                        sort
+                )
+        );
     }
 
     @GetMapping("/clubs/{id}")
