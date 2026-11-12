@@ -29,6 +29,8 @@ type AuthContextType = {
   isAuthenticated: boolean;
   isLoading: boolean;
   notice: string | null;
+  loginSuccess: boolean;
+  dismissLoginSuccess: () => void;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -40,11 +42,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+  // An explicit login event only; never persisted or set by session restoration.
+  const [loginSuccess, setLoginSuccess] = useState(false);
   const authVersion = useRef(0);
 
   useEffect(() => subscribeAuthFailures(failure => {
     authVersion.current++;
     setUser(null);
+    setLoginSuccess(false);
     setNotice(failure === 'account-not-allowed'
       ? 'บัญชีนี้ไม่ได้รับอนุญาตให้ใช้งานระบบ'
       : 'เซสชันหมดอายุหรือยังไม่ได้เข้าสู่ระบบ กรุณาเข้าสู่ระบบอีกครั้ง');
@@ -70,27 +75,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (username: string, password: string) => {
-    authVersion.current++;
+    const version = ++authVersion.current;
     setNotice(null);
-    if (isMockAuth) {
-      const mockUser: User = { id: "mock-id-1", role: "STUDENT" };
-      setUser(mockUser);
-      sessionStorage.setItem("tu_test_user", JSON.stringify(mockUser));
-      resetAuthFailureNotification();
-      return;
-    }
+    setLoginSuccess(false);
     try {
+      if (isMockAuth) {
+        const mockUser: User = { id: "mock-id-1", role: "STUDENT" };
+        sessionStorage.setItem("tu_test_user", JSON.stringify(mockUser));
+        resetAuthFailureNotification();
+        setUser(mockUser);
+        setLoginSuccess(true);
+        return;
+      }
       await apiRequest("/api/v1/auth/login", { method: "POST", body: { username, password } });
+      if (version !== authVersion.current) throw new Error("Login superseded");
       // Subsequent writes fetch the fresh token from the current session through apiRequest.
       const data = await apiRequest<{ user: User }>("/api/v1/auth/me");
+      if (version !== authVersion.current || !data?.user
+          || typeof data.user.id !== "string" || !data.user.id.trim()
+          || typeof data.user.role !== "string" || !data.user.role.trim()) {
+        throw new Error("Authenticated session could not be loaded");
+      }
       resetAuthFailureNotification();
       setUser(data.user);
-    } catch (error) { throw new Error(describeApiError(error, "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง")); }
+      setLoginSuccess(true);
+    } catch (error) {
+      if (version === authVersion.current) { setUser(null); setLoginSuccess(false); }
+      throw new Error(describeApiError(error, "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"));
+    }
   };
 
   const logout = async () => {
     authVersion.current++;
     setNotice(null);
+    setLoginSuccess(false);
     try {
       if (isMockAuth) sessionStorage.removeItem("tu_test_user");
       else await apiRequest<void>("/api/v1/auth/logout", { method: "POST" });
@@ -99,7 +117,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally { setUser(null); }
   };
 
-  return <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, notice, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, notice,
+    loginSuccess, dismissLoginSuccess: () => setLoginSuccess(false), login, logout }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
