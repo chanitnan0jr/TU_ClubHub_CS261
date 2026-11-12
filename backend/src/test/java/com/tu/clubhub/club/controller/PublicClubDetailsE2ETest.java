@@ -193,10 +193,12 @@ class PublicClubDetailsE2ETest {
                     .andExpect(jsonPath("$.tags", hasSize(1)))
                     .andExpect(jsonPath("$.tags[0].name").value("จิตอาสา"))
                     // ตรวจสอบว่าไม่มีฟิลด์ภายใน เช่น version, createdBy, status หลุดออกมา
-                    .andExpect(jsonPath("$.keys()", containsInAnyOrder(
+                                        .andExpect(jsonPath("$.keys()", containsInAnyOrder(
                             "id", "name", "description", "objectives", "contactUrl",
                             "facebookUrl", "instagramUrl", "contactEmail", "affiliationLevel",
-                            "affiliationName", "imageUrl", "bannerUrl", "category", "tags")));
+                            "affiliationName", "imageUrl", "bannerUrl", "category", "tags",
+                            "canEditProfile")))
+                    .andExpect(jsonPath("$.canEditProfile").value(false));
         }
     }
 
