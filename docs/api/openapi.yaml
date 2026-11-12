@@ -807,6 +807,12 @@ paths:
         a request over either limit gets 429 RATE_LIMITED without a TU call, even
         with the correct password. Verified credentials clear that username's
         count. Requests rejected with 400 are not counted.
+        HTTP 200 with the existing user/csrf response identifies success; no
+        extra status or message field is required (issue 78). For an explicit
+        login, the frontend waits for GET /api/v1/auth/me to succeed with the
+        current user before announcing a localized success confirmation after
+        its validated same-site redirect. Failed login/session loading and
+        session restoration on reload must not announce a fresh login.
       security:
         - SessionCookie: []
           CsrfHeader: []

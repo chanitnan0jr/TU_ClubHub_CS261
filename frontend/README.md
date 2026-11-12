@@ -11,7 +11,7 @@ Routes live in `src/app/AppRoutes.tsx`, under the path prefixes the backend forw
 | Route | Access | Current behavior |
 |---|---|---|
 | `/` | Public | Shows the login form without a session. After login it shows the account ID/role, logout, and a launcher where you enter a club ID (and round ID), because no API lists a user's clubs or rounds yet. |
-| `/login` | Public | Login form. After login it returns to the `next` path (same-site paths only), or `/`. |
+| `/login` | Public | Login form. After login and `/auth/me` both succeed, it returns to the `next` path (same-site paths only), or `/`, with a dismissible, screen-reader-accessible “เข้าสู่ระบบสำเร็จ” confirmation (issue #78). |
 | `/clubs/:clubId` | Public | `ClubDetailPage` reads `GET /api/v1/public/clubs/{id}` and `/recruitment-rounds` and shows only the fields they return. An unknown club shows "not found"; a failed load shows a retry button instead of placeholder data. The apply action opens the session-protected form when a round is available. |
 | `/clubs/:clubId/rounds/:roundId/apply` | Session | Loads the applicant form and questions from `GET /api/v1/rounds/{roundId}/application-form`, validates answers/HTTPS document links, reviews the submission, and posts to `POST /api/v1/rounds/{roundId}/applications`. The form-load endpoint is not implemented by the backend yet. |
 | `/profile/applications` | Session | Placeholder destination after successful submission. Application history is not connected because the US-04 API is not implemented. |
@@ -44,6 +44,21 @@ Open `http://localhost:5173`. [vite.config.ts](vite.config.ts) proxies `/api` to
 For backend mock authentication, use the `dev` profile with `TU_AUTH_MODE=mock` and `student-demo` / `tu-clubhub-demo`. This creates a local user but does not grant committee access or verify student eligibility.
 
 `AuthContext` also contains a separate browser-only mock enabled by `VITE_MOCK_AUTH=true` or `VITE_ENABLE_MOCK_AUTH=true`. It skips authentication requests and stores a fake user in `sessionStorage`; it does not create a backend session. Leave both unset for API integration and production builds. The current check is not restricted to Vite development mode.
+
+### Login confirmation (issue #78)
+
+`AuthContext` records a fresh-login event only after the explicit login flow has
+loaded the current session. `App` mounts `LoginSuccessNotice` outside the routes:
+its pre-mounted `role="status"`, `aria-live="polite"`, `aria-atomic="true"` region
+receives the confirmation after leaving `/login`. The message uses the existing
+green notification style and a keyboard-accessible close button; it stays until
+dismissed, logged out, or authentication fails, so it has no reading time limit.
+It is never persisted in storage or navigation state. Restoring a session on a
+page reload does not display it. Failed credentials, unavailable/invalid session
+responses and stale responses after session invalidation show no success message.
+Both real API mode and explicit browser-mock login use the same notice behavior.
+HTTP 200 plus the existing `user`/`csrf` response remains the backend contract;
+no `status` or `message` field is added. See the [verification report](../docs/testing/issue78-login-success.md).
 
 ## Scripts
 
