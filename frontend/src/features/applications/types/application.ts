@@ -82,3 +82,14 @@ export type ApplicationFilterTab =
   | 'ACCEPTED_PENDING_CONFIRMATION'
   | 'REJECTED'
   | 'CONFIRMED_DECLINED';
+
+  export interface MembershipOfferResponse {
+  applicationId: string;
+  clubId: string;
+  roundId: string;
+  status: ApplicantVisibleStatus;
+  displayStatusLabel: string;
+  respondedAt: string;
+  membershipId: string | null;
+  idempotentReplay: boolean;
+}
