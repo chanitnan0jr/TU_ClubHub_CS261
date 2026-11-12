@@ -306,15 +306,20 @@ class AuthSessionIntegrationTest {
 	}
 
 	@Test
-	void suspendedAccountCanStillUsePublicEndpointsAnonymously() throws Exception {
+	void suspendedAccountGetsReasonFromCsrfBeforeBootstrappingAnonymousSession() throws Exception {
 		AuthenticatedSession session = loginAsDemo();
 		suspendDemoAccount();
 
 		mockMvc.perform(get("/api/v1/auth/csrf").cookie(session.cookie()))
-				.andExpect(status().isOk());
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("ACCOUNT_NOT_ALLOWED"));
 
 		mockMvc.perform(get("/api/v1/auth/me").cookie(session.cookie()))
 				.andExpect(status().isUnauthorized());
+
+		mockMvc.perform(get("/api/v1/auth/csrf"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.token").isNotEmpty());
 	}
 
 	@Test

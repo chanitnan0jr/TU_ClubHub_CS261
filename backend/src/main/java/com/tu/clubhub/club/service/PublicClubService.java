@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 
@@ -111,7 +112,7 @@ public class PublicClubService {
         return new PublicOpenCallPageDto(items, pageMetadata(page, size, totalElements));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PublicClubSearchPageDto searchPublicClubs(
             String q,
             String rawCategoryId,

@@ -56,6 +56,10 @@ public class StudentProfile {
 		return studentCode;
 	}
 
+	public String getFacultyName() {
+		return facultyName;
+	}
+
 	public String getStudentStatus() {
 		return studentStatus;
 	}
