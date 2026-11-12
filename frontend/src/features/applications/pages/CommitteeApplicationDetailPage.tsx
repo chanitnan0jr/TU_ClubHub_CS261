@@ -180,7 +180,7 @@ function ApplicationDetail({ clubId, applicationId }: { clubId: string; applicat
 
           <SectionCard title="ผลการพิจารณา">
             <div className="flex flex-wrap gap-3">
-              <Button variant="danger">
+              <Button variant="primary">
                 อนุมัติ
               </Button>
               <Button variant="danger">

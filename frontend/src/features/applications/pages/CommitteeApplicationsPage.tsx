@@ -1,4 +1,3 @@
-import { useRef } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import CommitteeLayout from '../../../components/layout/CommitteeLayout';
 import { Button } from '../../../components/ui/Button';
@@ -34,7 +33,6 @@ export default function CommitteeApplicationsPage() {
 
 function ApplicationsList({ clubId }: { clubId: string }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const headingRef = useRef<HTMLHeadingElement>(null);
   const page = selectedPage(searchParams.get('page'));
   const rawStatus = searchParams.get('status');
   const status = isCommitteeApplicationStatus(rawStatus) ? rawStatus : undefined;
@@ -46,14 +44,12 @@ function ApplicationsList({ clubId }: { clubId: string }) {
 
   const updateFilters = (nextStatus: CommitteeApplicationStatus | undefined) => {
     setSearchParams(nextStatus ? { status: nextStatus } : {});
-    headingRef.current?.focus();
   };
   const goToPage = (nextPage: number) => {
     setSearchParams({
       ...(status ? { status } : {}),
       ...(nextPage > 0 ? { page: String(nextPage + 1) } : {}),
     });
-    headingRef.current?.focus();
   };
 
   return (
