@@ -108,6 +108,48 @@ class PublicClubControllerIntegrationTest {
         jdbc.update("INSERT INTO club_tags (club_id, tag_id) VALUES (?, ?)", activeClubId, tagId);
     }
 
+    @Autowired
+    private com.tu.clubhub.membership.repository.ClubMembershipRepository task81Memberships;
+
+    @Autowired
+    private com.tu.clubhub.committee.repository.ClubCommitteeAssignmentRepository task81Assignments;
+
+    @Test
+    void editPermissionIsGrantedOnlyForTheAssignedClub() throws Exception {
+        jdbc.update("""
+                INSERT INTO student_profiles (user_id, student_code, student_status)
+                VALUES (?, ?, 'ACTIVE')
+                """, userId, "T" + java.util.UUID.randomUUID().toString().substring(0, 8));
+        String username = jdbc.queryForObject(
+                "SELECT tu_username FROM users WHERE id = ?", String.class, userId);
+        var principal = new com.tu.clubhub.auth.service.ClubHubPrincipal(userId, username, "USER");
+        var auth = UsernamePasswordAuthenticationToken.authenticated(
+                principal, null, java.util.List.of());
+        var signedIn = org.springframework.security.test.web.servlet.request
+                .SecurityMockMvcRequestPostProcessors.authentication(auth);
+
+        mockMvc.perform(get("/api/v1/public/clubs/{id}", activeClubId).with(signedIn))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.canEditProfile").value(false));
+
+        var membership = task81Memberships.saveAndFlush(
+                new com.tu.clubhub.membership.domain.ClubMembership(activeClubId, userId, "ACTIVE"));
+        jdbc.update("UPDATE club_memberships SET joined_at = ? WHERE id = ?",
+                java.sql.Timestamp.from(NOW.minusSeconds(7200)), membership.getId());
+        task81Assignments.saveAndFlush(
+                new com.tu.clubhub.committee.domain.ClubCommitteeAssignment(
+                        membership.getId(), "Committee", "COMMITTEE",
+                        NOW.minusSeconds(3600), NOW.plusSeconds(3600), userId));
+
+        mockMvc.perform(get("/api/v1/public/clubs/{id}", activeClubId).with(signedIn))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.canEditProfile").value(true));
+
+        mockMvc.perform(get("/api/v1/public/clubs/{id}", otherClubId).with(signedIn))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.canEditProfile").value(false));
+    }
+
     @Test
     void anonymousCanReadActiveClubAndOnlyPublicFieldsAreSerialized() throws Exception {
         mockMvc.perform(get("/api/v1/public/clubs/{id}", activeClubId))
@@ -116,7 +158,11 @@ class PublicClubControllerIntegrationTest {
                 .andExpect(jsonPath("$.keys()", containsInAnyOrder(
                         "id", "name", "description", "objectives", "contactUrl",
                         "facebookUrl", "instagramUrl", "contactEmail", "affiliationLevel",
-                        "affiliationName", "imageUrl", "bannerUrl", "category", "tags")))
+                        "affiliationName", "imageUrl", "bannerUrl", "category", "tags",
+                        "canEditProfile")))
+                .andExpect(jsonPath("$.canEditProfile").value(false))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.id").value(activeClubId.toString()))
                 .andExpect(jsonPath("$.name").value(activeClubName))
                 .andExpect(jsonPath("$.description").value("Public club description"))

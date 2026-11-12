@@ -17,7 +17,8 @@ public record PublicClubProfileDto(
         String imageUrl,
         String bannerUrl,
         PublicClubCategoryDto category,
-        List<PublicClubTagDto> tags) {
+        List<PublicClubTagDto> tags,
+boolean canEditProfile) {
 
     public PublicClubProfileDto {
         tags = List.copyOf(tags);
