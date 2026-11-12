@@ -2,6 +2,8 @@ import { CentralDashboardPage } from '../features/admin-dashboard/pages/CentralD
 import { Route, Routes } from "react-router";
 import ApplicationRoutePage from "../pages/ApplicationRoutePage";
 import ApplicationResultRoutePage from "../pages/ApplicationResultRoutePage";
+import CommitteeApplicationDetailPage from "../features/applications/pages/CommitteeApplicationDetailPage";
+import CommitteeApplicationsPage from "../features/applications/pages/CommitteeApplicationsPage";
 import ClubDetailRoutePage from "../pages/ClubDetailRoutePage";
 import ClubEditRoutePage from "../pages/ClubEditRoutePage";
 import ClubManageRoutePage from "../pages/ClubManageRoutePage";
@@ -30,6 +32,22 @@ export default function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/open-calls" element={<OpenCallsPage />} />
       <Route path="/clubs/:clubId" element={<ClubDetailRoutePage />} />
+      <Route
+        path="/clubs/:clubId/applications"
+        element={
+          <RequireAuth>
+            <CommitteeApplicationsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/clubs/:clubId/applications/:applicationId"
+        element={
+          <RequireAuth>
+            <CommitteeApplicationDetailPage />
+          </RequireAuth>
+        }
+      />
       <Route path="/admin/dashboard" element={<RequireAuth><CentralDashboardPage /></RequireAuth>} />
       <Route
         path="/clubs/:clubId/rounds/:roundId/apply"
