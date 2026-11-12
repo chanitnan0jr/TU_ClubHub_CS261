@@ -30,7 +30,7 @@ See the [permission matrix implementation gaps](docs/security/permission-matrix.
 | Database | PostgreSQL; JPA and JDBC repositories; Flyway V1 business schema and V3 session tables |
 | Authentication | TU Authentication API with server-side Spring Session JDBC and CSRF protection |
 | API | REST JSON under `/api/v1`; Markdown and OpenAPI contracts include implementation status |
-| Local delivery | Root Dockerfile embeds the frontend in Spring Boot; Compose uses PostgreSQL 17 |
+| Local delivery | Compose runs Nginx frontend, Spring Boot backend, and PostgreSQL 17; the root Dockerfile builds a separate embedded-frontend image |
 | Deployment target | Render Web Service and PostgreSQL; no deployment is established by this README |
 
 Dependency versions are recorded in [frontend/package.json](frontend/package.json), its lockfile, and [backend/pom.xml](backend/pom.xml). Docker builds use Node 22.14 and Java 21. CI provisions PostgreSQL 18; local Compose uses 17.
@@ -50,7 +50,7 @@ Dependency versions are recorded in [frontend/package.json](frontend/package.jso
 | [Architecture diagram](docs/architecture/TU-ClubHub-Architecture.drawio) | Editable system architecture diagrams |
 | [Database design](docs/database/TU-ClubHub-ERD-Updated.dbml) / [migrations](backend/src/main/resources/db/migration) | Domain model and executable schema; migrations are authoritative |
 | [User stories](docs/stories) / [sequence diagram index](docs/diagrams/README.md) | Acceptance requirements and exchanges for Sprint 1 and Draft Sprint 2 workflows, with pending contracts and dependencies marked |
-| [Local demonstration guide](docs/deployment/local-demo.md) | Compose modes, demo login, persistence, and reset instructions |
+| [Local demonstration guide](docs/deployment/local-demo.md) | Compose services, demo login, persistence, and reset instructions |
 | [Frontend guide](frontend/README.md) | Current screens, components, and API integration gaps |
 | [Test reports and handoffs](docs/testing) | Historical results for the revision/date recorded in each report |
 
@@ -68,14 +68,14 @@ Use Docker Engine/Desktop with Compose V2. Run from the repository root:
    ```sh
    docker compose up --build
    ```
-3. Open `http://localhost:8080`. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` or `applicant-demo` (password `tu-clubhub-demo`). Health is available at `http://localhost:8080/actuator/health`.
+3. Open `http://localhost` (port 80). Nginx serves the frontend and proxies `/api/` to the backend; the backend is not published on a host port. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` or `applicant-demo` (password `tu-clubhub-demo`). Check backend health with `docker compose exec backend wget -qO- http://localhost:8080/actuator/health`.
 4. A fresh database has no clubs. Once the app has started (Flyway creates the tables), load the dev-only demo data in another terminal:
    ```sh
    scripts/seed-dev-data.sh
    ```
    It runs [`V2__seed_test_data.sql`](backend/src/test/resources/db/migration/V2__seed_test_data.sql) inside the `tu-clubhub-db` container: demo clubs, fictional users, and `student-demo` as president of one club with a draft round and questions. It is safe to run again, and prints the club and question-page URLs to open. The script does not read `.env`; if you changed `POSTGRES_USER` or `POSTGRES_DB`, export them first (`DB_CONTAINER` overrides the container name).
 
-Migrations create the schema without demo clubs, memberships, or committee assignments. Login provisions a local user and, for TU student accounts, a student profile from the TU status; it grants no memberships or committee permissions. Club detail, club editing, and question management are routed in the main app (see the [frontend guide](frontend/README.md)); the round and application forms are not. See the [local guide](docs/deployment/local-demo.md) for Compose options and resets.
+Migrations create the schema without demo clubs, memberships, or committee assignments. Login provisions a local user and, for TU student accounts, a student profile from the TU status; it grants no memberships or committee permissions. See the [local guide](docs/deployment/local-demo.md) for service checks and resets.
 
 ### Mock accounts for local testing
 
@@ -133,7 +133,7 @@ Open `http://localhost:5173`; Vite proxies `/api` to `http://localhost:8080`. Us
 | `DB_PASSWORD` | Password for direct JVM startup with the `dev` profile |
 | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Override the JDBC connection when database name, host port, or credentials differ; Compose supplies these to containers |
 | `SPRING_PROFILES_ACTIVE` | Compose defaults to `dev`; production must use real TU authentication |
-| `PORT` | Host port for the Compose `app` service (the container listens on 8080); Spring's HTTP port when run outside Compose |
+| `PORT` | Spring's HTTP port when run outside Compose; Compose fixes the backend container port at 8080 and publishes the frontend on host port 80 |
 | `TU_AUTH_MODE` | `mock` for dev/test, `real` for TU integration |
 | `TU_AUTH_ENDPOINT_URL`, `TU_AUTH_APPLICATION_KEY` | Required in real mode; server environment only |
 | `TU_AUTH_CONNECT_TIMEOUT`, `TU_AUTH_READ_TIMEOUT` | Backend defaults: `3s` and `5s` |

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Smoke test for a running compose stack: health, pages, API and database, session login.
 # Login uses the dev mock account; set SMOKE_USER/SMOKE_PASSWORD for another one, or
-# SMOKE_USER= to skip it. Exits non-zero if any check fails.
+# SMOKE_USER= to skip it. Set HEALTH_URL for a directly accessible backend.
+# Exits non-zero if any check fails.
 set -uo pipefail
 
-BASE_URL="${BASE_URL:-http://localhost:8080}"
+BASE_URL="${BASE_URL:-http://localhost}"
 DB_CONTAINER="${DB_CONTAINER:-tu-clubhub-db}"
+BACKEND_CONTAINER="${BACKEND_CONTAINER:-tu-clubhub-backend}"
 SMOKE_USER="${SMOKE_USER-student-demo}"
 SMOKE_PASSWORD="${SMOKE_PASSWORD:-tu-clubhub-demo}"
 jar="$(mktemp)"
@@ -17,7 +19,14 @@ check() { # name, actual, expected
 }
 status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 
-check "health is UP" "$(curl -s "$BASE_URL/actuator/health")" '{"status":"UP"}'
+if [[ -n "${HEALTH_URL:-}" ]]; then
+  health="$(curl -s "$HEALTH_URL")"
+elif command -v docker >/dev/null && docker container inspect "$BACKEND_CONTAINER" >/dev/null 2>&1; then
+  health="$(docker exec "$BACKEND_CONTAINER" wget -q -O - http://127.0.0.1:8080/actuator/health)"
+else
+  health="$(curl -s "$BASE_URL/actuator/health")"
+fi
+check "health is UP" "$health" '{"status":"UP"}'
 check "home page" "$(curl -s "$BASE_URL/" | grep -c '<div id="root">')" "1"
 check "SPA deep link /clubs/1" "$(status "$BASE_URL/clubs/1")" "200"
 # A missing club is a Problem 404 only if the API reached the database.
