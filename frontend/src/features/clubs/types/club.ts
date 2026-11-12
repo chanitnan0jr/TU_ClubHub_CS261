@@ -34,6 +34,7 @@ export interface ApiProblemResponse {
 export interface ClubResponseDto {
   id: string;
   name: string;
+  canEditProfile?: boolean;
   status?: string | null;
   categoryId?: string;
   category?: CategoryDto | any;
@@ -104,6 +105,7 @@ export interface ClubProfileDraft extends Partial<ClubUpdateRequestDto> {
 export interface PublicClubProfile {
   id: string;
   name: string;
+  canEditProfile?: boolean;
   description: string;
   objectives: string | null;
   contactUrl: string | null;
@@ -151,6 +153,7 @@ export interface RecruitmentRoundData {
 export interface ClubDetailData {
   id: string;
   name: string;
+  canEditProfile: boolean;
   category: string;
   description: string;
   objectives: string;

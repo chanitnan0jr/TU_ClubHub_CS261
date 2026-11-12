@@ -2,6 +2,7 @@ package com.tu.clubhub.club.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
@@ -20,12 +21,14 @@ import com.tu.clubhub.club.domain.Club;
 import com.tu.clubhub.club.dto.ClubResponseDto.ClubCategoryDto;
 import com.tu.clubhub.club.dto.ClubResponseDto.ClubTagDto;
 import com.tu.clubhub.club.dto.OpenPublicRecruitmentRoundDto;
+import com.tu.clubhub.club.dto.PublicClubSearchItemDto;
 import com.tu.clubhub.club.dto.PublicOpenCallDto;
 import com.tu.clubhub.club.repository.ClubProfileQueryRepository;
 import com.tu.clubhub.club.repository.ClubRepository;
 import com.tu.clubhub.club.service.ClubService.ClubNotFoundException;
 import com.tu.clubhub.club.service.ClubService.ClubValidationException;
 import com.tu.clubhub.club.service.PublicClubService.InvalidPublicClubIdException;
+import com.tu.clubhub.committee.security.ClubSecurity;
 
 class PublicClubServiceTest {
 
@@ -46,6 +49,7 @@ class PublicClubServiceTest {
         setId(inactiveClub, 8L);
         lookups = new AtomicInteger();
         clockReads = new AtomicInteger();
+
         ClubRepository clubs = (ClubRepository) Proxy.newProxyInstance(
                 ClubRepository.class.getClassLoader(),
                 new Class<?>[] {ClubRepository.class},
@@ -58,16 +62,20 @@ class PublicClubServiceTest {
                         return club != null && status.equals(club.getStatus())
                                 ? Optional.of(club) : Optional.empty();
                     }
-                    if (method.getName().equals("toString")) return "ClubRepository test proxy";
+                    if (method.getName().equals("toString")) {
+                        return "ClubRepository test proxy";
+                    }
                     throw new UnsupportedOperationException(method.getName());
                 });
+
         queries = new FixtureQueries();
         Clock clock = new Clock() {
             @Override public ZoneId getZone() { return ZoneOffset.UTC; }
             @Override public Clock withZone(ZoneId zone) { return this; }
             @Override public Instant instant() { clockReads.incrementAndGet(); return NOW; }
         };
-        service = new PublicClubService(clubs, queries, clock);
+
+        service = new PublicClubService(clubs, queries, clock, mock(ClubSecurity.class));
     }
 
     @Test
@@ -140,16 +148,7 @@ class PublicClubServiceTest {
     @Test
     void searchesThaiClubNameWithDefaultFilters() {
         queries.total = 1L;
-
-        var result = service.searchPublicClubs(
-                "  ชมรมดนตรี  ",
-                null,
-                null,
-                null,
-                0,
-                20,
-                null
-        );
+        var result = service.searchPublicClubs("  ชมรมดนตรี  ", null, null, null, 0, 20, null);
 
         assertEquals("ชมรมดนตรี", queries.searchTerm);
         assertEquals(null, queries.searchCategoryId);
@@ -168,16 +167,7 @@ class PublicClubServiceTest {
     @Test
     void combinesEnglishSearchFiltersAndPagination() {
         queries.total = 11L;
-
-        var result = service.searchPublicClubs(
-                "  Coding  ",
-                "3",
-                "4",
-                "OPEN",
-                2,
-                5,
-                "name,desc"
-        );
+        var result = service.searchPublicClubs("  Coding  ", "3", "4", "OPEN", 2, 5, "name,desc");
 
         assertEquals("Coding", queries.searchTerm);
         assertEquals(3L, queries.searchCategoryId);
@@ -186,7 +176,6 @@ class PublicClubServiceTest {
         assertEquals(true, queries.descending);
         assertEquals(10L, queries.offset);
         assertEquals(5, queries.searchSize);
-
         assertEquals(2, result.page().number());
         assertEquals(5, result.page().size());
         assertEquals(11L, result.page().totalElements());
@@ -196,15 +185,7 @@ class PublicClubServiceTest {
 
     @Test
     void supportsClosedStatusAndBlankSearch() {
-        service.searchPublicClubs(
-                "   ",
-                null,
-                null,
-                "CLOSED",
-                0,
-                20,
-                "name,asc"
-        );
+        service.searchPublicClubs("   ", null, null, "CLOSED", 0, 20, "name,asc");
 
         assertEquals(null, queries.searchTerm);
         assertEquals("CLOSED", queries.searchStatus);
@@ -214,49 +195,23 @@ class PublicClubServiceTest {
     @Test
     void rejectsInvalidSearchParametersBeforeQuerying() {
         assertThrows(ClubValidationException.class,
-                () -> service.searchPublicClubs(
-                        null, null, null, "ALL",
-                        -1, 20, "name,asc"));
-
+                () -> service.searchPublicClubs(null, null, null, "ALL", -1, 20, "name,asc"));
         assertThrows(ClubValidationException.class,
-                () -> service.searchPublicClubs(
-                        null, null, null, "ALL",
-                        0, 101, "name,asc"));
-
+                () -> service.searchPublicClubs(null, null, null, "ALL", 0, 101, "name,asc"));
         assertThrows(ClubValidationException.class,
-                () -> service.searchPublicClubs(
-                        null, "0", null, "ALL",
-                        0, 20, "name,asc"));
-
+                () -> service.searchPublicClubs(null, "0", null, "ALL", 0, 20, "name,asc"));
         assertThrows(ClubValidationException.class,
-                () -> service.searchPublicClubs(
-                        null, "01", null, "ALL",
-                        0, 20, "name,asc"));
-
+                () -> service.searchPublicClubs(null, "01", null, "ALL", 0, 20, "name,asc"));
         assertThrows(ClubValidationException.class,
-                () -> service.searchPublicClubs(
-                        null, null, "002", "ALL",
-                        0, 20, "name,asc"));
-
+                () -> service.searchPublicClubs(null, null, "002", "ALL", 0, 20, "name,asc"));
         assertThrows(ClubValidationException.class,
-                () -> service.searchPublicClubs(
-                        null, null, "abc", "ALL",
-                        0, 20, "name,asc"));
-
+                () -> service.searchPublicClubs(null, null, "abc", "ALL", 0, 20, "name,asc"));
         assertThrows(ClubValidationException.class,
-                () -> service.searchPublicClubs(
-                        null, null, null, "INVALID",
-                        0, 20, "name,asc"));
-
+                () -> service.searchPublicClubs(null, null, null, "INVALID", 0, 20, "name,asc"));
         assertThrows(ClubValidationException.class,
-                () -> service.searchPublicClubs(
-                        null, null, null, "ALL",
-                        0, 20, "id,desc"));
-
+                () -> service.searchPublicClubs(null, null, null, "ALL", 0, 20, "id,desc"));
         assertThrows(ClubValidationException.class,
-                () -> service.searchPublicClubs(
-                        "a".repeat(201), null, null, "ALL",
-                        0, 20, "name,asc"));
+                () -> service.searchPublicClubs("a".repeat(201), null, null, "ALL", 0, 20, "name,asc"));
 
         assertEquals(0, queries.searchCalls);
         assertEquals(0, queries.countCalls);
@@ -283,17 +238,22 @@ class PublicClubServiceTest {
         private int searchCalls;
         private int countCalls;
 
-        private FixtureQueries() { super(null); }
+        private FixtureQueries() {
+            super(null);
+        }
 
-        @Override public ClubCategoryDto findCategory(Long categoryId) {
+        @Override
+        public ClubCategoryDto findCategory(Long categoryId) {
             return new ClubCategoryDto("3", "Tech");
         }
 
-        @Override public List<ClubTagDto> findTags(Long clubId) {
+        @Override
+        public List<ClubTagDto> findTags(Long clubId) {
             return List.of(new ClubTagDto("4", "Code"));
         }
 
-        @Override public List<OpenPublicRecruitmentRoundDto> findOpenPublicRounds(
+        @Override
+        public List<OpenPublicRecruitmentRoundDto> findOpenPublicRounds(
                 Long clubId, Instant now, int size, long offset) {
             this.pageNow = now;
             this.offset = offset;
@@ -301,17 +261,9 @@ class PublicClubServiceTest {
         }
 
         @Override
-        public List<com.tu.clubhub.club.dto.PublicClubSearchItemDto>
-                searchPublicClubs(
-                        String q,
-                        Long categoryId,
-                        Long tagId,
-                        String recruitmentStatus,
-                        Instant now,
-                        boolean descending,
-                        int size,
-                        long offset
-                ) {
+        public List<PublicClubSearchItemDto> searchPublicClubs(
+                String q, Long categoryId, Long tagId, String recruitmentStatus,
+                Instant now, boolean descending, int size, long offset) {
             this.searchTerm = q;
             this.searchCategoryId = categoryId;
             this.searchTagId = tagId;
@@ -321,35 +273,32 @@ class PublicClubServiceTest {
             this.searchSize = size;
             this.offset = offset;
             this.searchCalls++;
-
             return List.of();
         }
 
         @Override
         public long countPublicClubs(
-                String q,
-                Long categoryId,
-                Long tagId,
-                String recruitmentStatus,
-                Instant now
-        ) {
+                String q, Long categoryId, Long tagId, String recruitmentStatus, Instant now) {
             this.countNow = now;
             this.countCalls++;
             return total;
         }
 
-        @Override public long countOpenPublicRounds(Long clubId, Instant now) {
+        @Override
+        public long countOpenPublicRounds(Long clubId, Instant now) {
             this.countNow = now;
             return total;
         }
 
-        @Override public List<PublicOpenCallDto> findOpenCalls(Instant now, int size, long offset) {
+        @Override
+        public List<PublicOpenCallDto> findOpenCalls(Instant now, int size, long offset) {
             this.pageNow = now;
             this.offset = offset;
             return List.of();
         }
 
-        @Override public long countOpenCalls(Instant now) {
+        @Override
+        public long countOpenCalls(Instant now) {
             this.countNow = now;
             return total;
         }

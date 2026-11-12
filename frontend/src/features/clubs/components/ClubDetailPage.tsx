@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import type { RecruitmentRoundData } from '../types/club';
 import { fetchClubDetail, type ClubDetailResult } from '../services/clubService';
 import { formatThaiDateTime } from '../../../lib/format';
 import { Breadcrumbs } from '../../../components/ui/Breadcrumbs';
 import { Button } from '../../../components/ui/Button';
+import { buttonClass } from '../../../components/ui/classes';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import { CalendarDaysIcon, ClipboardCheckIcon, ExternalLinkIcon } from '../../../components/ui/icons';
 import { SectionCard } from '../../../components/ui/SectionCard';
@@ -152,6 +154,11 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
             <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
               {club.name}
             </h1>
+            {club.canEditProfile && (
+              <Link to={`/clubs/${clubId}/edit`} className={`${buttonClass('secondary')} mt-3`}>
+                แก้ไขข้อมูลชมรม
+              </Link>
+            )}
             {club.tags.length > 0 && (
               <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="แท็กของชมรม">
                 {club.tags.map((tag, idx) => (

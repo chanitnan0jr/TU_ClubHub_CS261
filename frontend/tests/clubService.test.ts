@@ -6,6 +6,7 @@ import { json, problem, stubFetch } from './helpers.ts'
 const profile = {
   id: '20001',
   name: 'ชมรมตัวอย่าง',
+  canEditProfile: true,
   description: 'รายละเอียด',
   objectives: null,
   contactUrl: 'https://example.org/contact',
@@ -35,6 +36,7 @@ const rounds = {
 test('maps the public profile and rounds without inventing missing fields', () => {
   const club = toClubDetailData(profile, rounds)
 
+  assert.equal(club.canEditProfile, true)
   assert.equal(club.category, 'วิชาการ')
   assert.deepEqual(club.tags, ['เขียนโปรแกรม'])
   assert.equal(club.objectives, '')

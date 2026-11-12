@@ -9,6 +9,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 import com.jayway.jsonpath.JsonPath;
+import com.tu.clubhub.club.dto.PublicClubProfileDto;
+import com.tu.clubhub.club.dto.PublicRecruitmentRoundPageDto;
+import com.tu.clubhub.club.service.PublicClubService;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -22,15 +25,12 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.CannotCreateTransactionException;
 
-import com.tu.clubhub.club.dto.PublicClubProfileDto;
-import com.tu.clubhub.club.dto.PublicRecruitmentRoundPageDto;
-import com.tu.clubhub.club.service.PublicClubService;
-
 /** Fault injection verifies error dispatch through the real HTTP server and security filters. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Import(PublicClubErrorHandlingIntegrationTest.FailureConfiguration.class)
 class PublicClubErrorHandlingIntegrationTest {
+
     @Value("${local.server.port}")
     private int port;
 
@@ -72,15 +72,28 @@ class PublicClubErrorHandlingIntegrationTest {
     static class FailureConfiguration {
         @Bean
         @Primary
-        PublicClubService failureService() { return new FailingService(); }
+        PublicClubService failureService() {
+            return new FailingService();
+        }
     }
 
     public static class FailingService extends PublicClubService {
-        public FailingService() { super(null, null, null); }
-        @Override public PublicClubProfileDto getClubProfile(String id) { fail(id); return null; }
-        @Override public PublicRecruitmentRoundPageDto getOpenRecruitmentRounds(String id, int page, int size) {
-            fail(id); return null;
+        public FailingService() {
+            super(null, null, null, null);
         }
+
+        @Override
+        public PublicClubProfileDto getClubProfile(String id) {
+            fail(id);
+            return null;
+        }
+
+        @Override
+        public PublicRecruitmentRoundPageDto getOpenRecruitmentRounds(String id, int page, int size) {
+            fail(id);
+            return null;
+        }
+
         private static void fail(String id) {
             switch (id) {
                 case "1" -> throw new DataAccessResourceFailureException("QA simulated database failure");

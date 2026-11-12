@@ -16,6 +16,7 @@ Object.defineProperty(globalThis, 'navigator', { configurable: true, value: dom.
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react')
 const { MemoryRouter, Route, Routes } = await import('react-router')
 const { AuthProvider } = await import('../src/features/auth/AuthContext.tsx')
+const { default: RequireAuth } = await import('../src/app/RequireAuth.tsx')
 const { default: ClubEditRoutePage } = await import('../src/pages/ClubEditRoutePage.tsx')
 const { default: ClubProfileForm } = await import('../src/features/clubs/components/ClubProfileForm.tsx')
 const { ApiError } = await import('../src/lib/api.ts')
@@ -26,6 +27,7 @@ const tags = Array.from({ length: 11 }, (_, i) => ({ id: String(40001 + i), name
 const profile = {
   id: '20001',
   name: 'ชมรมอาสาพัฒนาชุมชน',
+  canEditProfile: true,
   description: 'รายละเอียดชมรม',
   objectives: 'ช่วยเหลือชุมชน',
   contactUrl: null,
@@ -108,6 +110,73 @@ test('the edit page loads the profile and lists, then PUTs category, tags and HT
   } finally { cleanup(); stub.restore() }
 })
 
+test('an unauthenticated visitor is redirected to login before loading the edit page', async () => {
+  const stub = stubFetch(request => request.url === '/api/v1/auth/me'
+    ? new Response(JSON.stringify({ status: 401, code: 'AUTHENTICATION_REQUIRED' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/problem+json' },
+    })
+    : json({ detail: 'Unexpected request' }, 500))
+  try {
+    render(createElement(MemoryRouter, { initialEntries: ['/clubs/20001/edit'] },
+      createElement(AuthProvider, null,
+        createElement(Routes, null,
+          createElement(Route, {
+            path: '/clubs/:clubId/edit',
+            element: createElement(RequireAuth, null, createElement(ClubEditRoutePage)),
+          }),
+          createElement(Route, { path: '/login', element: createElement('p', null, 'Login page') })))))
+
+    await screen.findByText('Login page')
+    assert.equal(stub.requests.some(request => request.url === '/api/v1/public/clubs/20001'), false)
+  } finally { cleanup(); stub.restore() }
+})
+
+test('a student is redirected away from a directly opened edit route', async () => {
+  const stub = stubFetch(request => {
+    if (request.url === '/api/v1/auth/me') {
+      return json({ user: { id: '2', role: 'STUDENT', activeCommitteeAssignments: [] } })
+    }
+    if (request.url === '/api/v1/public/clubs/20001') return json({ ...profile, canEditProfile: false })
+    if (request.url === '/api/v1/public/club-categories') return json({ items: categories })
+    if (request.url === '/api/v1/public/interest-tags') return json({ items: tags })
+    return json({ detail: 'Unexpected request' }, 500)
+  })
+  try {
+    render(createElement(MemoryRouter, { initialEntries: ['/clubs/20001/edit'] },
+      createElement(AuthProvider, null,
+        createElement(Routes, null,
+          createElement(Route, { path: '/clubs/:clubId/edit', element: createElement(ClubEditRoutePage) }),
+          createElement(Route, { path: '/clubs/:clubId', element: createElement('p', null, 'Public club') })))))
+
+    await screen.findByText('Public club')
+    assert.equal(screen.queryByLabelText(/^ชื่อชมรม/), null)
+  } finally { cleanup(); stub.restore() }
+})
+
+test('a committee member of another club is redirected from this club edit route', async () => {
+  const otherClubAssignment = { ...assignment, clubId: '20002', clubName: 'ชมรมอื่น' }
+  const stub = stubFetch(request => {
+    if (request.url === '/api/v1/auth/me') {
+      return json({ user: { id: '3', role: 'CLUB_COMMITTEE', activeCommitteeAssignments: [otherClubAssignment] } })
+    }
+    if (request.url === '/api/v1/public/clubs/20001') return json({ ...profile, canEditProfile: false })
+    if (request.url === '/api/v1/public/club-categories') return json({ items: categories })
+    if (request.url === '/api/v1/public/interest-tags') return json({ items: tags })
+    return json({ detail: 'Unexpected request' }, 500)
+  })
+  try {
+    render(createElement(MemoryRouter, { initialEntries: ['/clubs/20001/edit'] },
+      createElement(AuthProvider, null,
+        createElement(Routes, null,
+          createElement(Route, { path: '/clubs/:clubId/edit', element: createElement(ClubEditRoutePage) }),
+          createElement(Route, { path: '/clubs/:clubId', element: createElement('p', null, 'Public club') })))))
+
+    await screen.findByText('Public club')
+    assert.equal(screen.queryByLabelText(/^ชื่อชมรม/), null)
+  } finally { cleanup(); stub.restore() }
+})
+
 test('an 11th tag is blocked with a message and the count stays at 10/10', () => {
   renderForm({ tags: tags.slice(0, 10) })
   try {
@@ -158,6 +227,21 @@ test('a rejected save keeps the input and shows server field errors', async () =
     assert.equal(screen.getByLabelText(/^หมวดหมู่ชมรม/).getAttribute('aria-invalid'), 'true')
     assert.ok(screen.getByText('ข้อมูลไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง'))
     assert.ok(screen.getByText('มีสิ่งที่ยังไม่ได้บันทึก'))
+  } finally { cleanup() }
+})
+
+test('a 403 ACCESS_DENIED save shows an edit-permission error and never success', async () => {
+  renderForm({}, async () => {
+    throw new ApiError(403, 'คุณไม่มีสิทธิ์ดำเนินการนี้', 'ACCESS_DENIED')
+  })
+  try {
+    fireEvent.change(nameInput(), { target: { value: 'ชื่อที่แก้ไข' } })
+    fireEvent.click(saveButton())
+
+    const alert = await screen.findByRole('alert')
+    assert.match(alert.textContent ?? '', /ไม่มีสิทธิ์แก้ไขข้อมูลชมรมนี้แล้ว/)
+    assert.equal(screen.queryByText(/บันทึกข้อมูลโปรไฟล์ชมรมเรียบร้อยแล้ว/), null)
+    assert.equal(nameInput().value, 'ชื่อที่แก้ไข')
   } finally { cleanup() }
 })
 
