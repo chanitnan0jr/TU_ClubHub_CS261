@@ -400,7 +400,6 @@ export function DynamicApplicationForm({
                     <textarea
                       {...control}
                       rows={4}
-                      maxLength={2000}
                       value={formData.motivation}
                       onChange={(event) => {
                         updateFormData((previous) => ({
@@ -452,7 +451,6 @@ export function DynamicApplicationForm({
                           <textarea
                             {...control}
                             rows={3}
-                            maxLength={question.maxLength}
                             value={answer}
                             onChange={(event) => handleAnswerChange(question.id, event.target.value)}
                             placeholder="เขียนคำตอบของคุณ..."
