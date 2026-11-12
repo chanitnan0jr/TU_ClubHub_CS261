@@ -8,6 +8,7 @@ import com.tu.clubhub.club.dto.PublicItemListDto;
 import com.tu.clubhub.club.dto.PublicOpenCallPageDto;
 import com.tu.clubhub.club.dto.PublicRecruitmentRoundPageDto;
 import com.tu.clubhub.club.service.PublicClubService;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -63,7 +64,9 @@ public class PublicClubController {
     public ResponseEntity<PublicClubProfileDto> getClubProfile(
             @PathVariable("id") String id
     ) {
-        return ResponseEntity.ok(publicClubService.getClubProfile(id));
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(publicClubService.getClubProfile(id));
     }
 
     @GetMapping("/clubs/{id}/recruitment-rounds")
