@@ -43,7 +43,7 @@ function renderCommitteeLayout(user: Record<string, unknown>) {
   return stub
 }
 
-test('committee layout shows the club menu with the Sprint 2 review item disabled', async () => {
+test('committee layout links to application review from the club menu', async () => {
   const stub = renderCommitteeLayout({
     id: '10001', role: 'USER', displayName: 'ประธานทดสอบ', activeCommitteeAssignments: [assignment],
   })
@@ -58,12 +58,8 @@ test('committee layout shows the club menu with the Sprint 2 review item disable
     assert.equal(link('จัดการรอบรับสมัคร').getAttribute('href'), '/clubs/20001/rounds')
     assert.equal(link('จัดการรอบรับสมัคร').getAttribute('aria-current'), null)
 
-    assert.equal(within(menu).queryByRole('link', { name: /ตรวจสอบใบสมัคร/ }), null)
-    const review = within(menu).getByText('ตรวจสอบใบสมัคร')
-    assert.equal(review.getAttribute('aria-disabled'), 'true')
-    assert.match(review.textContent ?? '', /Sprint 2/)
-    const note = document.getElementById(review.getAttribute('aria-describedby') ?? '')
-    assert.match(note?.textContent ?? '', /Sprint 2/)
+    assert.equal(link('ตรวจสอบใบสมัคร').getAttribute('href'), '/clubs/20001/applications')
+    assert.equal(link('ตรวจสอบใบสมัคร').getAttribute('aria-current'), null)
 
     assert.ok(screen.getAllByText('ชมรมอาสาพัฒนาชุมชน').length > 0)
     assert.ok(screen.getByText('ประธานชมรม'))

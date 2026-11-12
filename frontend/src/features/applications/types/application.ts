@@ -82,3 +82,44 @@ export type ApplicationFilterTab =
   | 'ACCEPTED_PENDING_CONFIRMATION'
   | 'REJECTED'
   | 'CONFIRMED_DECLINED';
+
+export type CommitteeApplicationStatus =
+  | 'SUBMITTED'
+  | 'UNDER_REVIEW'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'CONFIRMED'
+  | 'DECLINED'
+  | 'WITHDRAWN'
+  | 'EXPIRED';
+
+export interface CommitteeApplicant {
+  userId: string;
+  studentCode: string;
+  displayName: string;
+  email: string | null;
+  facultyName: string | null;
+  departmentName: string | null;
+  programName: string | null;
+  studyYear: number | null;
+}
+
+export interface CommitteeApplicationSummary {
+  id: string;
+  roundId: string;
+  applicant: CommitteeApplicant;
+  submittedAt: string;
+  status: CommitteeApplicationStatus;
+}
+
+export interface CommitteeApplicationPage {
+  items: CommitteeApplicationSummary[];
+  page: PageMeta;
+}
+
+export interface CommitteeApplicationDetail extends CommitteeApplicationSummary {
+  clubId: string;
+  motivation: string;
+  questionsWithAnswers: CommitteeQuestionAnswerView[];
+  links: (ApplicantDocumentLinkView & { id: string; displayOrder: number })[];
+}

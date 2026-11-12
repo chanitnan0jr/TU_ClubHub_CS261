@@ -8,7 +8,6 @@ import com.tu.clubhub.club.dto.PublicItemListDto;
 import com.tu.clubhub.club.dto.PublicOpenCallPageDto;
 import com.tu.clubhub.club.dto.PublicRecruitmentRoundPageDto;
 import com.tu.clubhub.club.service.PublicClubService;
-import com.tu.clubhub.club.service.PublicClubSearchService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,23 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicClubController {
 
     private final PublicClubService publicClubService;
-    private final PublicClubSearchService searchService;
-
-    public PublicClubController(PublicClubService publicClubService, PublicClubSearchService searchService) {
+    public PublicClubController(PublicClubService publicClubService) {
         this.publicClubService = publicClubService;
-        this.searchService = searchService;
-    }
-
-    @GetMapping("/clubs")
-    public ResponseEntity<PublicClubSearchPageDto> searchClubs(
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) String categoryId,
-            @RequestParam(required = false) String tagId,
-            @RequestParam(defaultValue = "ALL") String recruitmentStatus,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "name,asc") String sort) {
-        return ResponseEntity.ok(searchService.search(q, categoryId, tagId, recruitmentStatus, page, size, sort));
     }
 
     @GetMapping("/club-categories")
@@ -48,6 +32,30 @@ public class PublicClubController {
     @GetMapping("/interest-tags")
     public ResponseEntity<PublicItemListDto<PublicClubTagDto>> listTags() {
         return ResponseEntity.ok(publicClubService.listTags());
+    }
+
+    /** Public club search and filter (US-01 / Task62). */
+    @GetMapping("/clubs")
+    public ResponseEntity<PublicClubSearchPageDto> searchClubs(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String categoryId,
+            @RequestParam(required = false) String tagId,
+            @RequestParam(defaultValue = "ALL") String recruitmentStatus,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "name,asc") String sort
+    ) {
+        return ResponseEntity.ok(
+                publicClubService.searchPublicClubs(
+                        q,
+                        categoryId,
+                        tagId,
+                        recruitmentStatus,
+                        page,
+                        size,
+                        sort
+                )
+        );
     }
 
     @GetMapping("/clubs/{id}")

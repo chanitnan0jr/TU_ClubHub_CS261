@@ -4,10 +4,15 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+
+import com.tu.clubhub.club.dto.PublicClubSearchItemDto;
+import com.tu.clubhub.club.dto.PublicClubSearchPageDto;
 import com.tu.clubhub.club.domain.Club;
 import com.tu.clubhub.club.dto.OpenPublicRecruitmentRoundDto;
 import com.tu.clubhub.club.dto.PublicClubCategoryDto;
@@ -107,6 +112,84 @@ public class PublicClubService {
         return new PublicOpenCallPageDto(items, pageMetadata(page, size, totalElements));
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public PublicClubSearchPageDto searchPublicClubs(
+            String q,
+            String rawCategoryId,
+            String rawTagId,
+            String recruitmentStatus,
+            int page,
+            int size,
+            String sort
+    ) {
+        validatePage(page, size);
+
+        if (q != null && q.codePointCount(0, q.length()) > 200) {
+            throw new ClubValidationException(
+                    Map.of("q", "Must not exceed 200 characters"));
+        }
+
+        String normalizedQ = q == null ? null : q.strip();
+
+        if (normalizedQ != null && normalizedQ.isEmpty()) {
+            normalizedQ = null;
+        }
+
+        Long categoryId = parseOptionalFilterId(
+                rawCategoryId, "categoryId");
+
+        Long tagId = parseOptionalFilterId(
+                rawTagId, "tagId");
+
+        String status = recruitmentStatus == null
+                ? "ALL" : recruitmentStatus;
+
+        if (!Set.of("ALL", "OPEN", "CLOSED").contains(status)) {
+            throw new ClubValidationException(
+                    Map.of("recruitmentStatus",
+                            "Must be ALL, OPEN or CLOSED"));
+        }
+
+        String sortOrder = sort == null ? "name,asc" : sort;
+
+        if (!Set.of("name,asc", "name,desc").contains(sortOrder)) {
+            throw new ClubValidationException(
+                    Map.of("sort",
+                            "Must be name,asc or name,desc"));
+        }
+
+        boolean descending = "name,desc".equals(sortOrder);
+
+        Instant now = clock.instant();
+        long offset = (long) page * size;
+
+        List<PublicClubSearchItemDto> items =
+                profileQueryRepository.searchPublicClubs(
+                        normalizedQ,
+                        categoryId,
+                        tagId,
+                        status,
+                        now,
+                        descending,
+                        size,
+                        offset
+                );
+
+        long totalElements =
+                profileQueryRepository.countPublicClubs(
+                        normalizedQ,
+                        categoryId,
+                        tagId,
+                        status,
+                        now
+                );
+
+        return new PublicClubSearchPageDto(
+                items,
+                pageMetadata(page, size, totalElements)
+        );
+    }
+
     @Transactional(readOnly = true)
     public PublicItemListDto<PublicClubCategoryDto> listCategories() {
         return new PublicItemListDto<>(profileQueryRepository.findAllCategories());
@@ -141,6 +224,33 @@ public class PublicClubService {
             throw new InvalidPublicClubIdException();
         }
     }
+
+    private static Long parseOptionalFilterId(
+        String rawId,
+        String fieldName
+) {
+    if (rawId == null) {
+        return null;
+    }
+
+        if (!rawId.matches("[1-9][0-9]{0,18}")) {
+            throw new ClubValidationException(
+                    Map.of(fieldName, "Must be a positive integer"));
+        }
+
+    try {
+        long id = Long.parseLong(rawId);
+
+        if (id <= 0) {
+            throw new NumberFormatException();
+        }
+
+        return id;
+    } catch (NumberFormatException exception) {
+        throw new ClubValidationException(
+                Map.of(fieldName, "Must be a positive integer"));
+    }
+}
 
     private static void validatePage(int page, int size) {
         if (page < 0) {

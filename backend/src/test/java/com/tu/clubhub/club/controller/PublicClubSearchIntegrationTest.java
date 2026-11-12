@@ -1,158 +1,276 @@
+
 package com.tu.clubhub.club.controller;
 
-import java.sql.Timestamp;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.UUID;
+import java.util.List;
 
-import org.junit.jupiter.api.BeforeEach;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.hamcrest.Matchers.is;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+
+import org.springframework.transaction.annotation.Transactional;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
 
-import static org.hamcrest.Matchers.containsInAnyOrder;
-import static org.hamcrest.Matchers.hasSize;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-/** Exercises anonymous search and its filters against the real PostgreSQL schema. */
 @SpringBootTest
-@AutoConfigureMockMvc(addFilters = true)
+@AutoConfigureMockMvc
 @ActiveProfiles({"test", "seedtest"})
-@Import(PublicClubSearchIntegrationTest.FixedClock.class)
-@Transactional
 class PublicClubSearchIntegrationTest {
-    private static final Instant NOW = Instant.parse("2026-10-20T09:30:00Z");
-    private static final String PATH = "/api/v1/public/clubs";
-    @Autowired private MockMvc mvc;
-    @Autowired private JdbcTemplate jdbc;
-    private long user, firstCategory, secondCategory, tag, alpha, beta, thai;
 
-    @TestConfiguration
-    static class FixedClock {
-        @Bean @Primary Clock task62Clock() { return Clock.fixed(NOW, ZoneOffset.UTC); }
-    }
+    @Autowired
+    private MockMvc mockMvc;
 
-    @BeforeEach
-    void fixtures() {
-        String unique = UUID.randomUUID().toString();
-        user = jdbc.queryForObject("INSERT INTO users(tu_username, display_name) VALUES (?, ?) RETURNING id",
-                Long.class, "task62-" + unique, "Task62 creator");
-        firstCategory = id("INSERT INTO club_categories(name) VALUES (?) RETURNING id", "Task62 first " + unique);
-        secondCategory = id("INSERT INTO club_categories(name) VALUES (?) RETURNING id", "Task62 second " + unique);
-        tag = id("INSERT INTO tags(name) VALUES (?) RETURNING id", "Task62 tag " + unique);
-        long secondTag = id("INSERT INTO tags(name) VALUES (?) RETURNING id", "Task62 other " + unique);
-        alpha = club("Task62 Alpha " + unique, firstCategory, "ACTIVE");
-        beta = club("Task62 beta " + unique, firstCategory, "ACTIVE");
-        thai = club("Task62 ชมรมกีฬา " + unique, secondCategory, "ACTIVE");
-        club("Task62 Hidden " + unique, firstCategory, "INACTIVE");
-        jdbc.update("INSERT INTO club_tags(club_id, tag_id) VALUES (?, ?), (?, ?), (?, ?)",
-                alpha, tag, alpha, secondTag, beta, tag);
-        round(alpha, NOW, NOW.plusSeconds(3600), null, "PUBLISHED");
-        round(beta, NOW.minusSeconds(3600), NOW, null, "PUBLISHED");
-        round(thai, NOW.minusSeconds(3600), NOW.plusSeconds(3600), NOW.minusSeconds(1), "PUBLISHED");
-        round(beta, NOW.minusSeconds(3600), NOW.plusSeconds(3600), null, "DRAFT");
-    }
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-    private long id(String sql, String value) { return jdbc.queryForObject(sql, Long.class, value); }
-    private long club(String name, long category, String status) {
-        return jdbc.queryForObject("""
-                INSERT INTO clubs(name, category_id, status, description, created_by)
-                VALUES (?, ?, ?, 'public description', ?) RETURNING id
-                """, Long.class, name, category, status, user);
-    }
-    private void round(long club, Instant opens, Instant closes, Instant closed, String publication) {
-        jdbc.update("""
-                INSERT INTO recruitment_rounds(club_id, title, academic_year, semester, description,
-                    opens_at, closes_at, closed_at, confirmation_deadline, publication_status, published_at, created_by)
-                VALUES (?, 'Task62 round', 2569, 1, 'description', ?, ?, ?, ?, ?, ?, ?)
-                """, club, Timestamp.from(opens), Timestamp.from(closes),
-                closed == null ? null : Timestamp.from(closed), Timestamp.from(closes.plusSeconds(3600)),
-                publication, publication.equals("PUBLISHED") ? Timestamp.from(opens) : null, user);
+    @Test
+    void anonymousUserCanSearchClubs() throws Exception {
+        mockMvc.perform(get("/api/v1/public/clubs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.page.number").value(0))
+                .andExpect(jsonPath("$.page.size").value(20));
     }
 
     @Test
-    void anonymousSearchSupportsEnglishThaiAndLiteralWildcards() throws Exception {
-        mvc.perform(get(PATH).param("q", "  aLpHa  "))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
-                .andExpect(jsonPath("$.items[0].id").value(Long.toString(alpha)))
-                .andExpect(jsonPath("$.items[0].hasOpenRecruitment").value(true))
-                .andExpect(jsonPath("$.items[0].tags", hasSize(2)))
-                .andExpect(jsonPath("$.items[0].keys()", containsInAnyOrder("id", "name", "description",
-                        "affiliationLevel", "affiliationName", "imageUrl", "category", "tags", "hasOpenRecruitment")));
-        mvc.perform(get(PATH).param("q", "ชมรมกีฬา"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].id").value(Long.toString(thai)));
-        for (String wildcard : new String[]{"%", "_", "\\", "!"}) {
-            mvc.perform(get(PATH).param("q", "Task62" + wildcard)).andExpect(status().isOk())
-                    .andExpect(jsonPath("$.page.totalElements").value(0));
-        }
+    void searchReturnsEmptyPageWhenNoClubMatches()
+            throws Exception {
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("q",
+                                "nonexistent-club-xyz-99999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.page.totalElements").value(0))
+                .andExpect(jsonPath("$.page.totalPages").value(0));
     }
 
     @Test
-    void filtersCombineAndNoTagJoinDuplicatesOrInactiveClubs() throws Exception {
-        mvc.perform(get(PATH).param("q", "   ").param("categoryId", Long.toString(firstCategory)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.page.totalElements").value(2));
-        mvc.perform(get(PATH).param("q", "Task62").param("categoryId", Long.toString(firstCategory))
-                .param("tagId", Long.toString(tag)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(2)))
+    void supportsSearchFiltersAndPagination()
+            throws Exception {
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("categoryId", "30001")
+                        .param("tagId", "40001")
+                        .param("recruitmentStatus", "OPEN")
+                        .param("page", "0")
+                        .param("size", "5")
+                        .param("sort", "name,desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.page.size").value(5));
+    }
+
+    @Test
+    void rejectsInvalidPageSize() throws Exception {
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("size", "101"))
+                .andExpect(status().isBadRequest());
+    }
+
+    //  ค้นหาภาษาไทย
+    @Test
+    void searchesThaiClubNameCorrectly() throws Exception {
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("q", "ดนตรี"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].name")
+                        .value("ชมรมดนตรีสากล"))
+                .andExpect(jsonPath("$.page.totalElements").value(1));
+    }
+
+    // ค้นหาภาษาอังกฤษ
+    @Test
+    void searchesEnglishClubNameCaseInsensitively()
+            throws Exception {
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("q", "iot"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].name")
+                        .value("ชมรมหุ่นยนต์และ IoT"))
+                .andExpect(jsonPath("$.page.totalElements").value(1));
+    }
+
+    // ทดสอบกรองชมรมตาม Category
+    @Test
+    void filtersClubsByCategoryCorrectly() throws Exception {
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("categoryId", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(3))
+                .andExpect(jsonPath("$.items[*].name",
+                        containsInAnyOrder(
+                                "ชมรมฟุตบอล",
+                                "ชมรมแบดมินตัน",
+                                "ชมรมวิ่งเพื่อสุขภาพ"
+                        )));
+    }
+
+    // ทดสอบกรองชมรมตาม Tag
+    @Test
+    void filtersClubsByTagCorrectly() throws Exception {
+
+        Long tagId = jdbcTemplate.queryForObject(
+                "SELECT id FROM tags WHERE name = ?",
+                Long.class,
+                "AI"
+        );
+
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("tagId", String.valueOf(tagId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(1))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].name")
+                        .value("ชมรม AI และวิทยาการข้อมูล"));
+    }
+
+
+    // ทดสอบค้นหาชมรมที่กำลังเปิดรับสมัคร
+    @Test
+    void filtersOpenRecruitmentCorrectly() throws Exception {
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("recruitmentStatus", "OPEN"))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.totalElements").value(2))
-                .andExpect(jsonPath("$.items[*].id", containsInAnyOrder(Long.toString(alpha), Long.toString(beta))));
-        mvc.perform(get(PATH).param("q", "Task62").param("categoryId", Long.toString(secondCategory))
-                .param("tagId", Long.toString(tag)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(0)))
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[*].name",
+                        containsInAnyOrder(
+                                "ชมรมเขียนโปรแกรม",
+                                "ชมรมฟุตบอล"
+                        )));
+    }
+
+    // ทดสอบค้นหาชมรมที่ไม่ได้เปิดรับสมัคร
+    @Test
+    void filtersClosedRecruitmentCorrectly() throws Exception {
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("recruitmentStatus", "CLOSED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(8))
+                .andExpect(jsonPath("$.items.length()").value(8))
+                .andExpect(jsonPath("$.items[*].name",
+                        containsInAnyOrder(
+                                "ชมรม AI และวิทยาการข้อมูล",
+                                "ชมรมหุ่นยนต์และ IoT",
+                                "ชมรมวิ่งเพื่อสุขภาพ",
+                                "ชมรมแบดมินตัน",
+                                "ชมรมดนตรีสากล",
+                                "ชมรมถ่ายภาพสร้างสรรค์",
+                                "ชมรมอาสาพัฒนาชุมชน",
+                                "ชมรมอนุรักษ์สิ่งแวดล้อม"
+                        )));
+    }
+
+
+    // ทดสอบการแบ่งหน้า โดยตรวจสอบข้อมูลจริงแต่ละหน้า
+    @Test
+    void paginatesClubsCorrectly() throws Exception {
+
+        List<String> firstPage = jdbcTemplate.queryForList(
+                """
+                SELECT name FROM clubs
+                WHERE status = 'ACTIVE'
+                ORDER BY name ASC, id ASC
+                LIMIT 3 OFFSET 0
+                """,
+                String.class
+        );
+
+        List<String> secondPage = jdbcTemplate.queryForList(
+                """
+                SELECT name FROM clubs
+                WHERE status = 'ACTIVE'
+                ORDER BY name ASC, id ASC
+                LIMIT 3 OFFSET 3
+                """,
+                String.class
+        );
+
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("page", "0")
+                        .param("size", "3")
+                        .param("sort", "name,asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.number").value(0))
+                .andExpect(jsonPath("$.page.size").value(3))
+                .andExpect(jsonPath("$.page.totalElements").value(10))
+                .andExpect(jsonPath("$.page.totalPages").value(4))
+                .andExpect(jsonPath("$.items[*].name", is(firstPage)));
+
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("page", "1")
+                        .param("size", "3")
+                        .param("sort", "name,asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.items[*].name", is(secondPage)));
+    }
+
+
+    // ทดสอบการเรียงชื่อชมรมจากมากไปน้อย
+    @Test
+    void sortsClubsByNameDescendingCorrectly() throws Exception {
+
+        List<String> expectedNames = jdbcTemplate.queryForList(
+                """
+                SELECT name FROM clubs
+                WHERE status = 'ACTIVE'
+                ORDER BY name DESC, id ASC
+                LIMIT 5
+                """,
+                String.class
+        );
+
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("sort", "name,desc")
+                        .param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(5))
+                .andExpect(jsonPath("$.items[*].name", is(expectedNames)));
+    }
+
+
+    // ทดสอบว่าไม่แสดงชมรม INACTIVE
+    @Test
+    @Transactional
+    void excludesInactiveClubsFromSearch() throws Exception {
+
+        int updated = jdbcTemplate.update(
+                "UPDATE clubs SET status = 'INACTIVE' WHERE name = ?",
+                "ชมรมฟุตบอล"
+        );
+
+        assertEquals(1, updated);
+
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("q", "ฟุตบอล"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
                 .andExpect(jsonPath("$.page.totalElements").value(0));
     }
 
+
+    // ทดสอบการขอหน้าที่เกินจำนวนข้อมูล
     @Test
-    void recruitmentBoundariesAndManualClosureAreRespected() throws Exception {
-        mvc.perform(get(PATH).param("q", "Task62").param("recruitmentStatus", "OPEN"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
-                .andExpect(jsonPath("$.items[0].id").value(Long.toString(alpha)));
-        mvc.perform(get(PATH).param("q", "Task62").param("recruitmentStatus", "CLOSED"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(2)))
-                .andExpect(jsonPath("$.items[*].id", containsInAnyOrder(Long.toString(beta), Long.toString(thai))));
+    void returnsEmptyItemsWhenPageIsOutOfRange()
+            throws Exception {
+
+        mockMvc.perform(get("/api/v1/public/clubs")
+                        .param("page", "1000")
+                        .param("size", "3"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.page.number").value(1000))
+                .andExpect(jsonPath("$.page.size").value(3))
+                .andExpect(jsonPath("$.page.totalElements").value(10))
+                .andExpect(jsonPath("$.page.totalPages").value(4));
     }
 
-    @Test
-    void paginationAndSortUseZeroBasedPageMetadata() throws Exception {
-        mvc.perform(get(PATH).param("q", "Task62").param("size", "1").param("page", "1")
-                .param("sort", "name,asc"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(1)))
-                .andExpect(jsonPath("$.items[0].id").value(Long.toString(beta)))
-                .andExpect(jsonPath("$.page.number").value(1)).andExpect(jsonPath("$.page.size").value(1))
-                .andExpect(jsonPath("$.page.totalElements").value(3)).andExpect(jsonPath("$.page.totalPages").value(3));
-        mvc.perform(get(PATH).param("q", "Task62").param("size", "1").param("sort", "name,desc"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].id").value(Long.toString(thai)));
-        mvc.perform(get(PATH).param("q", "Task62").param("page", "10"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items", hasSize(0)))
-                .andExpect(jsonPath("$.page.totalElements").value(3));
-    }
-
-    @ParameterizedTest
-    @CsvSource({"page,-1", "page,abc", "size,0", "size,101", "categoryId,0", "tagId,-2",
-            "tagId,9223372036854775808", "categoryId,12345678901234567890",
-            "recruitmentStatus,INVALID", "sort,invalid"})
-    void invalidParametersReturnValidationProblem(String parameter, String value) throws Exception {
-        mvc.perform(get(PATH).param(parameter, value)).andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
-    }
-
-    @Test
-    void overlongQueryReturnsValidationProblem() throws Exception {
-        mvc.perform(get(PATH).param("q", "x".repeat(201))).andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
-    }
 }

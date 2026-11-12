@@ -41,6 +41,12 @@ public class ClubCommitteeAssignment {
 	@Column(name = "assigned_by", nullable = false)
 	private Long assignedBy;
 
+	@Column(name = "assignment_reason", columnDefinition = "TEXT")
+	private String assignmentReason;
+
+	@Column(name = "replaces_assignment_id")
+	private Long replacesAssignmentId;
+
 	@Column(name = "revoked_at")
 	private Instant revokedAt;
 

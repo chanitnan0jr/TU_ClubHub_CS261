@@ -306,6 +306,8 @@ Table club_committee_assignments [headercolor: #15803D] {
   ends_at                  timestamptz [not null, note: 'Exclusive end of the assigned term']
   status                   varchar(20) [not null, default: 'ACTIVE', note: 'ACTIVE means not revoked; current privileges also depend on time and membership/account status']
   assigned_by              bigint [not null]
+  assignment_reason        text [note: 'V4: required by new Admin commands; null retained for legacy rows']
+  replaces_assignment_id   bigint [note: 'V4: retained previous assignment; revoke-and-create in one transaction']
   revoked_by               bigint
   revoked_at               timestamptz
   revocation_reason        text
@@ -313,7 +315,8 @@ Table club_committee_assignments [headercolor: #15803D] {
   updated_at               timestamptz [not null, default: `now()`]
   version                  bigint [not null, default: 0]
   indexes {
-    (membership_id, permission_role, starts_at) [unique]
+    // V4 partial unique uq_committee_active_term_start WHERE status=ACTIVE AND revoked_at IS NULL.
+    // DBML cannot encode its predicate or the GiST exclusion; V4 migration is authoritative.
     (membership_id, status, starts_at, ends_at)
   }
   checks {
@@ -323,8 +326,28 @@ Table club_committee_assignments [headercolor: #15803D] {
     `(status = 'REVOKED') = (revoked_at IS NOT NULL)`
     `(revoked_at IS NULL) = (revoked_by IS NULL)`
     `revoked_at IS NULL OR revoked_at >= created_at`
+    `assignment_reason IS NULL OR length(btrim(assignment_reason)) BETWEEN 1 AND 2000`
+    `replaces_assignment_id IS NULL OR replaces_assignment_id <> id`
   }
-  Note: 'Java: ClubCommitteeAssignment stores membership_id as a scalar ID owned by the membership module. Each term is a separate retained row. Effective privileges require ACTIVE account, student profile, club and membership; membership joined_at <= now and ended_at IS NULL; assignment ACTIVE, revoked_at IS NULL and starts_at <= now < ends_at. Backend UTC time is authoritative; no expiration job is required. PRESIDENT is required for selection-result publication and round cancellation. A committee member cannot manage any round in which they have an application, in any status. Admin provisions assignments but cannot appoint itself or override club authorization. Revoke instead of deleting; role/term corrections use revoke-and-create. Prevent overlapping non-revoked terms for the same membership and permission_role. See the permission matrix for action and audit requirements; these notes do not implement them.'
+  Note: 'Java: ClubCommitteeAssignment stores membership_id as a scalar ID owned by the membership module. Each term is a separate retained row. Effective privileges require ACTIVE account, student profile, club and membership; membership joined_at <= now and ended_at IS NULL; assignment ACTIVE, revoked_at IS NULL and starts_at <= now < ends_at. Backend UTC time is authoritative; no expiration job is required. PRESIDENT is required for selection-result publication and round cancellation. A committee member cannot manage any round in which they have an application, in any status. Admin provisions assignments but cannot appoint itself or override club authorization. Revoke instead of deleting; role/term corrections use revoke-and-create. Prevent overlapping non-revoked terms for the same membership and permission_role. See the permission matrix for action and audit requirements; V4 migration implements partial uniqueness, the non-overlap exclusion, reason/reference columns and durable audit; Admin service enforces the action rules.'
+}
+
+Table committee_assignment_audit [headercolor: #15803D] {
+  id                       bigint [pk, increment]
+  assignment_id            bigint [not null]
+  actor_id                 bigint [not null]
+  action                   varchar(20) [not null]
+  reason                   text [not null]
+  occurred_at              timestamptz [not null]
+  trace_id                 uuid [not null]
+  indexes {
+    (assignment_id, occurred_at, id)
+  }
+  checks {
+    `action IN ('ASSIGNED', 'REVOKED')`
+    `length(btrim(reason)) BETWEEN 1 AND 2000`
+  }
+  Note: 'V4. Durable Admin command audit. Replacement emits REVOKED and ASSIGNED with one trace UUID. Assignment and audit writes share one transaction. No session IDs, passwords or applicant contents.'
 }
 
 Table membership_history [headercolor: #15803D] {
@@ -397,6 +420,9 @@ Ref: club_memberships.(source_application_id, user_id, club_id) >? applications.
 Ref: club_committee_assignments.membership_id > club_memberships.id [delete: restrict, color: #15803D]
 Ref: club_committee_assignments.assigned_by > users.id [delete: restrict, color: #94A3B8]
 Ref: club_committee_assignments.revoked_by >? users.id [delete: restrict, color: #94A3B8]
+Ref: club_committee_assignments.replaces_assignment_id >? club_committee_assignments.id [delete: restrict, color: #15803D]
+Ref: committee_assignment_audit.assignment_id > club_committee_assignments.id [delete: restrict, color: #15803D]
+Ref: committee_assignment_audit.actor_id > users.id [delete: restrict, color: #94A3B8]
 Ref: membership_history.membership_id > club_memberships.id [delete: restrict, color: #15803D]
 Ref: membership_history.actor_id >? users.id [delete: restrict, color: #94A3B8]
 Ref: notifications.recipient_id > users.id [delete: restrict, color: #BE185D]
@@ -433,6 +459,7 @@ TableGroup "04_Applications" [color: #F5F3FF] {
 TableGroup "05_Membership" [color: #F0FDF4] {
   club_memberships
   club_committee_assignments
+  committee_assignment_audit
   membership_history
 }
 

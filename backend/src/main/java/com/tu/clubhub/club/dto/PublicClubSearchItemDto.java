@@ -1,3 +1,4 @@
+
 package com.tu.clubhub.club.dto;
 
 import java.util.List;
@@ -11,5 +12,6 @@ public record PublicClubSearchItemDto(
         String imageUrl,
         PublicClubCategoryDto category,
         List<PublicClubTagDto> tags,
-        boolean hasOpenRecruitment) {
+        boolean hasOpenRecruitment
+) {
 }
