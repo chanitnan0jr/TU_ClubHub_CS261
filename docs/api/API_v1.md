@@ -98,7 +98,7 @@ All state-changing requests, including login and logout, require a valid CSRF to
 1. Call `GET /api/v1/auth/csrf`; retain the returned CSRF token in memory and allow the browser to retain the session cookie.
 2. Call `POST /api/v1/auth/login` with credentials and the returned CSRF header.
 3. After successful login, the backend rotates the session ID and returns a fresh CSRF token in the login response body. Replace the in-memory token before making another state-changing request; no extra CSRF request is needed after login.
-4. Call `GET /api/v1/auth/me` to initialize or restore the frontend auth state.
+4. Call `GET /api/v1/auth/me` to initialize or restore the frontend auth state. After an explicit login, wait for this call to succeed with the current user before navigating to the validated same-site `next` path and announcing “เข้าสู่ระบบสำเร็จ”. Keep the dismissible success message in an application-level `role="status"` live region so it survives the route change. A failed login or failed session load must not announce success. Session restoration on reload is not a new login and must not replay this message; keep the notification only in memory, not in storage or URL/history state (issue #78).
 5. Before logout, send the current CSRF token to `POST /api/v1/auth/logout`. Clear frontend auth state and fetch a fresh CSRF token before a later login.
 
 The frontend must not read, copy, or persist the session cookie. The backend must establish and save the authenticated Spring Security context in the JDBC session so that a subsequent request using that cookie is authenticated.
@@ -150,6 +150,8 @@ With the `dev` or `test` profile, the fixed demo credentials are `student-demo` 
 ```
 
 The `username` field is the TU account identifier entered by the user. The backend adapter maps it to the official TU API request format. The password must not be logged, stored, returned, or copied into the session.
+
+**Success contract (issue #78):** HTTP `200` and the existing `LoginResponse` (`user`, fresh `csrf`) identify a successful login. No additional `status: true` or `message` field is required. The frontend selects its own localized confirmation text only after the subsequent `/auth/me` succeeds; a stale response after logout/session invalidation cannot restore authentication or trigger the confirmation. This clarification preserves the response schema and existing clients.
 
 Before calling the TU service, the backend counts attempts per client address and per username (case-insensitive). A request over either limit gets `429 RATE_LIMITED` with `Retry-After` in seconds and `Cache-Control: no-store`, and the TU service is not called, even when the password is correct. Successful verification clears that username's count; the client address count stays. Requests rejected with `400` are not counted. Defaults are 50 attempts per client address per 10 minutes and 5 attempts per username per 15 minutes, in fixed windows; deployments can change them through `clubhub.auth.login-limit.*`. Counts are kept in memory per application instance.
 
