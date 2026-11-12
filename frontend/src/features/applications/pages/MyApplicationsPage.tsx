@@ -18,6 +18,12 @@ import {
   ApplicationStatusBadge,
 } from '../components/ApplicationCard';
 import {
+  ConfirmMembershipDialog,
+  DeclineMembershipDialog,
+} from '../components/MembershipDecisionDialog';
+import {
+  confirmMembershipOffer,
+  declineMembershipOffer,
   fetchMyApplicationDetail,
   fetchMyApplications,
   MY_APPLICATIONS_PAGE_SIZE,
@@ -259,6 +265,45 @@ export function MyApplicationDetailPage({
     () => fetchMyApplicationDetail(applicationId),
   );
 
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isDeclineOpen, setIsDeclineOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const handleConfirm = async () => {
+    setIsProcessing(true);
+    setActionError(null);
+    try {
+      await confirmMembershipOffer(applicationId);
+      setIsConfirmOpen(false);
+      reload();
+    } catch (err) {
+      setIsConfirmOpen(false);
+      setActionError(
+        describeApiError(err, 'ไม่สามารถยืนยันสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง'),
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDecline = async () => {
+    setIsProcessing(true);
+    setActionError(null);
+    try {
+      await declineMembershipOffer(applicationId);
+      setIsDeclineOpen(false);
+      reload();
+    } catch (err) {
+      setIsDeclineOpen(false);
+      setActionError(
+        describeApiError(err, 'ไม่สามารถสละสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง'),
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6 pb-12" role="status">
@@ -377,6 +422,15 @@ export function MyApplicationDetailPage({
         description="ข้อมูลผลการพิจารณาและกำหนดการที่เกี่ยวข้องกับใบสมัครของคุณ"
       >
         <div className="flex flex-col gap-4">
+          {actionError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800"
+            >
+              {actionError}
+            </div>
+          )}
+
           {detail.applicantVisibleStatus === 'SUBMITTED' && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
               <p className="font-semibold">
@@ -394,6 +448,48 @@ export function MyApplicationDetailPage({
               {deadlineText && (
                 <p className="mt-1 text-xs font-medium text-emerald-800">
                   กรุณายืนยันสิทธิ์ภายในวันที่: {deadlineText}
+                </p>
+              )}
+
+              {detail.canConfirm && detail.canDecline && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-emerald-200/80 pt-4">
+                  <Button
+                    variant="primary"
+                    onClick={() => setIsConfirmOpen(true)}
+                  >
+                    ยืนยันสิทธิ์เข้าชมรม
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setIsDeclineOpen(true)}
+                  >
+                    สละสิทธิ์
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {detail.applicantVisibleStatus === 'CONFIRMED' && (
+            <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950">
+              <p className="text-base font-bold text-emerald-900">
+                เป็นสมาชิกชมรมเรียบร้อยแล้ว
+              </p>
+              <p className="mt-1 text-emerald-800">
+                คุณได้ยืนยันสิทธิ์เข้าร่วม {club.name} เรียบร้อยแล้ว
+                {respondedText ? ` (เมื่อ ${respondedText})` : ''}
+              </p>
+            </div>
+          )}
+
+          {detail.applicantVisibleStatus === 'DECLINED' && (
+            <div className="rounded-lg border border-slate-200 bg-slate-100 p-4 text-sm text-slate-700">
+              <p className="font-semibold text-slate-900">
+                คุณได้สละสิทธิ์การเข้าร่วมชมรมนี้แล้ว
+              </p>
+              {respondedText && (
+                <p className="mt-1 text-xs text-slate-500">
+                  ดำเนินการเมื่อ: {respondedText}
                 </p>
               )}
             </div>
@@ -526,6 +622,23 @@ export function MyApplicationDetailPage({
           )}
         </div>
       </SectionCard>
+
+      <ConfirmMembershipDialog
+        isOpen={isConfirmOpen}
+        roundTitle={round.title}
+        clubName={club.name}
+        isConfirming={isProcessing}
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={handleConfirm}
+      />
+
+      <DeclineMembershipDialog
+        isOpen={isDeclineOpen}
+        clubName={club.name}
+        isDeclining={isProcessing}
+        onClose={() => setIsDeclineOpen(false)}
+        onConfirm={handleDecline}
+      />
     </div>
   );
 }
