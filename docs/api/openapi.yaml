@@ -2743,11 +2743,127 @@ paths:
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/rounds/{roundId}/applications/{applicationId}/decision:
+    get:
+      tags:
+        - Committee Review & Results
+      operationId: getApplicationDecision
+      x-implementation-status: implemented
+      summary: Load an authorized selection decision editor snapshot
+      description: Requires SESSION and an effective COMMITTEE or PRESIDENT assignment
+        for the owning club, with no application of the caller in this round
+        (including withdrawn applications). The round must be PUBLISHED and not
+        CANCELLED. Returns the existing CommitteeApplicationDetail including
+        expected application version, draft decisions and internal reviews. This
+        separate editor GET preserves the trimmed Task65 club-scoped read DTO. No
+        application state is changed. It remains readable after result publication,
+        while further writes are forbidden. Never expose this DTO through applicant
+        APIs. Uses a repeatable-read snapshot and no-store.
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/PositiveBigintId"
+          example: "70001"
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/PositiveBigintId"
+          example: "90001"
+      responses:
+        "200":
+          description: Internal selection decision saved
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/ApplicationNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommitteeApplicationDetail"
+              example:
+                id: "90001"
+                clubId: "20001"
+                roundId: "70001"
+                applicant:
+                  userId: "10001"
+                  studentCode: "6609650001"
+                  displayName: Somchai Jaidee
+                  email: somchai.jai@dome.tu.ac.th
+                  facultyName: Faculty of Science and Technology
+                  departmentName: Computer Science
+                  programName: Computer Science
+                  studyYear: 2
+                motivation: I would like to help organize club activities.
+                questionsWithAnswers:
+                  - questionId: "81001"
+                    questionText: Describe an activity you helped organize.
+                    isRequired: true
+                    displayOrder: 1
+                    answerText: I have organized student workshops.
+                links:
+                  - id: "95001"
+                    label: Portfolio
+                    url: https://example.org/portfolio
+                    displayOrder: 1
+                status: ACCEPTED
+                resultMessage: Congratulations! Please confirm your membership before the
+                  deadline.
+                decidedBy: "10002"
+                decidedAt: 2026-10-25T19:00:00Z
+                respondedAt: null
+                version: 1
+                submittedAt: 2026-10-19T09:30:00Z
+                reviews:
+                  - id: "97001"
+                    reviewerId: "10002"
+                    reviewerDisplayName: Committee Member
+                    recommendation: ACCEPT
+                    internalComment: Strong portfolio and workshop experience.
+                    createdAt: 2026-10-25T19:00:00Z
+                    updatedAt: 2026-10-25T19:00:00Z
+                    version: 0
+                statusHistory:
+                  - fromStatus: null
+                    toStatus: SUBMITTED
+                    actorId: "10001"
+                    reason: APPLICATION_SUBMITTED
+                    changedAt: 2026-10-19T09:30:00Z
+                  - fromStatus: SUBMITTED
+                    toStatus: ACCEPTED
+                    actorId: "10002"
+                    reason: COMMITTEE_DECISION
+                    changedAt: 2026-10-25T19:00:00Z
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Round or application does not exist (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Round still open, results already published, round cancelled, or
+            optimistic lock version mismatch
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApplicationDecisionConflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
     put:
       tags: [Committee Review & Results]
       operationId: recordApplicationDecision
-      x-implementation-status: pending
-      x-contract-status: specified-in-task75
+      x-implementation-status: implemented
+      x-contract-status: implemented-in-task67-pending-team-review
       summary: Record or update an internal selection decision before publication (S2-DECISION-DRAFT / Task67)
       description: >-
         Requires SESSION, X-CSRF-TOKEN, and an effective COMMITTEE or PRESIDENT
@@ -2760,7 +2876,13 @@ paths:
         When internalNote is provided, upserts application_reviews for (application_id,
         reviewer_id) with internal_comment = internalNote and recommendation mapped
         from decision (ACCEPT for ACCEPTED, REJECT for REJECTED).
-        Does not expose the decision to the applicant until POST /publish-results commits.
+        Null, blank or omitted internalNote preserves the caller's existing review.
+        Omitted or null resultMessage clears the applicant-facing message (PUT replacement).
+        Durable selection_result_audit, changed-state history, review and decision commit together.
+        Retains granting assignment locks before round FOR SHARE and sorted application FOR UPDATE,
+        then rechecks write eligibility and samples one final UTC time after lock waits.
+        ACCEPTED/REJECTED only; WAITLIST is unsupported. Does not expose the decision
+        to the applicant until POST /publish-results commits.
       security:
         - SessionCookie: []
           CsrfHeader: []
@@ -2872,12 +2994,142 @@ paths:
           $ref: '#/components/responses/ServerError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  "/api/v1/rounds/{roundId}/application-decisions":
+    put:
+      tags:
+        - Committee Review & Results
+      operationId: recordBatchApplicationDecisions
+      x-implementation-status: implemented
+      summary: Atomically save a batch of pre-publication decisions
+      description: "Requester-confirmed atomic batch: 1 to 100 unique application IDs
+        from this round; any validation, authorization, state, version, history or
+        audit failure rolls back the entire batch. Same assignment, no-self-review
+        and closed/unpublished round rules as the individual PUT. Lock granting
+        assignments first, round FOR SHARE, then all requested applications
+        ordered by ID FOR UPDATE; validate every item before the first write. The
+        final server time and write permissions are checked after waiting.
+        Application IDs are canonical positive signed-BIGINT decimal strings;
+        invalid/duplicate IDs return 400. Existing foreign-round applications
+        return 403; missing applications 404. Response items retain request order.
+        One durable audit row per item shares a server trace UUID.
+        ACCEPTED/REJECTED only; WAITLIST is unsupported. Requires SESSION and
+        X-CSRF-TOKEN. All responses use no-store."
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/PositiveBigintId"
+          example: "70001"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchApplicationDecisionRequest"
+            example:
+              decisions:
+                - applicationId: "90001"
+                  decision: ACCEPTED
+                  resultMessage: Welcome to the fictional club.
+                  internalNote: Committee-only fictional note.
+                  version: 0
+      responses:
+        "200":
+          description: All decisions saved atomically; input order preserved
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/ApplicationNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchApplicationDecisionResponse"
+              example:
+                items:
+                  - id: "90001"
+                    clubId: "20001"
+                    roundId: "70001"
+                    applicant:
+                      userId: "10001"
+                      studentCode: "6609650001"
+                      displayName: Somchai Jaidee
+                      email: somchai.jai@dome.tu.ac.th
+                      facultyName: Faculty of Science and Technology
+                      departmentName: Computer Science
+                      programName: Computer Science
+                      studyYear: 2
+                    motivation: I would like to help organize club activities.
+                    questionsWithAnswers:
+                      - questionId: "81001"
+                        questionText: Describe an activity you helped organize.
+                        isRequired: true
+                        displayOrder: 1
+                        answerText: I have organized student workshops.
+                    links:
+                      - id: "95001"
+                        label: Portfolio
+                        url: https://example.org/portfolio
+                        displayOrder: 1
+                    status: ACCEPTED
+                    resultMessage: Congratulations! Please confirm your membership before the
+                      deadline.
+                    decidedBy: "10002"
+                    decidedAt: 2026-10-25T19:00:00Z
+                    respondedAt: null
+                    version: 1
+                    submittedAt: 2026-10-19T09:30:00Z
+                    reviews:
+                      - id: "97001"
+                        reviewerId: "10002"
+                        reviewerDisplayName: Committee Member
+                        recommendation: ACCEPT
+                        internalComment: Strong portfolio and workshop experience.
+                        createdAt: 2026-10-25T19:00:00Z
+                        updatedAt: 2026-10-25T19:00:00Z
+                        version: 0
+                    statusHistory:
+                      - fromStatus: null
+                        toStatus: SUBMITTED
+                        actorId: "10001"
+                        reason: APPLICATION_SUBMITTED
+                        changedAt: 2026-10-19T09:30:00Z
+                      - fromStatus: SUBMITTED
+                        toStatus: ACCEPTED
+                        actorId: "10002"
+                        reason: COMMITTEE_DECISION
+                        changedAt: 2026-10-25T19:00:00Z
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Round or application does not exist (RESOURCE_NOT_FOUND)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: Round still open, results already published, round cancelled, or
+            optimistic lock version mismatch
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApplicationDecisionConflict"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/v1/rounds/{roundId}/publish-results:
     post:
       tags: [Committee Review & Results]
       operationId: publishRoundSelectionResults
-      x-implementation-status: pending
-      x-contract-status: specified-in-task75
+      x-implementation-status: implemented
+      x-contract-status: implemented-in-task67-pending-team-review
       summary: Publish finalized selection results for a recruitment round (S2-PUBLICATION-DRAFT / Task67)
       description: >-
         Requires SESSION, X-CSRF-TOKEN, and an effective PRESIDENT assignment for
@@ -2889,6 +3141,12 @@ paths:
         or UNDER_REVIEW). Sets recruitment_rounds.results_published_at = serverNow,
         increments version, and creates RESULT_PUBLISHED notifications in one transaction
         without writing same-state rows to application_status_history (T74-D03).
+        WITHDRAWN applications are ignored; a round with no active applications may publish
+        with zero counts. Repeated publication returns 409 RESULTS_ALREADY_PUBLISHED
+        without duplicate audit or notifications. Locks granting assignments, round FOR UPDATE
+        and its applications ordered by ID; rechecks eligibility and deadline after waiting.
+        Durable selection_result_audit commits with round metadata and notification rows.
+        Structured audit logging occurs only after commit. No external delivery worker is added.
       security:
         - SessionCookie: []
           CsrfHeader: []
@@ -4846,6 +5104,7 @@ components:
           format: date-time
           description: Persisted application_status_history.changed_at timestamp.
     CommitteeApplicationDetail:
+      description: Dedicated authorized evaluation editor/write DTO; never reuse for Task65 reads or applicant APIs.
       type: object
       additionalProperties: false
       required: [id, clubId, roundId, applicant, motivation, questionsWithAnswers, links, status, resultMessage, decidedBy, decidedAt, respondedAt, version, submittedAt, reviews, statusHistory]
@@ -4927,6 +5186,69 @@ components:
           type: integer
           minimum: 0
           description: Expected applications.version for optimistic locking.
+    BatchApplicationDecisionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - decisions
+      description: Atomic requester-confirmed batch. All application IDs must be
+        unique canonical signed-BIGINT decimal strings from the path round. The
+        bounded batch size is a technical limit. Items are validated before any
+        mutation.
+      properties:
+        decisions:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - applicationId
+              - decision
+              - version
+            properties:
+              applicationId:
+                $ref: "#/components/schemas/PositiveBigintId"
+              decision:
+                type: string
+                enum:
+                  - ACCEPTED
+                  - REJECTED
+              resultMessage:
+                type:
+                  - string
+                  - "null"
+                maxLength: 1000
+                pattern: '^[^\u0000]*$'
+                description: Applicant-facing feedback stored in applications.result_message;
+                  hidden from the applicant until round.results_published_at is set.
+              internalNote:
+                type:
+                  - string
+                  - "null"
+                maxLength: 2000
+                pattern: '^[^\u0000]*$'
+                description: Committee-only note stored only in application_reviews.internal_comment;
+                  null, blank or omitted preserves the caller review. History uses fixed
+                  COMMITTEE_DECISION reason. Never exposed to applicants.
+              version:
+                type: integer
+                minimum: 0
+                maximum: 9223372036854775806
+                description: Expected applications.version for optimistic locking.
+    BatchApplicationDecisionResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/CommitteeApplicationDetail"
     ApplicationDecisionRequest:
       type: object
       additionalProperties: false
@@ -4946,18 +5268,22 @@ components:
         resultMessage:
           type: [string, 'null']
           maxLength: 1000
+          pattern: '^[^\u0000]*$'
           description: >-
             Applicant-facing feedback stored in applications.result_message;
             hidden from the applicant until round.results_published_at is set.
         internalNote:
           type: [string, 'null']
           maxLength: 2000
+          pattern: '^[^\u0000]*$'
           description: >-
-            Committee-only note stored in application_reviews.internal_comment
-            and/or application_status_history.reason; never exposed to applicants.
+            Committee-only note stored only in application_reviews.internal_comment;
+            history reason is the fixed COMMITTEE_DECISION code. Null, blank or omitted
+            preserves the caller's existing review. Never exposed to applicants.
         version:
           type: integer
           minimum: 0
+          maximum: 9223372036854775806
           description: Expected applications.version for optimistic locking.
     ApplicationDecisionConflict:
       allOf:
@@ -4984,13 +5310,14 @@ components:
       description: >-
         Atomically publishes all pre-recorded ACCEPTED and REJECTED decisions
         for a closed recruitment round by setting
-        recruitment_rounds.results_published_at = serverNow and queuing outbox
-        notifications for all decided applications (T74-D03). The round's
+        recruitment_rounds.results_published_at = serverNow and inserting notification
+        rows for all decided applications (T74-D03). No external notification delivery worker is added. The round's
         confirmation_deadline is already stored on recruitment_rounds.
       properties:
         version:
           type: integer
           minimum: 0
+          maximum: 9223372036854775806
           description: Expected recruitment_rounds.version for optimistic locking.
     PublishResultsResponse:
       type: object
