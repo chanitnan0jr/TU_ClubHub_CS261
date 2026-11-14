@@ -4,13 +4,15 @@
 |---|---|
 | **Task ID** | `Task70` |
 | **Feature Code** | `MEMBER-02` |
-| **สถานะบน Trello** | `To Do` |
+| **สถานะบน Trello** | `Doing` (In Review — PR #83) |
 | **ผู้รับผิดชอบ (Owner)** | เขมจิรา (FE2 - Frontend Engineer) |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (SE) |
 | **งานที่ต้องทำก่อน (Dependency)** | Task69 (Member API) และ Task64 (Application Tracking UI) |
 | **SDLC Labels** | 3. Development (Coding), 4. Testing & QA |
 | **สมาชิกบนการ์ด Trello** | Khem|
 | **Trello Card Link** | [https://trello.com/c/coUzzxER](https://trello.com/c/coUzzxER) |
+| **Pull Request** | [PR #83](https://github.com/chanitnan0jr/TU_ClubHub_CS261/pull/83) |
+| **Test Reports** | [`docs/testing/qa-task70.md`](../../testing/qa-task70.md) |
 
 ---
 
@@ -38,15 +40,15 @@
 
 ### เกณฑ์ตรวจรับ (Acceptance Criteria)
 
-- [ ] ปุ่มยืนยันสิทธิ์และสละสิทธิ์จะแสดงเฉพาะใบสมัครที่อยู่ในสถานะผ่านการคัดเลือกเท่านั้น
-- [ ] มีกล่องยืนยัน (Confirmation Modal) ชัดเจนก่อนส่งคำขอ เพื่อป้องกันการกดพลาด
-- [ ] หลังทำรายการสำเร็จ หน้าจออัปเดตสถานะทันทีโดยไม่ต้อง Refresh หน้าเว็บ
+- [x] ปุ่มยืนยันสิทธิ์และสละสิทธิ์จะแสดงเฉพาะใบสมัครที่อยู่ในสถานะผ่านการคัดเลือกเท่านั้น
+- [x] มีกล่องยืนยัน (Confirmation Modal) ชัดเจนก่อนส่งคำขอ เพื่อป้องกันการกดพลาด
+- [x] หลังทำรายการสำเร็จ หน้าจออัปเดตสถานะทันทีโดยไม่ต้อง Refresh หน้าเว็บ
 
 ### Definition of Done (Checklist กลาง)
 
-- [ ] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
-- [ ] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
-- [ ] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
-- [ ] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
+- [x] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
+- [x] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
+- [x] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
+- [x] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
 - [ ] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
 - [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ

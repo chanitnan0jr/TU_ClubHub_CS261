@@ -40,7 +40,7 @@
 | [**Task67**](Task67.md) | `RESULT-01` | ทำ Backend API บันทึกผลการคัดเลือกและประกาศผล | `To Do` | อริยะวีร์ (BE2 - Backend Engineer) | สิรวิชญ์ (SE) | [Trello](https://trello.com/c/FI0N4S2e) |
 | [**Task68**](Task68.md) | `RESULT-02` | พัฒนาหน้าจอประเมินคะแนนและกดยืนยันประกาศผล | `To Do` | ภูบดี (FE1 - Frontend Engineer) | สิรวิชญ์ (SE) | [Trello](https://trello.com/c/buiXkPO3) |
 | [**Task69**](Task69.md) | `MEMBER-01` | ทำ Backend API ยืนยันสิทธิ์/สละสิทธิ์ และเพิ่มเป็นสมาชิกชมรม | `To Do` | วรพล (BE1 - Backend Engineer) | สิรวิชญ์ (SE) | [Trello](https://trello.com/c/QLoXKZxo) |
-| [**Task70**](Task70.md) | `MEMBER-02` | พัฒนาหน้าจอให้ผู้สมัครกดยืนยันสิทธิ์หรือสละสิทธิ์ | `To Do` | เขมจิรา (FE2 - Frontend Engineer) | สิรวิชญ์ (SE) | [Trello](https://trello.com/c/coUzzxER) |
+| [**Task70**](Task70.md) | `MEMBER-02` | พัฒนาหน้าจอให้ผู้สมัครกดยืนยันสิทธิ์หรือสละสิทธิ์ | `Doing` | เขมจิรา (FE2 - Frontend Engineer) | สิรวิชญ์ (SE) | [Trello](https://trello.com/c/coUzzxER) |
 | [**Task71**](Task71.md) | `REPORT-01` | ทำ Backend API คำนวณสถิติภาพรวมสำหรับ Admin | `To Do` | ณัฐชนินทร์ (Boom - Fullstack / Backend) | สิรวิชญ์ (SE) | [Trello](https://trello.com/c/1YJliqm2) |
 | [**Task72**](Task72.md) | `REPORT-02` | พัฒนาหน้า Central Dashboard แสดงกราฟและสถิติภาพรวม | `To Do` | เขมจิรา (FE2 - Frontend Engineer) | สิรวิชญ์ (SE) | [Trello](https://trello.com/c/HeYEYWBE) |
 | [**Task73**](Task73.md) | `RELEASE-05` | ตรวจรับระบบรวม End-to-End และเตรียมพร้อมส่งมอบ Sprint 2 | `To Do` | สิรวิชญ์ (QA Lead) ร่วมกับทีมทั้ง 7 คน | ชนิตว์นันท์ (PO) & สมาชิกทุกคน | [Trello](https://trello.com/c/CrQUam4X) |
