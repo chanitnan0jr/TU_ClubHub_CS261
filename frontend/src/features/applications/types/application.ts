@@ -83,11 +83,13 @@ export type ApplicationFilterTab =
   | 'REJECTED'
   | 'CONFIRMED_DECLINED';
 
-  export interface MembershipOfferResponse {
+export type MembershipDecision = 'confirm' | 'decline';
+
+export interface MembershipOfferResponse {
   applicationId: string;
   clubId: string;
   roundId: string;
-  status: ApplicantVisibleStatus;
+  status: Extract<ApplicantVisibleStatus, 'CONFIRMED' | 'DECLINED'>;
   displayStatusLabel: string;
   respondedAt: string;
   membershipId: string | null;

@@ -2,6 +2,7 @@ import { apiRequest } from '../../../lib/api';
 import type {
   ApplicantApplicationDetail,
   ApplicantApplicationPage,
+  MembershipDecision,
   MembershipOfferResponse,
 } from '../types/application';
 
@@ -24,20 +25,12 @@ export async function fetchMyApplicationDetail(
   );
 }
 
-export async function confirmMembershipOffer(
+export async function respondToMembershipOffer(
   applicationId: string,
+  decision: MembershipDecision,
 ): Promise<MembershipOfferResponse> {
   return apiRequest<MembershipOfferResponse>(
-    `/api/v1/me/applications/${encodeURIComponent(applicationId)}/confirm`,
-    { method: 'POST' },
-  );
-}
-
-export async function declineMembershipOffer(
-  applicationId: string,
-): Promise<MembershipOfferResponse> {
-  return apiRequest<MembershipOfferResponse>(
-    `/api/v1/me/applications/${encodeURIComponent(applicationId)}/decline`,
+    `/api/v1/me/applications/${encodeURIComponent(applicationId)}/${decision}`,
     { method: 'POST' },
   );
 }
