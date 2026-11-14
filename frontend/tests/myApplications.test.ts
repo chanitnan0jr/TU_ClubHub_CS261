@@ -314,12 +314,24 @@ test('my application detail route rejects non-numeric application IDs without ca
   }
 })
 
+const detailItem = (
+  id: string,
+  summaryOverrides: Record<string, unknown> = {},
+  detailOverrides: Record<string, unknown> = {},
+) => ({
+  ...summaryItem(id, summaryOverrides),
+  resultMessage: null,
+  motivation: 'ตั้งใจเข้าร่วมกิจกรรม',
+  questionsWithAnswers: [],
+  links: [],
+  statusHistory: [],
+  ...detailOverrides,
+})
+
 test('my application detail page confirms membership offer via dialog and updates UI immediately', async () => {
-  let confirmed = false
   const stub = renderApp(request => {
     if (request.url === '/api/v1/auth/csrf') return csrfResponse()
     if (request.url === '/api/v1/me/applications/90001/confirm' && request.method === 'POST') {
-      confirmed = true
       return json({
         applicationId: '90001',
         clubId: '20001',
@@ -331,26 +343,27 @@ test('my application detail page confirms membership offer via dialog and update
         idempotentReplay: false,
       })
     }
-    return json({
-      ...summaryItem('90001', {
-        applicantVisibleStatus: confirmed ? 'CONFIRMED' : 'ACCEPTED_PENDING_CONFIRMATION',
-        displayStatusLabel: confirmed ? 'ยืนยันสิทธิ์แล้ว' : 'ผ่านการคัดเลือก (รอยืนยันสิทธิ์)',
-        canConfirm: !confirmed,
-        canDecline: !confirmed,
-        respondedAt: confirmed ? '2026-10-27T08:00:00Z' : null,
-      }),
-      resultMessage: 'ยินดีต้อนรับเข้าสู่ชมรม',
-      motivation: 'ตั้งใจเข้าร่วมกิจกรรม',
-      questionsWithAnswers: [],
-      links: [],
-      statusHistory: [
+    return json(
+      detailItem(
+        '90001',
         {
-          status: 'SUBMITTED',
-          displayStatusLabel: 'ส่งใบสมัครแล้ว',
-          occurredAt: '2026-10-15T04:00:00Z',
+          applicantVisibleStatus: 'ACCEPTED_PENDING_CONFIRMATION',
+          displayStatusLabel: 'ผ่านการคัดเลือก (รอยืนยันสิทธิ์)',
+          canConfirm: true,
+          canDecline: true,
         },
-      ],
-    })
+        {
+          resultMessage: 'ยินดีต้อนรับเข้าสู่ชมรม',
+          statusHistory: [
+            {
+              status: 'SUBMITTED',
+              displayStatusLabel: 'ส่งใบสมัครแล้ว',
+              occurredAt: '2026-10-15T04:00:00Z',
+            },
+          ],
+        },
+      ),
+    )
   }, '/me/applications/90001')
 
   try {
@@ -365,6 +378,15 @@ test('my application detail page confirms membership offer via dialog and update
     assert.equal(screen.queryByRole('button', { name: 'ยืนยันสิทธิ์เข้าชมรม' }), null)
     assert.equal(screen.queryByRole('button', { name: 'สละสิทธิ์' }), null)
 
+    const timeline = screen.getByRole('list', { name: 'ไทม์ไลน์สถานะใบสมัคร' })
+    assert.ok(within(timeline).getByText('ยืนยันสิทธิ์แล้ว'))
+    assert.equal(screen.getAllByText('ยืนยันสิทธิ์แล้ว').length, 2)
+
+    const detailGets = stub.requests.filter(
+      r => r.url === '/api/v1/me/applications/90001' && r.method === 'GET',
+    )
+    assert.equal(detailGets.length, 1)
+
     const postRequest = stub.requests.find(r => r.url === '/api/v1/me/applications/90001/confirm')
     assert.equal(postRequest?.method, 'POST')
     assert.equal(postRequest?.headers['X-CSRF-TOKEN'], 'csrf-token')
@@ -375,11 +397,9 @@ test('my application detail page confirms membership offer via dialog and update
 })
 
 test('my application detail page declines membership offer via dialog and updates UI immediately', async () => {
-  let declined = false
   const stub = renderApp(request => {
     if (request.url === '/api/v1/auth/csrf') return csrfResponse()
     if (request.url === '/api/v1/me/applications/90001/decline' && request.method === 'POST') {
-      declined = true
       return json({
         applicationId: '90001',
         clubId: '20001',
@@ -391,20 +411,14 @@ test('my application detail page declines membership offer via dialog and update
         idempotentReplay: false,
       })
     }
-    return json({
-      ...summaryItem('90001', {
-        applicantVisibleStatus: declined ? 'DECLINED' : 'ACCEPTED_PENDING_CONFIRMATION',
-        displayStatusLabel: declined ? 'สละสิทธิ์แล้ว' : 'ผ่านการคัดเลือก (รอยืนยันสิทธิ์)',
-        canConfirm: !declined,
-        canDecline: !declined,
-        respondedAt: declined ? '2026-10-27T09:00:00Z' : null,
+    return json(
+      detailItem('90001', {
+        applicantVisibleStatus: 'ACCEPTED_PENDING_CONFIRMATION',
+        displayStatusLabel: 'ผ่านการคัดเลือก (รอยืนยันสิทธิ์)',
+        canConfirm: true,
+        canDecline: true,
       }),
-      resultMessage: null,
-      motivation: 'ตั้งใจเข้าร่วมกิจกรรม',
-      questionsWithAnswers: [],
-      links: [],
-      statusHistory: [],
-    })
+    )
   }, '/me/applications/90001')
 
   try {
@@ -417,6 +431,14 @@ test('my application detail page declines membership offer via dialog and update
 
     assert.ok(await screen.findByText('คุณได้สละสิทธิ์การเข้าร่วมชมรมนี้แล้ว'))
     assert.equal(screen.queryByRole('button', { name: 'ยืนยันสิทธิ์เข้าชมรม' }), null)
+
+    const timeline = screen.getByRole('list', { name: 'ไทม์ไลน์สถานะใบสมัคร' })
+    assert.ok(within(timeline).getByText('สละสิทธิ์แล้ว'))
+
+    const detailGets = stub.requests.filter(
+      r => r.url === '/api/v1/me/applications/90001' && r.method === 'GET',
+    )
+    assert.equal(detailGets.length, 1)
   } finally {
     cleanup()
     stub.restore()
@@ -427,21 +449,16 @@ test('my application detail page shows Thai conflict message when confirmation f
   const stub = renderApp(request => {
     if (request.url === '/api/v1/auth/csrf') return csrfResponse()
     if (request.url === '/api/v1/me/applications/90001/confirm' && request.method === 'POST') {
-      return problem(409, 'CONFLICT', 'Limit exceeded', { reason: 'MEMBERSHIP_LIMIT_REACHED' })
+      return problem(409, 'RESOURCE_CONFLICT', 'Limit exceeded', { reason: 'MEMBERSHIP_LIMIT_REACHED' })
     }
-    return json({
-      ...summaryItem('90001', {
+    return json(
+      detailItem('90001', {
         applicantVisibleStatus: 'ACCEPTED_PENDING_CONFIRMATION',
         displayStatusLabel: 'ผ่านการคัดเลือก (รอยืนยันสิทธิ์)',
         canConfirm: true,
         canDecline: true,
       }),
-      resultMessage: null,
-      motivation: 'ตั้งใจเข้าร่วมกิจกรรม',
-      questionsWithAnswers: [],
-      links: [],
-      statusHistory: [],
-    })
+    )
   }, '/me/applications/90001')
 
   try {
@@ -451,6 +468,175 @@ test('my application detail page shows Thai conflict message when confirmation f
 
     const alert = await screen.findByRole('alert')
     assert.equal(alert.textContent, 'คุณเป็นสมาชิกชมรมครบจำนวนสูงสุด 5 ชมรมแล้ว')
+
+    const detailGets = stub.requests.filter(
+      r => r.url === '/api/v1/me/applications/90001' && r.method === 'GET',
+    )
+    assert.equal(detailGets.length, 2)
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
+test('my application detail page hides offer decision buttons outside confirmable offers', async () => {
+  const hiddenStates = [
+    { status: 'SUBMITTED', label: 'รอพิจารณา', canConfirm: false, canDecline: false },
+    { status: 'REJECTED', label: 'ไม่ผ่านการคัดเลือก', canConfirm: false, canDecline: false },
+    { status: 'CONFIRMED', label: 'ยืนยันสิทธิ์แล้ว', canConfirm: false, canDecline: false },
+    { status: 'DECLINED', label: 'สละสิทธิ์แล้ว', canConfirm: false, canDecline: false },
+    {
+      status: 'ACCEPTED_PENDING_CONFIRMATION',
+      label: 'ผ่านการคัดเลือก (รอยืนยันสิทธิ์)',
+      canConfirm: false,
+      canDecline: false,
+    },
+  ]
+
+  for (const state of hiddenStates) {
+    const stub = renderApp(
+      () =>
+        json(
+          detailItem('90001', {
+            applicantVisibleStatus: state.status,
+            displayStatusLabel: state.label,
+            canConfirm: state.canConfirm,
+            canDecline: state.canDecline,
+          }),
+        ),
+      '/me/applications/90001',
+    )
+    try {
+      await screen.findByRole('heading', { level: 1, name: 'ชมรมทดสอบ 90001' })
+      assert.equal(screen.queryByRole('button', { name: 'ยืนยันสิทธิ์เข้าชมรม' }), null)
+      assert.equal(screen.queryByRole('button', { name: 'สละสิทธิ์' }), null)
+    } finally {
+      cleanup()
+      stub.restore()
+    }
+  }
+})
+
+test('my application detail page reloads server state and hides buttons on 409 state mismatch', async () => {
+  let getCount = 0
+  const stub = renderApp(request => {
+    if (request.url === '/api/v1/auth/csrf') return csrfResponse()
+    if (request.url === '/api/v1/me/applications/90001/confirm' && request.method === 'POST') {
+      return problem(409, 'RESOURCE_CONFLICT', 'Expired', { reason: 'CONFIRMATION_DEADLINE_EXPIRED' })
+    }
+    getCount += 1
+    const expired = getCount > 1
+    return json(
+      detailItem('90001', {
+        applicantVisibleStatus: expired ? 'EXPIRED' : 'ACCEPTED_PENDING_CONFIRMATION',
+        displayStatusLabel: expired ? 'หมดเวลายืนยันสิทธิ์' : 'ผ่านการคัดเลือก (รอยืนยันสิทธิ์)',
+        canConfirm: !expired,
+        canDecline: !expired,
+      }),
+    )
+  }, '/me/applications/90001')
+
+  try {
+    fireEvent.click(await screen.findByRole('button', { name: 'ยืนยันสิทธิ์เข้าชมรม' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'ยืนยันสิทธิ์' }))
+
+    const alert = await screen.findByRole('alert')
+    assert.equal(alert.textContent, 'หมดเขตยืนยันสิทธิ์แล้ว')
+    assert.equal(getCount, 2)
+    assert.equal(screen.queryByRole('button', { name: 'ยืนยันสิทธิ์เข้าชมรม' }), null)
+    assert.equal(screen.queryByRole('button', { name: 'สละสิทธิ์' }), null)
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
+test('my application detail page keeps decision dialog open while request is busy', async () => {
+  let resolvePost!: (response: Response) => void
+  let markPostStarted!: () => void
+  const postStarted = new Promise<void>(resolve => {
+    markPostStarted = resolve
+  })
+
+  const stub = renderApp(request => {
+    if (request.url === '/api/v1/auth/csrf') return csrfResponse()
+    if (request.url === '/api/v1/me/applications/90001/confirm' && request.method === 'POST') {
+      markPostStarted()
+      return new Promise<Response>(resolve => {
+        resolvePost = resolve
+      })
+    }
+    return json(
+      detailItem('90001', {
+        applicantVisibleStatus: 'ACCEPTED_PENDING_CONFIRMATION',
+        displayStatusLabel: 'ผ่านการคัดเลือก (รอยืนยันสิทธิ์)',
+        canConfirm: true,
+        canDecline: true,
+      }),
+    )
+  }, '/me/applications/90001')
+
+  try {
+    fireEvent.click(await screen.findByRole('button', { name: 'ยืนยันสิทธิ์เข้าชมรม' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'ยืนยันสิทธิ์' }))
+
+    await postStarted
+    await within(dialog).findByRole('button', { name: 'กำลังยืนยัน...' })
+
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'ยกเลิก' }))
+    assert.ok(screen.getByRole('dialog'))
+
+    resolvePost(
+      json({
+        applicationId: '90001',
+        clubId: '20001',
+        roundId: '50001',
+        status: 'CONFIRMED',
+        displayStatusLabel: 'ยืนยันสิทธิ์แล้ว',
+        respondedAt: '2026-10-27T08:00:00Z',
+        membershipId: '80001',
+        idempotentReplay: false,
+      }),
+    )
+
+    assert.ok(await screen.findByText('เป็นสมาชิกชมรมเรียบร้อยแล้ว'))
+    assert.equal(screen.queryByRole('dialog'), null)
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
+test('my application detail page clears previous error alert when opening decision dialog', async () => {
+  const stub = renderApp(request => {
+    if (request.url === '/api/v1/auth/csrf') return csrfResponse()
+    if (request.url === '/api/v1/me/applications/90001/confirm' && request.method === 'POST') {
+      return problem(500, 'INTERNAL_ERROR', 'Server error')
+    }
+    return json(
+      detailItem('90001', {
+        applicantVisibleStatus: 'ACCEPTED_PENDING_CONFIRMATION',
+        displayStatusLabel: 'ผ่านการคัดเลือก (รอยืนยันสิทธิ์)',
+        canConfirm: true,
+        canDecline: true,
+      }),
+    )
+  }, '/me/applications/90001')
+
+  try {
+    fireEvent.click(await screen.findByRole('button', { name: 'ยืนยันสิทธิ์เข้าชมรม' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'ยืนยันสิทธิ์' }))
+
+    const alert = await screen.findByRole('alert')
+    assert.equal(alert.textContent, 'ไม่สามารถยืนยันสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง')
+
+    fireEvent.click(screen.getByRole('button', { name: 'ยืนยันสิทธิ์เข้าชมรม' }))
+    await screen.findByRole('dialog')
+    assert.equal(screen.queryByRole('alert'), null)
   } finally {
     cleanup()
     stub.restore()

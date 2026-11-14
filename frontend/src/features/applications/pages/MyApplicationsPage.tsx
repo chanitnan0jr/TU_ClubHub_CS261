@@ -10,27 +10,26 @@ import {
 } from '../../../components/ui/icons';
 import { SectionCard } from '../../../components/ui/SectionCard';
 import { useApiResource } from '../../../hooks/useApiResource';
-import { describeApiError } from '../../../lib/api';
+import { ApiError, describeApiError } from '../../../lib/api';
 import { formatThaiDateTime } from '../../../lib/format';
 import { ClubLogo } from '../../clubs/components/ClubLogo';
 import {
   ApplicationCard,
   ApplicationStatusBadge,
 } from '../components/ApplicationCard';
+import { MembershipDecisionDialog } from '../components/MembershipDecisionDialog';
 import {
-  ConfirmMembershipDialog,
-  DeclineMembershipDialog,
-} from '../components/MembershipDecisionDialog';
-import {
-  confirmMembershipOffer,
-  declineMembershipOffer,
   fetchMyApplicationDetail,
   fetchMyApplications,
   MY_APPLICATIONS_PAGE_SIZE,
+  respondToMembershipOffer,
 } from '../services/myApplicationService';
 import type {
+  ApplicantApplicationDetail,
   ApplicantApplicationSummary,
   ApplicationFilterTab,
+  MembershipDecision,
+  MembershipOfferResponse,
 } from '../types/application';
 
 const pageIndex = (value: string | null) =>
@@ -255,52 +254,85 @@ export function MyApplicationsPage() {
   );
 }
 
+const DECISION_ERROR_FALLBACK: Record<MembershipDecision, string> = {
+  confirm: 'ไม่สามารถยืนยันสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง',
+  decline: 'ไม่สามารถสละสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง',
+};
+
+/** Mirrors the server transition so the page updates without a refetch. */
+function applyOfferResult(
+  detail: ApplicantApplicationDetail,
+  result: MembershipOfferResponse,
+): ApplicantApplicationDetail {
+  const lastEntry = detail.statusHistory.at(-1);
+  const nextHistory =
+    lastEntry?.status === result.status
+      ? detail.statusHistory
+      : [
+          ...detail.statusHistory,
+          {
+            status: result.status,
+            displayStatusLabel: result.displayStatusLabel,
+            occurredAt: result.respondedAt,
+          },
+        ];
+
+  return {
+    ...detail,
+    applicantVisibleStatus: result.status,
+    displayStatusLabel: result.displayStatusLabel,
+    respondedAt: result.respondedAt,
+    canConfirm: false,
+    canDecline: false,
+    statusHistory: nextHistory,
+  };
+}
+
 export function MyApplicationDetailPage({
   applicationId,
 }: {
   applicationId: string;
 }) {
-  const { data: detail, error, isLoading, reload } = useApiResource(
-    `my-application-detail:${applicationId}`,
-    () => fetchMyApplicationDetail(applicationId),
+  const {
+    data: detail,
+    error,
+    isLoading,
+    reload,
+    update,
+  } = useApiResource(`my-application-detail:${applicationId}`, () =>
+    fetchMyApplicationDetail(applicationId),
   );
 
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [isDeclineOpen, setIsDeclineOpen] = useState(false);
+  const [decision, setDecision] = useState<MembershipDecision | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const handleConfirm = async () => {
-    setIsProcessing(true);
+  const openDecision = (next: MembershipDecision) => {
     setActionError(null);
-    try {
-      await confirmMembershipOffer(applicationId);
-      setIsConfirmOpen(false);
-      reload();
-    } catch (err) {
-      setIsConfirmOpen(false);
-      setActionError(
-        describeApiError(err, 'ไม่สามารถยืนยันสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง'),
-      );
-    } finally {
-      setIsProcessing(false);
+    setDecision(next);
+  };
+
+  const closeDecision = () => {
+    if (!isProcessing) {
+      setDecision(null);
     }
   };
 
-  const handleDecline = async () => {
+  const submitDecision = async () => {
+    if (!decision) return;
     setIsProcessing(true);
     setActionError(null);
     try {
-      await declineMembershipOffer(applicationId);
-      setIsDeclineOpen(false);
-      reload();
+      const result = await respondToMembershipOffer(applicationId, decision);
+      update((current) => applyOfferResult(current, result));
     } catch (err) {
-      setIsDeclineOpen(false);
-      setActionError(
-        describeApiError(err, 'ไม่สามารถสละสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง'),
-      );
+      setActionError(describeApiError(err, DECISION_ERROR_FALLBACK[decision]));
+      if (err instanceof ApiError && err.status === 409) {
+        reload();
+      }
     } finally {
       setIsProcessing(false);
+      setDecision(null);
     }
   };
 
@@ -451,20 +483,29 @@ export function MyApplicationDetailPage({
                 </p>
               )}
 
-              {detail.canConfirm && detail.canDecline && (
-                <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-emerald-200/80 pt-4">
-                  <Button
-                    variant="primary"
-                    onClick={() => setIsConfirmOpen(true)}
-                  >
-                    ยืนยันสิทธิ์เข้าชมรม
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => setIsDeclineOpen(true)}
-                  >
-                    สละสิทธิ์
-                  </Button>
+              {(detail.canConfirm || detail.canDecline) && (
+                <div className="mt-4 flex flex-col gap-3 border-t border-emerald-200/80 pt-4">
+                  <p className="text-xs text-emerald-800">
+                    เมื่อยืนยันหรือสละสิทธิ์แล้วจะไม่สามารถเปลี่ยนใจได้
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {detail.canConfirm && (
+                      <Button
+                        variant="primary"
+                        onClick={() => openDecision('confirm')}
+                      >
+                        ยืนยันสิทธิ์เข้าชมรม
+                      </Button>
+                    )}
+                    {detail.canDecline && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => openDecision('decline')}
+                      >
+                        สละสิทธิ์
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -623,21 +664,13 @@ export function MyApplicationDetailPage({
         </div>
       </SectionCard>
 
-      <ConfirmMembershipDialog
-        isOpen={isConfirmOpen}
+      <MembershipDecisionDialog
+        decision={decision}
         roundTitle={round.title}
         clubName={club.name}
-        isConfirming={isProcessing}
-        onClose={() => setIsConfirmOpen(false)}
-        onConfirm={handleConfirm}
-      />
-
-      <DeclineMembershipDialog
-        isOpen={isDeclineOpen}
-        clubName={club.name}
-        isDeclining={isProcessing}
-        onClose={() => setIsDeclineOpen(false)}
-        onConfirm={handleDecline}
+        busy={isProcessing}
+        onCancel={closeDecision}
+        onConfirm={submitDecision}
       />
     </div>
   );
