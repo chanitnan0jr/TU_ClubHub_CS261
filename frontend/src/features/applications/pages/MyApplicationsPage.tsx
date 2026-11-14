@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { Breadcrumbs } from '../../../components/ui/Breadcrumbs';
 import { Button } from '../../../components/ui/Button';
 import { buttonClass } from '../../../components/ui/classes';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import {
   ClipboardCheckIcon,
@@ -17,7 +18,6 @@ import {
   ApplicationCard,
   ApplicationStatusBadge,
 } from '../components/ApplicationCard';
-import { MembershipDecisionDialog } from '../components/MembershipDecisionDialog';
 import {
   fetchMyApplicationDetail,
   fetchMyApplications,
@@ -254,9 +254,50 @@ export function MyApplicationsPage() {
   );
 }
 
-const DECISION_ERROR_FALLBACK: Record<MembershipDecision, string> = {
-  confirm: 'ไม่สามารถยืนยันสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง',
-  decline: 'ไม่สามารถสละสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง',
+const DECISION_COPY: Record<
+  MembershipDecision,
+  {
+    title: string;
+    action: string;
+    busyAction: string;
+    tone: 'primary' | 'danger';
+    errorFallback: string;
+    prompt: (clubName: string, roundTitle: string) => ReactNode;
+    warning: string;
+    warningClass: string;
+  }
+> = {
+  confirm: {
+    title: 'ยืนยันการเข้าร่วมเป็นสมาชิกชมรม',
+    action: 'ยืนยันสิทธิ์',
+    busyAction: 'กำลังยืนยัน...',
+    tone: 'primary',
+    errorFallback: 'ไม่สามารถยืนยันสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง',
+    prompt: (clubName, roundTitle) => (
+      <>
+        คุณต้องการยืนยันสิทธิ์เข้าร่วม <strong>{clubName}</strong> ในรอบ{' '}
+        <strong>{roundTitle}</strong> ใช่หรือไม่?
+      </>
+    ),
+    warning:
+      'เมื่อกดยืนยันสิทธิ์แล้ว ระบบจะขึ้นทะเบียนคุณเป็นสมาชิกชมรมทันที และไม่สามารถยกเลิกหรือเปลี่ยนแปลงการตัดสินใจในภายหลังได้ (นักศึกษาสามารถเป็นสมาชิกชมรมได้สูงสุดไม่เกิน 5 ชมรม)',
+    warningClass: 'border-amber-200 bg-amber-50 text-amber-900',
+  },
+  decline: {
+    title: 'ยืนยันการสละสิทธิ์เข้าชมรม',
+    action: 'ยืนยันสละสิทธิ์',
+    busyAction: 'กำลังสละสิทธิ์...',
+    tone: 'danger',
+    errorFallback: 'ไม่สามารถสละสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง',
+    prompt: (clubName) => (
+      <>
+        คุณต้องการสละสิทธิ์การเข้าร่วม <strong>{clubName}</strong> ใช่หรือไม่?
+      </>
+    ),
+    warning:
+      'หากคุณกดสละสิทธิ์ สิทธิ์การเข้าเป็นสมาชิกชมรมในรอบนี้จะสิ้นสุดลงทันที และไม่สามารถขอกลับมายืนยันสิทธิ์ในภายหลังได้',
+    warningClass: 'border-red-200 bg-red-50 text-red-900',
+  },
 };
 
 /** Mirrors the server transition so the page updates without a refetch. */
@@ -312,12 +353,6 @@ export function MyApplicationDetailPage({
     setDecision(next);
   };
 
-  const closeDecision = () => {
-    if (!isProcessing) {
-      setDecision(null);
-    }
-  };
-
   const submitDecision = async () => {
     if (!decision) return;
     setIsProcessing(true);
@@ -326,7 +361,7 @@ export function MyApplicationDetailPage({
       const result = await respondToMembershipOffer(applicationId, decision);
       update((current) => applyOfferResult(current, result));
     } catch (err) {
-      setActionError(describeApiError(err, DECISION_ERROR_FALLBACK[decision]));
+      setActionError(describeApiError(err, DECISION_COPY[decision].errorFallback));
       if (err instanceof ApiError && err.status === 409) {
         reload();
       }
@@ -395,6 +430,7 @@ export function MyApplicationDetailPage({
     ['กำหนดยืนยันสิทธิ์', deadlineText],
     ['วันที่ตอบรับสิทธิ์', respondedText],
   ].filter(([, value]) => Boolean(value));
+  const decisionCopy = DECISION_COPY[decision ?? 'confirm'];
 
   return (
     <div className="flex flex-col gap-6 pb-12">
@@ -664,14 +700,28 @@ export function MyApplicationDetailPage({
         </div>
       </SectionCard>
 
-      <MembershipDecisionDialog
-        decision={decision}
-        roundTitle={round.title}
-        clubName={club.name}
+      <ConfirmDialog
+        open={decision !== null}
+        tone={decisionCopy.tone}
+        title={decisionCopy.title}
+        confirmLabel={
+          isProcessing ? decisionCopy.busyAction : decisionCopy.action
+        }
         busy={isProcessing}
-        onCancel={closeDecision}
+        onCancel={() => setDecision(null)}
         onConfirm={submitDecision}
-      />
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm leading-relaxed text-slate-700">
+            {decisionCopy.prompt(club.name, round.title)}
+          </p>
+          <div
+            className={`rounded-lg border p-4 text-sm leading-relaxed ${decisionCopy.warningClass}`}
+          >
+            {decisionCopy.warning}
+          </div>
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

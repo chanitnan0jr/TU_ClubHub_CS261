@@ -21,10 +21,10 @@ because the Task69 `/confirm` and `/decline` endpoints are not yet present in
 |---|---|---|---|
 | Skeleton flash & focus loss on success (🟠1) | Calling `reload()` reset `isLoading` to `true`, unmounting the page and losing scroll/focus | Patched `useApiResource` cache via `update()` using `applyOfferResult()` without refetching `GET` | `MyApplicationsPage.tsx` |
 | Stale action buttons after `409` conflict (🟠2) | Conflict responses (e.g., expired deadline, already responded) kept action buttons rendered | Trigger `reload()` when `ApiError.status === 409` to resync state from the server | `MyApplicationsPage.tsx` |
-| Dialog closable while request in flight (🟡3) | Pressing `Esc` or clicking cancel dismissed the modal before `POST` settled | Guarded `closeDecision()` with `if (!isProcessing)` | `MyApplicationsPage.tsx` |
+| Dialog closable while request in flight (🟡3) | Pressing `Esc` or clicking cancel dismissed the modal before `POST` settled | Guarded `Escape` (`if (!busy)`) and disabled cancel button during `busy` in `ConfirmDialog` | `ConfirmDialog.tsx` |
 | Stale error alert across reopen (🟡4) | Opening a new decision dialog left the previous `actionError` banner visible | Clear `actionError` inside `openDecision()` | `MyApplicationsPage.tsx` |
-| Contract & prop gaps | `MembershipOfferResponse.status` was too wide; error fixture used `'CONFLICT'` instead of `'RESOURCE_CONFLICT'`; optional `clubName`/`roundTitle` | Narrowed `status` to `'CONFIRMED' \| 'DECLINED'`, required dialog props, fixed test fixture | `application.ts`, `MembershipDecisionDialog.tsx`, `myApplications.test.ts` |
-| Duplicated confirm/decline paths | Separate `ConfirmMembershipDialog`/`DeclineMembershipDialog`, handlers, boolean states, and service functions | Consolidated into `MembershipDecision`, `respondToMembershipOffer()`, `MembershipDecisionDialog`, `openDecision`/`submitDecision` | `application.ts`, `myApplicationService.ts`, `MembershipDecisionDialog.tsx`, `MyApplicationsPage.tsx` |
+| Contract & prop gaps | `MembershipOfferResponse.status` was too wide; error fixture used `'CONFLICT'` instead of `'RESOURCE_CONFLICT'` | Narrowed `status` to `'CONFIRMED' \| 'DECLINED'` and fixed test fixture | `application.ts`, `myApplications.test.ts` |
+| Duplicated confirm/decline paths | Separate `ConfirmMembershipDialog`/`DeclineMembershipDialog`, handlers, boolean states, and service functions | Consolidated into `MembershipDecision`, `respondToMembershipOffer()`, `DECISION_COPY` + shared `ConfirmDialog`, and `openDecision`/`submitDecision` | `application.ts`, `myApplicationService.ts`, `MyApplicationsPage.tsx` |
 
 ## Case Matrix
 

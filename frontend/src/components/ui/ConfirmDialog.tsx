@@ -54,7 +54,7 @@ export function ConfirmDialog({
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
       event.stopPropagation();
-      onCancel();
+      if (!busy) onCancel();
       return;
     }
     if (event.key !== 'Tab' || !panelRef.current) return;
@@ -101,7 +101,7 @@ export function ConfirmDialog({
         </div>
         {children}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button onClick={onCancel}>{cancelLabel}</Button>
+          <Button disabled={busy} onClick={onCancel}>{cancelLabel}</Button>
           <Button
             variant={tone}
             loading={busy}
