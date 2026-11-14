@@ -69,6 +69,10 @@ public class ClubCommitteeAssignment {
 	protected ClubCommitteeAssignment() {
 	}
 
+	public Long getId() { return id; }
+
+	public String getPermissionRole() { return permissionRole; }
+
 	public ClubCommitteeAssignment(
 			Long membershipId, String positionName, String permissionRole,
 			Instant startsAt, Instant endsAt, Long assignedBy) {

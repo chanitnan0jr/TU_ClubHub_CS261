@@ -37,6 +37,14 @@
 
 ## 2. รายการตรวจสอบ (Checklists)
 
+### Implementation handoff — 2026-11-13
+
+พัฒนาใน branch `feat/task67-result-publishing` ตาม [API contract §15](../../api/API_v1.md#15-selection-decisions-and-publication-task67)
+และ [review/test packet](../../testing/task67-selection-results.md) ผู้ใช้ยืนยันให้ยึด
+`ACCEPTED/REJECTED` ตาม docs เดิม (**ยังไม่รองรับตัวสำรอง**) และ batch แบบ atomic
+มี evaluation editor GET แยกจาก Task65 read DTO และเพิ่ม durable audit ใน V6
+สถานะ checklist ด้านล่างยังไม่ใช่หลักฐานว่า CI, PO/Reviewer หรือ merge ผ่านแล้ว
+
 ### เกณฑ์ตรวจรับ (Acceptance Criteria)
 
 - [ ] บันทึกผลการคัดเลือกได้ถูกต้อง และสถานะใบสมัครเปลี่ยนตามที่กำหนด
