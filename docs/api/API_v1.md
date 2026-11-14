@@ -1453,8 +1453,8 @@ Individual PUT example:
 `decision` and `version` are required. `resultMessage` is nullable, max 1000;
 PUT omission/null clears it. `internalNote` is nullable, max 2000; a nonblank value
 upserts only the current actor's `(application_id, reviewer_id)` review and maps
-ACCEPTED→ACCEPT, REJECTED→REJECT. Omission/null/blank preserves that review rather
-than erasing it. History uses fixed reason `COMMITTEE_DECISION`, never the private
+ACCEPTED→ACCEPT, REJECTED→REJECT. Omission/null/blank preserves that review's comment rather
+than erasing it, while syncing an existing review's recommendation with the new decision. History uses fixed reason `COMMITTEE_DECISION`, never the private
 note. The application version always increments on a successful decision write;
 history is added only when the status changes. Same-status edits still have audit.
 Unknown body fields and wrong scalar types are rejected with 400.

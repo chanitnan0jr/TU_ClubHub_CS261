@@ -104,7 +104,7 @@ Each write enters a real Spring transaction. Order:
 Decision permits SUBMITTED/UNDER_REVIEW/ACCEPTED/REJECTED before publication.
 `now >= COALESCE(closed_at,closes_at)` includes actual close. Same-status edits
 increment version/audit but add no duplicate history. Nonblank internalNote upserts
-only the caller's review; absent/null/blank preserves it. Absent/null resultMessage
+only the caller's review; absent/null/blank preserves an existing comment while syncing its recommendation. Absent/null resultMessage
 clears it. All non-WITHDRAWN applications must be ACCEPTED/REJECTED before publication,
 which requires `now < confirmation_deadline`; repeated publication is 409 with no
 additional audit/history/notification. Publication does not change application rows.
