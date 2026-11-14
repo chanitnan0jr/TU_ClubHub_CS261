@@ -83,6 +83,19 @@ export type ApplicationFilterTab =
   | 'REJECTED'
   | 'CONFIRMED_DECLINED';
 
+export type MembershipDecision = 'confirm' | 'decline';
+
+export interface MembershipOfferResponse {
+  applicationId: string;
+  clubId: string;
+  roundId: string;
+  status: Extract<ApplicantVisibleStatus, 'CONFIRMED' | 'DECLINED'>;
+  displayStatusLabel: string;
+  respondedAt: string;
+  membershipId: string | null;
+  idempotentReplay: boolean;
+}
+
 export type CommitteeApplicationStatus =
   | 'SUBMITTED'
   | 'UNDER_REVIEW'
@@ -123,3 +136,4 @@ export interface CommitteeApplicationDetail extends CommitteeApplicationSummary 
   questionsWithAnswers: CommitteeQuestionAnswerView[];
   links: (ApplicantDocumentLinkView & { id: string; displayOrder: number })[];
 }
+
