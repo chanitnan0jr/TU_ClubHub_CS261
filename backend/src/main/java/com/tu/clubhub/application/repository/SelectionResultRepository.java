@@ -28,7 +28,8 @@ public class SelectionResultRepository {
     private final CommitteeApplicationRepository reads;
 
     public SelectionResultRepository(NamedParameterJdbcTemplate jdbc, CommitteeApplicationRepository reads) {
-        this.jdbc = jdbc; this.reads = reads;
+        this.jdbc = jdbc;
+        this.reads = reads;
     }
 
     public void lockTimeout(String value) {
@@ -67,6 +68,7 @@ public class SelectionResultRepository {
                     """, params("id", before.id()).addValue("before", before.status()).addValue("after", request.decision())
                     .addValue("actor", actor).addValue("at", at(now)));
         }
+        String recommendation = request.decision().equals("ACCEPTED") ? "ACCEPT" : "REJECT";
         if (request.internalNote() != null && !request.internalNote().isBlank()) {
             jdbc.update("""
                     INSERT INTO application_reviews(application_id,reviewer_id,recommendation,internal_comment,created_at,updated_at)
@@ -75,22 +77,34 @@ public class SelectionResultRepository {
                         recommendation=EXCLUDED.recommendation, internal_comment=EXCLUDED.internal_comment,
                         updated_at=EXCLUDED.updated_at, version=application_reviews.version+1
                     """, params("id", before.id()).addValue("actor", actor).addValue("at", at(now))
-                    .addValue("recommendation", request.decision().equals("ACCEPTED") ? "ACCEPT" : "REJECT")
+                    .addValue("recommendation", recommendation)
                     .addValue("note", request.internalNote()));
+        } else {
+            jdbc.update("""
+                    UPDATE application_reviews
+                    SET recommendation=:recommendation, updated_at=:at, version=version+1
+                    WHERE application_id=:id AND reviewer_id=:actor AND recommendation<>:recommendation
+                    """, params("id", before.id()).addValue("actor", actor).addValue("at", at(now))
+                    .addValue("recommendation", recommendation));
         }
     }
 
     public void publish(Round round, List<Application> applications, Instant now) {
         jdbc.update("UPDATE recruitment_rounds SET results_published_at=:at, updated_at=:at, version=version+1 WHERE id=:id",
                 params("id", round.id()).addValue("at", at(now)));
-        for (Application app : applications) {
-            if (!List.of("ACCEPTED", "REJECTED").contains(app.status())) continue;
-            jdbc.update("""
+        var batch = applications.stream()
+                .filter(app -> List.of("ACCEPTED", "REJECTED").contains(app.status()))
+                .map(app -> params("recipient", app.applicantId())
+                        .addValue("id", app.id())
+                        .addValue("at", at(now))
+                        .addValue("key", "result-published:" + round.id() + ":" + app.id()))
+                .toArray(MapSqlParameterSource[]::new);
+        if (batch.length > 0) {
+            jdbc.batchUpdate("""
                     INSERT INTO notifications(recipient_id,application_id,type,title,message,deduplication_key,created_at)
                     VALUES (:recipient,:id,'RESULT_PUBLISHED','Selection results published',
                         'Your selection result is available in My applications.',:key,:at)
-                    """, params("recipient", app.applicantId()).addValue("id", app.id()).addValue("at", at(now))
-                    .addValue("key", "result-published:" + round.id() + ":" + app.id()));
+                    """, batch);
         }
     }
 
@@ -130,6 +144,11 @@ public class SelectionResultRepository {
         OffsetDateTime value = rs.getObject(name, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
     }
-    private static MapSqlParameterSource params(String name, Object value) { return new MapSqlParameterSource(name, value); }
-    private static OffsetDateTime at(Instant value) { return value.atOffset(ZoneOffset.UTC); }
+    private static MapSqlParameterSource params(String name, Object value) {
+        return new MapSqlParameterSource(name, value);
+    }
+
+    private static OffsetDateTime at(Instant value) {
+        return value.atOffset(ZoneOffset.UTC);
+    }
 }

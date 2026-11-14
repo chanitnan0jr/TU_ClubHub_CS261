@@ -42,7 +42,11 @@ public class SelectionResultService {
 
     public SelectionResultService(SelectionResultRepository repository, CommitteeApplicationRepository reads,
             ClubSecurity security, Clock clock, ObjectMapper json, ApplicationSubmissionProperties properties) {
-        this.repository = repository; this.reads = reads; this.security = security; this.clock = clock; this.json = json;
+        this.repository = repository;
+        this.reads = reads;
+        this.security = security;
+        this.clock = clock;
+        this.json = json;
         this.lockTimeout = properties.databaseLockTimeout();
     }
 
@@ -86,22 +90,31 @@ public class SelectionResultService {
                 scopedApplication(id(item.applicationId()), roundId); // preserve 403/404 for foreign/missing children
                 throw conflict("VERSION_MISMATCH"); // resource scope changed concurrently
             }
-            if (!DECIDABLE.contains(app.status())) throw conflict("INVALID_STATUS_TRANSITION");
-            if (app.version() != item.decision().version()) throw conflict("VERSION_MISMATCH");
+            if (!DECIDABLE.contains(app.status())) {
+                throw conflict("INVALID_STATUS_TRANSITION");
+            }
+            if (app.version() != item.decision().version()) {
+                throw conflict("VERSION_MISMATCH");
+            }
         }
         UUID trace = UUID.randomUUID();
+        var updated = new ArrayList<Application>(requests.size());
         for (var item : requests) {
             var before = locked.get(id(item.applicationId()));
             var request = item.decision();
             repository.decide(before, request, actor, now);
             repository.audit(round, before.id(), actor, "DECISION_RECORDED", now, trace,
                     json.writeValueAsString(Map.of("status", before.status(), "version", before.version())),
-                    json.writeValueAsString(Map.of("status", request.decision(), "version", before.version()+1,
+                    json.writeValueAsString(Map.of("status", request.decision(), "version", before.version() + 1,
                             "resultMessageChanged", !Objects.equals(before.resultMessage(), request.resultMessage()),
                             "internalNoteWritten", request.internalNote() != null && !request.internalNote().isBlank())));
+            updated.add(new Application(
+                    before.id(), before.roundId(), before.clubId(), before.applicantId(),
+                    request.decision(), request.resultMessage(), Long.toString(actor), now,
+                    before.respondedAt(), before.version() + 1));
         }
         afterCommit(actor, round, "DECISION_RECORDED", now, trace, requests.size(), 0, 0);
-        return ids.stream().map(i -> repository.detail(repository.application(i).orElseThrow())).toList();
+        return updated.stream().map(repository::detail).toList();
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -157,12 +170,14 @@ public class SelectionResultService {
         if (round.resultsPublishedAt() != null) throw conflict("RESULTS_ALREADY_PUBLISHED");
     }
     private static <T> T lockErrors(Supplier<T> action) {
-        try { return action.get(); }
-        catch (RuntimeException error) {
+        try {
+            return action.get();
+        } catch (RuntimeException error) {
             for (Throwable cause = error; cause != null; cause = cause.getCause()) {
                 if (cause instanceof SQLException sql && Set.of("55P03", "40P01").contains(sql.getSQLState())) {
                     var unavailable = failure(503, "SERVICE_UNAVAILABLE", "Selection results are temporarily unavailable.");
-                    unavailable.initCause(error); throw unavailable;
+                    unavailable.initCause(error);
+                    throw unavailable;
                 }
             }
             throw error;
@@ -193,6 +208,11 @@ public class SelectionResultService {
             return Long.parseLong(raw);
         } catch (IllegalArgumentException e) { throw failure(400, "INVALID_RESOURCE_ID", "Invalid resource identifier."); }
     }
-    private static ApplicationSubmissionException missing() { return failure(404, "RESOURCE_NOT_FOUND", "Resource not found."); }
-    private static ApplicationSubmissionException denied() { return failure(403, "ACCESS_DENIED", "Access denied."); }
+    private static ApplicationSubmissionException missing() {
+        return failure(404, "RESOURCE_NOT_FOUND", "Resource not found.");
+    }
+
+    private static ApplicationSubmissionException denied() {
+        return failure(403, "ACCESS_DENIED", "Access denied.");
+    }
 }

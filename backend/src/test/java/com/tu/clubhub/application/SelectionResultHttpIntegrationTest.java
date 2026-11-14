@@ -103,6 +103,14 @@ class SelectionResultHttpIntegrationTest {
         assertEquals("New private note",body(editor).path("reviews").get(0).path("internalComment").asText());
         var trimmed=as(reviewer,get("/api/v1/clubs/"+club+"/applications/"+app)); ok(trimmed);
         assertFalse(body(trimmed).has("reviews")); assertFalse(body(trimmed).has("version"));
+        var synced=as(reviewer,put(decision(app)).content(body("ACCEPTED",3,"Final message",null))); ok(synced);
+        var syncedBody=body(synced);
+        assertEquals("4",syncedBody.path("version").asText());
+        assertEquals("ACCEPTED",syncedBody.path("status").asText());
+        assertEquals("New private note",syncedBody.path("reviews").get(0).path("internalComment").asText());
+        assertEquals("ACCEPT",syncedBody.path("reviews").get(0).path("recommendation").asText());
+        assertEquals(4L,count("application_status_history","application_id",app));
+        assertEquals(1L,count("application_reviews","application_id",app));
     }
 
     @Test void atomicBatchPreservesOrderValidatesEveryItemAndUsesOneTrace() throws Exception {
