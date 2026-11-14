@@ -96,6 +96,7 @@ export default function CommitteeLayout({
     { label: 'ภาพรวม', path: `${base}/manage`, icon: LayoutGridIcon, end: true },
     { label: 'โปรไฟล์ชมรม', path: `${base}/edit`, icon: UsersIcon, end: true },
     { label: 'จัดการรอบรับสมัคร', path: `${base}/rounds`, icon: CalendarDaysIcon, end: false },
+    { label: 'ตรวจสอบใบสมัคร', path: `${base}/applications`, icon: ClipboardCheckIcon, end: false },
   ];
 
   return (
@@ -153,22 +154,6 @@ export default function CommitteeLayout({
                   </NavLink>
                 </li>
               ))}
-              <li>
-                <span
-                  aria-disabled="true"
-                  aria-describedby="committee-menu-review-note"
-                  className={`${menuItemClass} cursor-not-allowed whitespace-nowrap text-slate-500`}
-                >
-                  <ClipboardCheckIcon className="size-5" />
-                  ตรวจสอบใบสมัคร
-                  <span className="ml-auto shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    Sprint 2
-                  </span>
-                </span>
-                <p id="committee-menu-review-note" className="px-3 pb-1 text-xs leading-5 text-slate-600">
-                  การตรวจสอบใบสมัครจะเปิดให้ใช้ใน Sprint 2
-                </p>
-              </li>
             </ul>
           </nav>
 

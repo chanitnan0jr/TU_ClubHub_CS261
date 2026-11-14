@@ -26,39 +26,10 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # Application Service: Spring Boot with embedded React frontend
-  # Default service when running: docker compose up --build
-  # Demo data (dev only): run scripts/seed-dev-data.sh after the app has started
-  # ============================================================================
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: tu-clubhub-app
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      # The container always listens on 8080; .env PORT only picks the host port below.
-      PORT: 8080
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-tu_clubhub}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
-      TU_AUTH_MODE: ${TU_AUTH_MODE:-mock}
-      TU_AUTH_ENDPOINT_URL: ${TU_AUTH_ENDPOINT_URL:-}
-      TU_AUTH_APPLICATION_KEY: ${TU_AUTH_APPLICATION_KEY:-}
-    ports:
-      - "${PORT:-8080}:8080"
-
-  # ============================================================================
-  # Split Architecture Option: Standalone Backend + Frontend Nginx Reverse Proxy
-  # Run via: docker compose --profile split up --build
+  # Standalone Backend + Frontend Nginx Reverse Proxy
+  # Run via: docker compose up --build
   # ============================================================================
   backend:
-    profiles: ["split"]
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -81,7 +52,6 @@ services:
       - "8080"
 
   frontend:
-    profiles: ["split"]
     build:
       context: ./frontend
       dockerfile: Dockerfile

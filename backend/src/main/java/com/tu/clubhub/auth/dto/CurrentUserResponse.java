@@ -15,7 +15,11 @@ public record CurrentUserResponse(CurrentUser user) {
 			String id,
 			String role,
 			String studentStatus,
-			List<ActiveCommitteeAssignment> activeCommitteeAssignments) {
+			List<ActiveCommitteeAssignment> activeCommitteeAssignments,
+			String displayName,
+			String studentCode,
+			String email,
+			String facultyName) {
 
 		public CurrentUser {
 			activeCommitteeAssignments = List.copyOf(activeCommitteeAssignments);

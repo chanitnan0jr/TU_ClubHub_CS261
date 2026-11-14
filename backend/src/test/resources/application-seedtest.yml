@@ -8,6 +8,11 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  session:
+    jdbc:
+      # Flyway V3 owns the session schema in PostgreSQL-backed tests.
+      initialize-schema: never
+
   jpa:
     hibernate:
       ddl-auto: validate

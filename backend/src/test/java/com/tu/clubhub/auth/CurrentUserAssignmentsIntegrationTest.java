@@ -127,8 +127,37 @@ class CurrentUserAssignmentsIntegrationTest {
 		me(userId)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.user.role").value("ADMIN"))
+				.andExpect(jsonPath("$.user.displayName").value("Me admin test user"))
+				.andExpect(jsonPath("$.user.studentCode").value(nullValue()))
+				.andExpect(jsonPath("$.user.email").value(nullValue()))
+				.andExpect(jsonPath("$.user.facultyName").value(nullValue()))
 				.andExpect(jsonPath("$.user.studentStatus").value(nullValue()))
 				.andExpect(jsonPath("$.user.activeCommitteeAssignments", hasSize(0)));
+	}
+
+	@Test
+	void returnsOnlyTheAuthenticatedAccountsProfile() throws Exception {
+		Long owner = createUser("ACTIVE");
+		Long other = createUser("ACTIVE");
+		jdbc.update("UPDATE users SET display_name = ?, email = ? WHERE id = ?",
+				"Owner name", "owner@example.edu", owner);
+		jdbc.update("UPDATE student_profiles SET student_code = ?, faculty_name = ? WHERE user_id = ?",
+				"owner-student", "Owner faculty", owner);
+		jdbc.update("UPDATE users SET display_name = ?, email = ? WHERE id = ?",
+				"Other name", "other@example.edu", other);
+
+		me(owner)
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", containsString("no-store")))
+				.andExpect(jsonPath("$.user.displayName").value("Owner name"))
+				.andExpect(jsonPath("$.user.studentCode").value("owner-student"))
+				.andExpect(jsonPath("$.user.email").value("owner@example.edu"))
+				.andExpect(jsonPath("$.user.facultyName").value("Owner faculty"));
+		me(other)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.user.displayName").value("Other name"))
+				.andExpect(jsonPath("$.user.email").value("other@example.edu"))
+				.andExpect(jsonPath("$.user.facultyName").value(nullValue()));
 	}
 
 	@Test
