@@ -645,6 +645,19 @@ CONSTRAINT chk_app_history_change CHECK (from_status IS NULL OR from_status <> t
    - ตาราง `notifications` (`type = 'RESULT_PUBLISHED'`, `created_at = results_published_at`) สำหรับผู้สมัครทุกคนที่ได้รับผลในรอบนั้น
 3. บันทึก Application Audit Log ลง Structured Logger ของระบบ (`SLF4J` JSON/Key-Value format) โดยมี `event="ROUND_RESULTS_PUBLISHED"`, `roundId`, `clubId`, `publishedByUserId`, `publishedAt`, `acceptedCount`, `rejectedCount`, `traceId`
 
+**Task67 implementation supplement (2026-11-13, pending team review):** Logger-only
+audit cannot roll back with a transaction. New V6 `selection_result_audit` therefore
+records decisions/publication durably in the same transaction as business writes,
+history/reviews and notification rows. SLF4J logging runs only after commit, with
+the same server trace UUID and actor/resource/time/count fields (`actorId` and
+`occurredAt` identify publisher/time). Private notes/answers are excluded from audit
+states/logs. See [API §15](../api/API_v1.md#15-selection-decisions-and-publication-task67)
+for the exact locks, final-time authorization recheck, atomic batch and dedicated
+evaluation editor GET; Task65's trimmed reads are unchanged. The requester confirmed
+ACCEPTED/REJECTED only and atomic batch; WAITLIST remains unsupported. This supplement
+does not implement the optional start-review, confirm/decline or expiry worker,
+and does not record formal PO/reviewer approval.
+
 ---
 
 ### 4.4 การออกแบบ Background Worker สำหรับตัดสิทธิ์เมื่อหมดเวลา (`SD-11` / `T74-D06`)

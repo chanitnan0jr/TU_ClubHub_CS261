@@ -81,10 +81,13 @@ class PublicRoutesTest {
     }
 
     @Test
-    void onlyExactHealthGetRouteIsPublic() {
+    void onlyExactHealthAndInfoGetRoutesArePublic() {
         assertTrue(matches("GET", "/actuator/health"));
+        assertTrue(matches("GET", "/actuator/info"));
 
         assertFalse(matches("POST", "/actuator/health"));
+        assertFalse(matches("POST", "/actuator/info"));
+        assertFalse(matches("GET", "/actuator/info/details"));
         assertFalse(matches("GET", "/actuator/health/details"));
         assertFalse(matches("GET", "/actuator/env"));
         assertFalse(matches("GET", "/actuator/metrics"));

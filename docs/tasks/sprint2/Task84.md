@@ -4,10 +4,11 @@
 |---|---|
 | **Task ID** | `Task84` |
 | **Feature Code** | `PIPELINE-03` |
-| **สถานะบน Trello** | `Done` |
+| **สถานะบน Trello** | ยังไม่ได้ตรวจสอบจากการ์ด |
+| **สถานะเอกสาร** | `In Progress / Pending Review` |
 | **ผู้รับผิดชอบ (Owner)** | สิรวิชญ์ (DevOps Lead) |
 | **ผู้ตรวจรับ (Reviewer)** | วรพล (DevOps) |
-| **งานที่ต้องทำก่อน (Dependency)** | Staging Server จาก Task56 และ CI จาก Task82–83 |
+| **งานที่ต้องทำก่อน (Dependency)** | เตรียม Docker Staging Server และ CI จาก Task82–83; Task56 ตรวจ smoke test หลังเชื่อม workflow |
 | **SDLC Labels** | 5. Deployment & DevOps |
 | **สมาชิกบนการ์ด Trello** | Sirawich Kridatikanwut_6809660027, 34Woraphon Pupatanun |
 | **Trello Card Link** | [https://trello.com/c/nIuNToIt](https://trello.com/c/nIuNToIt) |
@@ -20,7 +21,7 @@
 - **Label:** 5. Deployment & DevOps
 - **Owner:** สิรวิชญ์ (DevOps Lead)
 - **Reviewer:** วรพล (DevOps)
-- **Dependency:** Staging Server จาก Task56 และ CI จาก Task82–83
+- **Dependency:** เตรียม Docker Staging Server และ CI จาก Task82–83; Task56 ตรวจ smoke test หลังเชื่อม workflow
 
 **จุดประสงค์ & บริบทของงาน**
 ทำให้กระบวนการ Deploy ระบบขึ้นเซิร์ฟเวอร์ Staging เป็นไปโดยอัตโนมัติเมื่อ Merge โค้ดเข้า Branch หลัก ลดเวลาและลดความผิดพลาดจากการทำมือ
@@ -31,6 +32,8 @@
 3. **Staging Deployment:** ติดตั้งเวอร์ชันใหม่ขึ้น Staging Server โดยอัตโนมัติ
 4. **Post-deploy Health Check:** ยิง Health Check ตรวจสอบระบบหลัง Deploy หากพังให้แจ้งเตือนทันที
 
+**สถานะหลักฐาน:** PR และการตรวจ container บน runner ยังไม่ใช่หลักฐานว่า deploy ไป Staging สำเร็จ ต้องมีผล deploy/health check จากเซิร์ฟเวอร์จริงและ reviewer ตรวจรับก่อนปิดงาน
+
 **Artefact (ชิ้นงานที่ต้องส่ง)**
 - ไฟล์ GitHub Actions Workflow (`cd-deploy.yml`) พร้อมบันทึกการ Deploy สำเร็จ
 
@@ -40,14 +43,14 @@
 
 ### เกณฑ์ตรวจรับ (Acceptance Criteria)
 
-- [x] เมื่อโค้ดถูก Merge เข้า `main` หรือติด Release Tag ระบบจะ Deploy ขึ้น Staging อัตโนมัติ
-- [x] มีขั้นตอน Health Check ตรวจสอบหลัง Deploy หากล้มเหลวจะแจ้งเตือนทันที
+- [ ] เมื่อโค้ดถูก Merge เข้า `main` หรือติด Release Tag ระบบจะ Deploy ขึ้น Staging อัตโนมัติ
+- [ ] มีขั้นตอน Health Check ตรวจสอบหลัง Deploy หากล้มเหลวจะแจ้งเตือนทันที
 
 ### Definition of Done (Checklist กลาง)
 
-- [x] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
-- [x] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
-- [x] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
-- [x] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
+- [ ] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
+- [ ] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
+- [ ] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
+- [ ] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
 - [ ] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
 - [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ

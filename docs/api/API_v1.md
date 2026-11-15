@@ -22,9 +22,10 @@ Initial source review on 2026-10-19; application POST status updated on 2026-10-
 | API | Backend status | Frontend status |
 |---|---|---|
 | Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout; `me` returns `studentStatus` and `activeCommitteeAssignments` read on every call | Login/account/logout connected; committee pages do not read assignments yet |
+| `GET /api/v1/public/clubs` | Task62 public directory: active clubs, name/category/tag/recruitment filters and pagination | Club search page calls the public directory API |
 | `GET /api/v1/public/clubs/{id}` and `.../{id}/recruitment-rounds` | Implemented; active clubs and currently open rounds from DB | Club detail still uses mock data and is not mounted |
 | `GET /api/v1/public/recruitment-rounds` (Open Call Board) | Implemented; open rounds across all active clubs | `/open-calls` page pending |
-| `GET /api/v1/public/club-categories` and `GET /api/v1/public/interest-tags` | Implemented; complete lists ordered by name, then id | Profile editor fills its category select and tag chips from them; search filters pending (Task62) |
+| `GET /api/v1/public/club-categories` and `GET /api/v1/public/interest-tags` | Implemented; complete lists ordered by name, then id | Profile editor uses both; club search page uses categories |
 | `GET /api/v1/clubs/{clubId}` | Contract-only; no handler | Editor client calls this missing endpoint |
 | `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard; `categoryId` and `tagIds` are required and saved with the profile in one transaction | Profile editor at `/clubs/:clubId/edit` sends `categoryId` and `tagIds` |
 | Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
@@ -48,7 +49,7 @@ The foundation contract covers:
 - Applicant-facing form schemas and the read policy in [section 12](#12-round-application-form-task42).
 - A minimal health endpoint for operations.
 
-Application review, membership decisions, notifications, search, and dashboards remain product backlog work; their request and response schemas must be defined before implementation. Recruitment management is specified separately in [rounds.openapi.yaml](rounds.openapi.yaml). The application form and submission contracts are defined below and implemented. A not-yet-implemented endpoint must not return a success response as a stub.
+Other Sprint 2 work includes application review, membership decisions, notifications, and dashboards; consult endpoint implementation status and the individual contracts. Recruitment management is specified separately in [rounds.openapi.yaml](rounds.openapi.yaml). A not-yet-implemented endpoint must not return a success response as a stub.
 
 ## 2. API conventions
 
@@ -97,14 +98,14 @@ All state-changing requests, including login and logout, require a valid CSRF to
 1. Call `GET /api/v1/auth/csrf`; retain the returned CSRF token in memory and allow the browser to retain the session cookie.
 2. Call `POST /api/v1/auth/login` with credentials and the returned CSRF header.
 3. After successful login, the backend rotates the session ID and returns a fresh CSRF token in the login response body. Replace the in-memory token before making another state-changing request; no extra CSRF request is needed after login.
-4. Call `GET /api/v1/auth/me` to initialize or restore the frontend auth state.
+4. Call `GET /api/v1/auth/me` to initialize or restore the frontend auth state. After an explicit login, wait for this call to succeed with the current user before navigating to the validated same-site `next` path and announcing “เข้าสู่ระบบสำเร็จ”. Keep the dismissible success message in an application-level `role="status"` live region so it survives the route change. A failed login or failed session load must not announce success. Session restoration on reload is not a new login and must not replay this message; keep the notification only in memory, not in storage or URL/history state (issue #78).
 5. Before logout, send the current CSRF token to `POST /api/v1/auth/logout`. Clear frontend auth state and fetch a fresh CSRF token before a later login.
 
 The frontend must not read, copy, or persist the session cookie. The backend must establish and save the authenticated Spring Security context in the JDBC session so that a subsequent request using that cookie is authenticated.
 
 ### `GET /api/v1/auth/csrf`
 
-Creates or uses the browser session and returns the CSRF token for that session. It is public and must return `Cache-Control: no-store`.
+Creates or uses the browser session and returns the CSRF token for that session. It is public and must return `Cache-Control: no-store`. If an existing authenticated session belongs to a suspended account, it is invalidated and this request returns `403 ACCOUNT_NOT_ALLOWED`; an anonymous request can obtain a new token.
 
 **`200 OK`**
 
@@ -150,6 +151,8 @@ With the `dev` or `test` profile, the fixed demo credentials are `student-demo` 
 
 The `username` field is the TU account identifier entered by the user. The backend adapter maps it to the official TU API request format. The password must not be logged, stored, returned, or copied into the session.
 
+**Success contract (issue #78):** HTTP `200` and the existing `LoginResponse` (`user`, fresh `csrf`) identify a successful login. No additional `status: true` or `message` field is required. The frontend selects its own localized confirmation text only after the subsequent `/auth/me` succeeds; a stale response after logout/session invalidation cannot restore authentication or trigger the confirmation. This clarification preserves the response schema and existing clients.
+
 Before calling the TU service, the backend counts attempts per client address and per username (case-insensitive). A request over either limit gets `429 RATE_LIMITED` with `Retry-After` in seconds and `Cache-Control: no-store`, and the TU service is not called, even when the password is correct. Successful verification clears that username's count; the client address count stays. Requests rejected with `400` are not counted. Defaults are 50 attempts per client address per 10 minutes and 5 attempts per username per 15 minutes, in fixed windows; deployments can change them through `clubhub.auth.login-limit.*`. Counts are kept in memory per application instance.
 
 After TU verification succeeds, the backend creates a local `users` row on first login, keyed by the unique TU username. Later successful logins refresh the display name, email, and `last_login_at`; they preserve the local `system_role` and `account_status`. New accounts start as `USER` and `ACTIVE`. A suspended account is rejected after identity verification. Login never creates a `student_profiles` row because TU authentication currently does not provide an agreed, normalized student eligibility status.
@@ -165,6 +168,10 @@ Returns the authenticated account as it is stored now. `role`, `studentStatus`, 
   "user": {
     "id": "10001",
     "role": "USER",
+    "displayName": "Example Student",
+    "studentCode": "6600000001",
+    "email": "student@example.edu",
+    "facultyName": "Example Faculty",
     "studentStatus": "ACTIVE",
     "activeCommitteeAssignments": [
       {
@@ -183,6 +190,7 @@ Returns the authenticated account as it is stored now. `role`, `studentStatus`, 
 | Field | Meaning |
 |---|---|
 | `role` | `USER` or `ADMIN`. Do not infer student or committee access from it. |
+| `displayName`, `studentCode`, `email`, `facultyName` | The current authenticated account's own display information, read from its account and student profile. Student code and faculty are `null` without a student profile; email or faculty may be `null` if unavailable. These fields are returned by `/auth/me`, not the login response. |
 | `studentStatus` | `ACTIVE`, `INACTIVE`, `GRADUATED`, or `UNKNOWN`, refreshed at each TU login; `null` when the account has no student profile. Only `ACTIVE` grants student or committee rights. |
 | `activeCommitteeAssignments` | Assignments that grant committee rights at the time of the call, in every club, ordered by club name; `[]` when there are none. An entry is listed only while the committee authorization rule in [§7](#7-authorization-rules) holds: the assignment is unrevoked and `startsAt <= now < endsAt`, the membership has started and not ended, and the account, student status, and club are all Active. Two overlapping assignments in one club give two entries. |
 
@@ -208,6 +216,12 @@ An upstream timeout or outage must never result in a successful login or an auto
 ### Public club API
 
 The following read-only endpoints are public and do not require a session cookie or CSRF token. They return data only for clubs whose `clubs.status` is `ACTIVE`. For the two per-club endpoints, an unknown or inactive club returns the same `404 CLUB_NOT_FOUND` response to avoid disclosing whether an inactive club exists. The `id` path parameter is a decimal string for a positive signed 64-bit database `bigint`, matching the project's wire convention. Non-decimal values and values outside the supported integer range return `400 INVALID_RESOURCE_ID`.
+
+#### `GET /api/v1/public/clubs`
+
+Returns an anonymous, paginated directory of active clubs. `q` is a trimmed, case-insensitive substring of the club name (maximum 200 characters); an empty value means no name filter and `%`, `_`, and `\` are treated as literal text. Optional `categoryId` and `tagId` are positive bigint IDs. `recruitmentStatus` is `ALL` (default), `OPEN`, or `CLOSED`; open means at least one published round has `closed_at IS NULL` and `opens_at <= now < closes_at`. All supplied filters apply together.
+
+`page` is zero-based (default 0), `size` defaults to 20 and is limited to 1–100, and `sort` is `name,asc` (default) or `name,desc`, with `id ASC` as a tie-breaker. The `items`/`page` response, fields, and errors are defined by [`searchPublicClubs` in OpenAPI](openapi.yaml). Category and tag fields contain public summaries; filtering by a tag must not duplicate a club in the results or totals.
 
 #### `GET /api/v1/public/clubs/{id}`
 
@@ -1370,3 +1384,204 @@ Policy evidence: [permission matrix](../security/permission-matrix.md) §§2.2�
 Admin HTTP scope; review of endpoint naming, timeout operations and rollout remains
 for the team. Bootstrap, inactive-membership lifecycle revocation, separate PRESIDENT
 publishing guards and Admin dashboards remain separate work.
+
+## 15. Selection decisions and publication (Task67)
+
+**Implemented on the Task67 branch; formal PO/team review and release CI are not
+claimed.** This section is the current implementation contract for the decision
+and publication entries in §8.2. It supersedes their older “handlers/audit pending”
+wording in the historical Task74 handoff (§8.1), without completing that review.
+
+### Decisions confirmed for this task
+
+- The requester confirmed **ACCEPTED / REJECTED only** using the existing docs and
+  database enum. **WAITLIST / ตัวสำรอง is unsupported**. No new application status
+  or waitlist workflow is introduced.
+- The requester confirmed **atomic batch**: a failed item or required history,
+  review or audit write rolls back every item. The 100-item bound is a technical
+  request limit, subject to team review; it is not a recruitment quota.
+- [Permission matrix §4 and §7](../security/permission-matrix.md) and
+  [Task75 §2.6](../architecture/task75-sprint2-design.md) remain authoritative:
+  effective COMMITTEE/PRESIDENT decides; only PRESIDENT publishes; no global
+  ADMIN shortcut; no self-review for any application status in the round.
+- Decisions are saved only after actual close:
+  `now >= COALESCE(closed_at, closes_at)`. Only a PUBLISHED, not CANCELLED, round
+  with `results_published_at IS NULL` accepts decisions. Source status must be
+  SUBMITTED, UNDER_REVIEW, ACCEPTED or REJECTED. UNDER_REVIEW is optional.
+- Publication requires all non-WITHDRAWN applications to be ACCEPTED/REJECTED,
+  and `now < confirmation_deadline`. No minimum application count was specified:
+  an empty/all-withdrawn round publishes with zero counts. Please review that
+  interpretation. At the deadline publication is refused. Published results
+  cannot be edited/unpublished by this API. A repeated publish returns 409.
+
+### Endpoints and DTOs
+
+Every success/error is `Cache-Control: no-store`. Auth uses the existing SESSION
+cookie; writes also require the existing `X-CSRF-TOKEN` mechanism. IDs are
+canonical positive signed-BIGINT decimal strings (1–9223372036854775807), not JSON
+numbers. Timestamps are UTC ISO 8601; PostgreSQL microsecond precision is used.
+Versions are nonnegative JSON integers at most 9223372036854775806, leaving room
+for the signed-BIGINT increment. Strings are measured in Unicode code points;
+NUL is rejected because PostgreSQL text cannot store it; multiline Thai/emoji
+text is supported. No actor, timestamps or publication fields are client-owned.
+
+| Method/path | Request | 200 response |
+|---|---|---|
+| `GET /api/v1/rounds/{roundId}/applications/{applicationId}/decision` | No body | `CommitteeApplicationDetail` editor snapshot |
+| `PUT /api/v1/rounds/{roundId}/applications/{applicationId}/decision` | `ApplicationDecisionRequest` | Updated `CommitteeApplicationDetail` |
+| `PUT /api/v1/rounds/{roundId}/application-decisions` | `BatchApplicationDecisionRequest` | `{ "items": [CommitteeApplicationDetail, ...] }`, in request order |
+| `POST /api/v1/rounds/{roundId}/publish-results` | `PublishResultsRequest` | `PublishResultsResponse` |
+
+The **dedicated editor GET is a necessary Task67 contract addition**: Task65's
+club-scoped read DTO intentionally excludes version/internal reviews. This GET
+loads the expected version and draft for editing, under the same club/term and
+no-self-review authorization. It uses a repeatable-read snapshot, requires a
+PUBLISHED, non-CANCELLED round, and does not change state. It can still be read
+after publication, when further writes are blocked. Task65 read DTOs are unchanged;
+applicant APIs never use this editor DTO. Optional `/start-review` remains a
+separate pending operation; Task67 does not implement it.
+
+Individual PUT example:
+
+```json
+{
+  "decision": "ACCEPTED",
+  "resultMessage": "ผ่านการคัดเลือก กรุณายืนยันสิทธิ์ภายในกำหนด",
+  "internalNote": "ข้อความจำลองสำหรับกรรมการเท่านั้น",
+  "version": 0
+}
+```
+
+`decision` and `version` are required. `resultMessage` is nullable, max 1000;
+PUT omission/null clears it. `internalNote` is nullable, max 2000; a nonblank value
+upserts only the current actor's `(application_id, reviewer_id)` review and maps
+ACCEPTED→ACCEPT, REJECTED→REJECT. Omission/null/blank preserves that review's comment rather
+than erasing it, while syncing an existing review's recommendation with the new decision. History uses fixed reason `COMMITTEE_DECISION`, never the private
+note. The application version always increments on a successful decision write;
+history is added only when the status changes. Same-status edits still have audit.
+Unknown body fields and wrong scalar types are rejected with 400.
+
+Atomic batch example (1–100 items, unique IDs from the path round):
+
+```json
+{
+  "decisions": [
+    {"applicationId": "90001", "decision": "ACCEPTED", "version": 0},
+    {"applicationId": "90002", "decision": "REJECTED", "resultMessage": "ขอบคุณที่สมัคร", "version": 2}
+  ]
+}
+```
+
+Each item has the same fields/validation as the individual request plus required
+string `applicationId`. All items are authorized/validated before the first
+mutation. A missing child gives 404; an existing child in another round gives
+403, after parent authorization. Duplicate/noncanonical IDs give 400. A stale
+item gives 409 `VERSION_MISMATCH`; there is no partial-success response or retry.
+
+The editor/decision response uses the **existing** `CommitteeApplicationDetail`
+schema: applicant identity, motivation, question/answer pairs and links, status,
+resultMessage, decidedBy/At, respondedAt, version/submittedAt, internal reviews
+and statusHistory. All IDs are strings. These fields are available only to an
+authorized, non-self-reviewing committee caller. For full examples see OpenAPI;
+this is not a public or applicant response.
+
+Publication request: `{ "version": 0 }` (the expected **round** version). Example
+200 response:
+
+```json
+{
+  "roundId": "70001",
+  "clubId": "20001",
+  "resultsPublishedAt": "2026-11-13T10:00:00Z",
+  "confirmationDeadline": "2026-11-15T10:00:00Z",
+  "acceptedCount": 1,
+  "rejectedCount": 1,
+  "roundVersion": 1
+}
+```
+
+Publication changes round metadata/version, inserts one generic RESULT_PUBLISHED
+notification for each ACCEPTED/REJECTED application and one durable publication
+audit row. It does not alter application statuses/versions or add same-state
+history. WITHDRAWN rows get no notification. Notification keys are unique per
+round/application; repeated publication is a conflict with no duplicate writes.
+This task adds database notification rows, not an external-delivery worker or a
+notification read endpoint.
+
+### Errors and evaluation/publication ordering
+
+The existing `application/problem+json` format is reused, including `code`,
+`traceId`, fieldErrors, and **root** `reason` (not inside detail).
+
+```json
+{
+  "type": "urn:tuclubhub:problem:resource-conflict",
+  "title": "Resource state conflict",
+  "status": 409,
+  "detail": "The request conflicts with the current resource state.",
+  "instance": "/api/v1/rounds/70001/publish-results",
+  "code": "RESOURCE_CONFLICT",
+  "traceId": "9d5b946d-1066-4a16-bfb7-cd583fdc6cb9",
+  "fieldErrors": [],
+  "reason": "APPLICATIONS_INCOMPLETE"
+}
+```
+
+| HTTP | Meaning |
+|---|---|
+| 400 | INVALID_RESOURCE_ID for malformed path IDs; VALIDATION_FAILED for body/batch fields |
+| 401 | AUTHENTICATION_REQUIRED: no valid session |
+| 403 | ACCESS_DENIED: wrong club/role, ineffective grant/student/membership, self-review or foreign child; CSRF_INVALID for missing/invalid write CSRF; ACCOUNT_NOT_ALLOWED for suspended actor (session invalidated) |
+| 404 | RESOURCE_NOT_FOUND: genuinely missing round/application after relevant authorization |
+| 409 | RESOURCE_CONFLICT and one of the ordered reasons below |
+| 415 | Existing HTTP_415 unsupported request content type |
+| 500 | INTERNAL_ERROR for unexpected business/history/review/audit/notification failure; no SQL/stack traces in response |
+| 503 | SERVICE_UNAVAILABLE for database dependency failure or exact PostgreSQL lock-timeout/deadlock SQLSTATE 55P03/40P01 |
+
+After final permission and scope checks, both mutations check round conflicts in
+this order: ROUND_CANCELLED → ROUND_NOT_PUBLISHED → ROUND_STILL_OPEN →
+RESULTS_ALREADY_PUBLISHED. A decision then checks source status
+(INVALID_STATUS_TRANSITION) and application VERSION_MISMATCH. Publication then
+checks CONFIRMATION_DEADLINE_EXPIRED → APPLICATIONS_INCOMPLETE → round
+VERSION_MISMATCH. Authorization is not bypassed to expose a child/conflict.
+
+### Transactions, audit and applicant privacy
+
+- Each write is one proxied transaction. Retain effective assignment SHARE locks
+  **before** resource locks, following the existing matrix order. Decision: round
+  FOR SHARE, requested applications FOR UPDATE in ascending ID order. Publication:
+  round FOR UPDATE, its applications FOR UPDATE in ascending ID order. This
+  serializes publish vs decisions and repeated publication. Expected versions
+  prevent concurrent lost updates. All locks last until commit/rollback.
+- After all resource locks, sample one final `Clock` instant and recheck current
+  eligibility/term, all-status self-review, state and deadline. Preliminary grant
+  acquisition may use an earlier instant; timestamps for the actual mutation,
+  history, audit and notifications use the same final instant. Recheck only grants
+  already locked, so no assignment lock is newly acquired after a round lock.
+- The existing bounded per-lock database configuration
+  `clubhub.application.submission.lock-timeout` (default 2s) is also reused here;
+  it is an operational wait bound, not a business rule. Only known lock SQLSTATEs
+  become 503; other constraint/write failures are not mislabeled as conflicts.
+- New **V6 `selection_result_audit`** supplies durable transactional audit missing
+  from the older logger-only Task75 design. It follows Task78 actor/action/resource/
+  time/server-UUID conventions, without replacing its assignment audit table.
+  Decision audit rows record actor, round/club/application, time, trace, before/
+  after status/version and changed-note/message flags. Batch rows share one trace.
+  Publication audit records old/new round version, published flag and outcome
+  counts. It contains no raw notes, answers, document URLs or session identifiers.
+  Required audit failure rolls back the entire business mutation. SLF4J structured
+  logging is supplementary and runs only **after commit**, so rollback produces no
+  committed-success event. Formal audit retention/access review is still needed.
+- Existing `/me/applications` list/detail use explicit applicant DTOs and a stable
+  read snapshot. Before publication, status is SUBMITTED, feedback/confirmation
+  metadata is hidden, and timeline contains only applicant-allowed events. No
+  decision actor, version, review, internal reason or note is returned, including
+  nested objects. Counts enumerate owned applications, not draft decision counts.
+  After publication only the owner's result/message is visible; private notes and
+  evaluator identities remain hidden. There is no implemented applicant result or
+  notification read endpoint that bypasses this mapping. Admin aggregate reporting
+  remains a separate authorized API, not an applicant channel.
+
+See the [Task67 verification/reviewer packet](../testing/task67-selection-results.md)
+for fixtures, actual checks, rollback/concurrency evidence and remaining review
+items. An implementation or local test result is not CI or PO/reviewer approval.

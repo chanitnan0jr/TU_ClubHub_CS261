@@ -7,7 +7,7 @@
 | **สถานะบน Trello** | `To Do` |
 | **ผู้รับผิดชอบ (Owner)** | สิรวิชญ์ (QA / DevOps) & วรพล |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (QA) |
-| **งานที่ต้องทำก่อน (Dependency)** | Deployment Workflow จาก Task84 และ Seed Data จาก Task55 |
+| **งานที่ต้องทำก่อน (Dependency)** | เตรียม Docker Staging Server ก่อนเชื่อม Deployment Workflow จาก Task84; ตรวจผลจริงหลัง workflow พร้อม (Task55 seed ใช้เมื่อทีมอนุมัติและเหมาะกับ environment เท่านั้น) |
 | **SDLC Labels** | 5. Deployment & DevOps |
 | **สมาชิกบนการ์ด Trello** | - |
 | **Trello Card Link** | [https://trello.com/c/5BcWYA6t](https://trello.com/c/5BcWYA6t) |
@@ -19,7 +19,7 @@
 - **Label:** 5. Deployment & DevOps
 - **Owner:** สิรวิชญ์ (QA / DevOps) & วรพล
 - **Reviewer:** สิรวิชญ์ (QA)
-- **Dependency:** Deployment Workflow จาก Task84 และ Seed Data จาก Task55
+- **Dependency:** เตรียม Docker Staging Server ก่อนเชื่อม Deployment Workflow จาก Task84; ตรวจผลจริงหลัง workflow พร้อม (Task55 seed ใช้เมื่อทีมอนุมัติและเหมาะกับ environment เท่านั้น)
 
 **จุดประสงค์ & บริบทของงาน**
 ตรวจสอบความพร้อมของเซิร์ฟเวอร์ Staging และรัน Smoke Test เพื่อยืนยันว่าระบบทำงานพื้นฐานได้สมบูรณ์

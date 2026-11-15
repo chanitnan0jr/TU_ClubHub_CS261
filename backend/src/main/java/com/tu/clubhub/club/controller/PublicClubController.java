@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicClubController {
 
     private final PublicClubService publicClubService;
-
     public PublicClubController(PublicClubService publicClubService) {
         this.publicClubService = publicClubService;
     }

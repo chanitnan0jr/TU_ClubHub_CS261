@@ -37,17 +37,25 @@
 
 ## 2. รายการตรวจสอบ (Checklists)
 
+### Implementation handoff — 2026-11-13
+
+พัฒนาใน branch `feat/task67-result-publishing` ตาม [API contract §15](../../api/API_v1.md#15-selection-decisions-and-publication-task67)
+และ [review/test packet](../../testing/task67-selection-results.md) ผู้ใช้ยืนยันให้ยึด
+`ACCEPTED/REJECTED` ตาม docs เดิม (**ยังไม่รองรับตัวสำรอง**) และ batch แบบ atomic
+มี evaluation editor GET แยกจาก Task65 read DTO และเพิ่ม durable audit ใน V6
+สถานะ checklist ด้านล่างยังไม่ใช่หลักฐานว่า CI, PO/Reviewer หรือ merge ผ่านแล้ว
+
 ### เกณฑ์ตรวจรับ (Acceptance Criteria)
 
-- [ ] บันทึกผลการคัดเลือกได้ถูกต้อง และสถานะใบสมัครเปลี่ยนตามที่กำหนด
-- [ ] ผลการคัดเลือกจะยังไม่แสดงต่อนักศึกษาจนกว่ากรรมการจะกดยืนยันประกาศผล (Publish)
-- [ ] มี Audit Log บันทึกประวัติการบันทึกและประกาศผลอย่างครบถ้วน
+- [x] บันทึกผลการคัดเลือกได้ถูกต้อง และสถานะใบสมัครเปลี่ยนตามที่กำหนด
+- [x] ผลการคัดเลือกจะยังไม่แสดงต่อนักศึกษาจนกว่ากรรมการจะกดยืนยันประกาศผล (Publish)
+- [x] มี Audit Log บันทึกประวัติการบันทึกและประกาศผลอย่างครบถ้วน
 
 ### Definition of Done (Checklist กลาง)
 
-- [ ] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
-- [ ] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
-- [ ] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
-- [ ] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
-- [ ] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
+- [x] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
+- [x] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
+- [x] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
+- [x] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
+- [x] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
 - [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ

@@ -18,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
         ApplicationController.class,
         ClubApplicationController.class,
         CommitteeApplicationController.class,
+        SelectionResultController.class,
         MyApplicationController.class
 })
 @Order(0)

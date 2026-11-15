@@ -43,9 +43,8 @@ public class CurrentUserService {
 	@Transactional(readOnly = true)
 	public CurrentUser describe(Long userId) {
 		UserAccount account = accounts.findById(userId).orElseThrow(AccountNotAllowedException::new);
-		String studentStatus = studentProfiles.findById(userId)
-				.map(StudentProfile::getStudentStatus)
-				.orElse(null);
+		var studentProfile = studentProfiles.findById(userId);
+		String studentStatus = studentProfile.map(StudentProfile::getStudentStatus).orElse(null);
 		var active = assignments.findEffectiveAssignmentSummaries(userId, clock.instant()).stream()
 				.map(assignment -> new ActiveCommitteeAssignment(
 						assignment.getClubId().toString(),
@@ -55,6 +54,8 @@ public class CurrentUserService {
 						assignment.getStartsAt(),
 						assignment.getEndsAt()))
 				.toList();
-		return new CurrentUser(account.getId().toString(), account.getSystemRole(), studentStatus, active);
+		return new CurrentUser(account.getId().toString(), account.getSystemRole(), studentStatus, active,
+				account.getDisplayName(), studentProfile.map(StudentProfile::getStudentCode).orElse(null),
+				account.getEmail(), studentProfile.map(StudentProfile::getFacultyName).orElse(null));
 	}
 }

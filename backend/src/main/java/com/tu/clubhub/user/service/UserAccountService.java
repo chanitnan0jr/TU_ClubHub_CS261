@@ -40,7 +40,7 @@ public class UserAccountService {
 	public UserAccount provisionAfterVerifiedLogin(
 			String tuUsername, String displayName, String email, StudentIdentity student) {
 		try {
-			return transactionTemplate.execute(status -> syncStudentProfile(repository.findByTuUsername(tuUsername)
+			return transactionTemplate.execute(status -> syncStudentProfile(repository.findByTuUsernameForUpdate(tuUsername)
 					.map(account -> refresh(account, displayName, email))
 					.orElseGet(() -> repository.saveAndFlush(new UserAccount(
 							tuUsername, displayName, email, Instant.now()))), student));
@@ -53,7 +53,7 @@ public class UserAccountService {
 				throw concurrentFirstLogin;
 			}
 			return transactionTemplate.execute(status -> syncStudentProfile(refresh(
-				repository.findByTuUsername(tuUsername).orElseThrow(), displayName, email), student));
+					repository.findByTuUsernameForUpdate(tuUsername).orElseThrow(), displayName, email), student));
 		}
 	}
 

@@ -1,0 +1,55 @@
+# Deployed independently from the local development stack. Images must be supplied
+# as immutable registry digest references by the deployment workflow.
+name: tu-clubhub
+
+services:
+  database:
+    image: ${DATABASE_IMAGE:?DATABASE_IMAGE digest is required}
+    container_name: tu-clubhub-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend-frontend:
+    image: ${BACKEND_FRONTEND_IMAGE:?BACKEND_FRONTEND_IMAGE digest is required}
+    container_name: tu-clubhub-backend-frontend
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:?SPRING_PROFILES_ACTIVE is required}
+      PORT: 8080
+      DEPLOY_COMMIT: ${DEPLOY_COMMIT:?DEPLOY_COMMIT is required}
+      DEPLOY_IMAGE_DIGEST: ${DEPLOY_IMAGE_DIGEST:?DEPLOY_IMAGE_DIGEST is required}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      TU_AUTH_MODE: ${TU_AUTH_MODE:?TU_AUTH_MODE is required}
+      TU_AUTH_ENDPOINT_URL: ${TU_AUTH_ENDPOINT_URL:?TU_AUTH_ENDPOINT_URL is required}
+      TU_AUTH_APPLICATION_KEY: ${TU_AUTH_APPLICATION_KEY:?TU_AUTH_APPLICATION_KEY is required}
+    ports:
+      - "${PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+volumes:
+  postgres_data:
+    driver: local

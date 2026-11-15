@@ -18,10 +18,13 @@ server:
         path: /
 
 management:
+  info:
+    defaults:
+      enabled: false
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info
   endpoint:
     health:
       show-details: never

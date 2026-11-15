@@ -49,8 +49,9 @@ final class PublicRoutes {
             get("/api/v1/public/clubs/*/recruitment-rounds"),
             get("/api/v1/public/recruitment-rounds"),
 
-            // Deployment health check.
-            get("/actuator/health")
+            // Deployment health and revision checks.
+            get("/actuator/health"),
+            get("/actuator/info")
     );
 
     private PublicRoutes() {

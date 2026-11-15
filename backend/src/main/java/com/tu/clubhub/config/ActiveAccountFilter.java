@@ -17,7 +17,8 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Rechecks the session account against current database state. A suspended
  * account loses its session; protected API requests are rejected with
- * ACCOUNT_NOT_ALLOWED while public requests continue anonymously.
+ * ACCOUNT_NOT_ALLOWED while public requests continue anonymously. A CSRF
+ * request with a suspended session reports the suspension before clearing it.
  */
 public final class ActiveAccountFilter extends OncePerRequestFilter {
 
@@ -63,7 +64,7 @@ public final class ActiveAccountFilter extends OncePerRequestFilter {
 				session.invalidate();
 			}
 			SecurityContextHolder.clearContext();
-			if (isProtectedApiRequest(request)) {
+			if (isProtectedApiRequest(request) || isCsrfRequest(request)) {
 				SecurityConfiguration.writeProblem(objectMapper, response, request.getRequestURI(), 403,
 						"Account not allowed", "This account is not allowed to use TU-ClubHub.",
 						"ACCOUNT_NOT_ALLOWED");
@@ -90,5 +91,9 @@ public final class ActiveAccountFilter extends OncePerRequestFilter {
 	private static boolean isProtectedApiRequest(HttpServletRequest request) {
 		return request.getRequestURI().startsWith("/api/")
 				&& !PublicRoutes.MATCHER.matches(request);
+	}
+
+	private static boolean isCsrfRequest(HttpServletRequest request) {
+		return "GET".equals(request.getMethod()) && "/api/v1/auth/csrf".equals(request.getRequestURI());
 	}
 }

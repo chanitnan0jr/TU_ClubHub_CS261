@@ -214,6 +214,22 @@ test('concurrent 401 responses notify AuthProvider once and never create client 
   } finally { unsubscribe(); resetAuthFailureNotification(); stub.restore() }
 })
 
+test('a suspended session detected while fetching CSRF reports the account and does not submit', async () => {
+  resetAuthFailureNotification()
+  const notifications: string[] = []
+  const unsubscribe = subscribeAuthFailures(value => notifications.push(value))
+  const stub = stubFetch(() => problem(403, 'ACCOUNT_NOT_ALLOWED', 'SECRET'))
+  try {
+    await assert.rejects(apiRequest('/api/v1/rounds/1/applications', { method: 'POST', body: {} }), (error: unknown) => {
+      assert.ok(error instanceof ApiError)
+      assert.equal(error.code, 'ACCOUNT_NOT_ALLOWED')
+      return true
+    })
+    assert.deepEqual(notifications, ['account-not-allowed'])
+    assert.deepEqual(stub.requests.map(r => `${r.method} ${r.url}`), ['GET /api/v1/auth/csrf'])
+  } finally { unsubscribe(); resetAuthFailureNotification(); stub.restore() }
+})
+
 test('RBAC and CSRF denials do not trigger Login flow or automatic write retries', async () => {
   resetAuthFailureNotification()
   const notifications: string[] = []

@@ -190,6 +190,14 @@
 
 ## 9. สถานะ implementation และงานที่ต้องตามนโยบาย
 
+**Task67 update 2026-11-13:** เพิ่ม individual/atomic batch decisions, evaluation
+editor GET และ PRESIDENT publication ตาม [API §15](../api/API_v1.md#15-selection-decisions-and-publication-task67)
+ใช้ assignment locks ก่อน round/application locks แล้วตรวจสิทธิ์/วาระซ้ำหลังรอ
+มี durable selection audit และตรวจ applicant draft masking ผ่าน HTTP/PostgreSQL
+ตาม [review packet](../testing/task67-selection-results.md) ผู้ใช้ยืนยัน ACCEPTED/REJECTED
+เท่านั้น (ไม่มี WAITLIST) และ batch atomic การแก้ไขนี้ไม่เปลี่ยน Task65 read DTO
+และไม่ใช่ formal approval, CI result หรือ merge; ตารางประวัติ Task74 ด้านล่างยังคงระบุวันที่เดิม
+
 **Task65 update 2026-11-08:** เพิ่ม club-scoped committee list/detail reads พร้อม
 current grant checks, per-round self-review filtering และ DTO ที่ไม่มี internal
 reviews ตาม [API §13](../api/API_v1.md#13-committee-application-reads-task65)

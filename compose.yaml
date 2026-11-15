@@ -20,7 +20,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-tu_clubhub}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tu_clubhub_dev_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
     ports:
       # Bind to loopback interface only to prevent exposing database port to public network
       - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
@@ -61,8 +61,8 @@ services:
       PORT: 8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/${POSTGRES_DB:-tu_clubhub}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-tu_clubhub_dev_secret}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-tu_clubhub_dev_secret}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
       TU_AUTH_MODE: ${TU_AUTH_MODE:-mock}
       TU_AUTH_ENDPOINT_URL: ${TU_AUTH_ENDPOINT_URL:-}
       TU_AUTH_APPLICATION_KEY: ${TU_AUTH_APPLICATION_KEY:-}
@@ -74,6 +74,43 @@ services:
       timeout: 5s
       retries: 6
       start_period: 30s
+
+  # Optional main-branch split architecture, started explicitly with
+  # docker compose --profile split up -d --build database backend frontend
+  backend:
+    profiles: ["split"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tu-clubhub-backend
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/${POSTGRES_DB:-tu_clubhub}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
+      TU_AUTH_MODE: ${TU_AUTH_MODE:-mock}
+      TU_AUTH_ENDPOINT_URL: ${TU_AUTH_ENDPOINT_URL:-}
+      TU_AUTH_APPLICATION_KEY: ${TU_AUTH_APPLICATION_KEY:-}
+    expose:
+      - "8080"
+
+  frontend:
+    profiles: ["split"]
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tu-clubhub-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
 
 volumes:
   # Named volume for PostgreSQL persistence

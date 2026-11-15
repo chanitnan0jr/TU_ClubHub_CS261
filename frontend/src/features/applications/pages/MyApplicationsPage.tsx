@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { Breadcrumbs } from '../../../components/ui/Breadcrumbs';
 import { Button } from '../../../components/ui/Button';
 import { buttonClass } from '../../../components/ui/classes';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import {
   ClipboardCheckIcon,
@@ -10,7 +11,7 @@ import {
 } from '../../../components/ui/icons';
 import { SectionCard } from '../../../components/ui/SectionCard';
 import { useApiResource } from '../../../hooks/useApiResource';
-import { describeApiError } from '../../../lib/api';
+import { ApiError, describeApiError } from '../../../lib/api';
 import { formatThaiDateTime } from '../../../lib/format';
 import { ClubLogo } from '../../clubs/components/ClubLogo';
 import {
@@ -21,10 +22,14 @@ import {
   fetchMyApplicationDetail,
   fetchMyApplications,
   MY_APPLICATIONS_PAGE_SIZE,
+  respondToMembershipOffer,
 } from '../services/myApplicationService';
 import type {
+  ApplicantApplicationDetail,
   ApplicantApplicationSummary,
   ApplicationFilterTab,
+  MembershipDecision,
+  MembershipOfferResponse,
 } from '../types/application';
 
 const pageIndex = (value: string | null) =>
@@ -249,15 +254,122 @@ export function MyApplicationsPage() {
   );
 }
 
+const DECISION_COPY: Record<
+  MembershipDecision,
+  {
+    title: string;
+    action: string;
+    busyAction: string;
+    tone: 'primary' | 'danger';
+    errorFallback: string;
+    prompt: (clubName: string, roundTitle: string) => ReactNode;
+    warning: string;
+    warningClass: string;
+  }
+> = {
+  confirm: {
+    title: 'ยืนยันการเข้าร่วมเป็นสมาชิกชมรม',
+    action: 'ยืนยันสิทธิ์',
+    busyAction: 'กำลังยืนยัน...',
+    tone: 'primary',
+    errorFallback: 'ไม่สามารถยืนยันสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง',
+    prompt: (clubName, roundTitle) => (
+      <>
+        คุณต้องการยืนยันสิทธิ์เข้าร่วม <strong>{clubName}</strong> ในรอบ{' '}
+        <strong>{roundTitle}</strong> ใช่หรือไม่?
+      </>
+    ),
+    warning:
+      'เมื่อกดยืนยันสิทธิ์แล้ว ระบบจะขึ้นทะเบียนคุณเป็นสมาชิกชมรมทันที และไม่สามารถยกเลิกหรือเปลี่ยนแปลงการตัดสินใจในภายหลังได้ (นักศึกษาสามารถเป็นสมาชิกชมรมได้สูงสุดไม่เกิน 5 ชมรม)',
+    warningClass: 'border-amber-200 bg-amber-50 text-amber-900',
+  },
+  decline: {
+    title: 'ยืนยันการสละสิทธิ์เข้าชมรม',
+    action: 'ยืนยันสละสิทธิ์',
+    busyAction: 'กำลังสละสิทธิ์...',
+    tone: 'danger',
+    errorFallback: 'ไม่สามารถสละสิทธิ์ได้ กรุณาลองใหม่อีกครั้ง',
+    prompt: (clubName) => (
+      <>
+        คุณต้องการสละสิทธิ์การเข้าร่วม <strong>{clubName}</strong> ใช่หรือไม่?
+      </>
+    ),
+    warning:
+      'หากคุณกดสละสิทธิ์ สิทธิ์การเข้าเป็นสมาชิกชมรมในรอบนี้จะสิ้นสุดลงทันที และไม่สามารถขอกลับมายืนยันสิทธิ์ในภายหลังได้',
+    warningClass: 'border-red-200 bg-red-50 text-red-900',
+  },
+};
+
+/** Mirrors the server transition so the page updates without a refetch. */
+function applyOfferResult(
+  detail: ApplicantApplicationDetail,
+  result: MembershipOfferResponse,
+): ApplicantApplicationDetail {
+  const lastEntry = detail.statusHistory.at(-1);
+  const nextHistory =
+    lastEntry?.status === result.status
+      ? detail.statusHistory
+      : [
+          ...detail.statusHistory,
+          {
+            status: result.status,
+            displayStatusLabel: result.displayStatusLabel,
+            occurredAt: result.respondedAt,
+          },
+        ];
+
+  return {
+    ...detail,
+    applicantVisibleStatus: result.status,
+    displayStatusLabel: result.displayStatusLabel,
+    respondedAt: result.respondedAt,
+    canConfirm: false,
+    canDecline: false,
+    statusHistory: nextHistory,
+  };
+}
+
 export function MyApplicationDetailPage({
   applicationId,
 }: {
   applicationId: string;
 }) {
-  const { data: detail, error, isLoading, reload } = useApiResource(
-    `my-application-detail:${applicationId}`,
-    () => fetchMyApplicationDetail(applicationId),
+  const {
+    data: detail,
+    error,
+    isLoading,
+    reload,
+    update,
+  } = useApiResource(`my-application-detail:${applicationId}`, () =>
+    fetchMyApplicationDetail(applicationId),
   );
+
+  const [decision, setDecision] = useState<MembershipDecision | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const openDecision = (next: MembershipDecision) => {
+    setActionError(null);
+    setDecision(next);
+  };
+
+  const submitDecision = async () => {
+    if (!decision) return;
+    setIsProcessing(true);
+    setActionError(null);
+    try {
+      const result = await respondToMembershipOffer(applicationId, decision);
+      update((current) => applyOfferResult(current, result));
+    } catch (err) {
+      setActionError(describeApiError(err, DECISION_COPY[decision].errorFallback));
+      if (err instanceof ApiError && err.status === 409) {
+        reload();
+      }
+    } finally {
+      setIsProcessing(false);
+      setDecision(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -318,6 +430,7 @@ export function MyApplicationDetailPage({
     ['กำหนดยืนยันสิทธิ์', deadlineText],
     ['วันที่ตอบรับสิทธิ์', respondedText],
   ].filter(([, value]) => Boolean(value));
+  const decisionCopy = DECISION_COPY[decision ?? 'confirm'];
 
   return (
     <div className="flex flex-col gap-6 pb-12">
@@ -377,6 +490,15 @@ export function MyApplicationDetailPage({
         description="ข้อมูลผลการพิจารณาและกำหนดการที่เกี่ยวข้องกับใบสมัครของคุณ"
       >
         <div className="flex flex-col gap-4">
+          {actionError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800"
+            >
+              {actionError}
+            </div>
+          )}
+
           {detail.applicantVisibleStatus === 'SUBMITTED' && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
               <p className="font-semibold">
@@ -394,6 +516,57 @@ export function MyApplicationDetailPage({
               {deadlineText && (
                 <p className="mt-1 text-xs font-medium text-emerald-800">
                   กรุณายืนยันสิทธิ์ภายในวันที่: {deadlineText}
+                </p>
+              )}
+
+              {(detail.canConfirm || detail.canDecline) && (
+                <div className="mt-4 flex flex-col gap-3 border-t border-emerald-200/80 pt-4">
+                  <p className="text-xs text-emerald-800">
+                    เมื่อยืนยันหรือสละสิทธิ์แล้วจะไม่สามารถเปลี่ยนใจได้
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {detail.canConfirm && (
+                      <Button
+                        variant="primary"
+                        onClick={() => openDecision('confirm')}
+                      >
+                        ยืนยันสิทธิ์เข้าชมรม
+                      </Button>
+                    )}
+                    {detail.canDecline && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => openDecision('decline')}
+                      >
+                        สละสิทธิ์
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {detail.applicantVisibleStatus === 'CONFIRMED' && (
+            <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950">
+              <p className="text-base font-bold text-emerald-900">
+                เป็นสมาชิกชมรมเรียบร้อยแล้ว
+              </p>
+              <p className="mt-1 text-emerald-800">
+                คุณได้ยืนยันสิทธิ์เข้าร่วม {club.name} เรียบร้อยแล้ว
+                {respondedText ? ` (เมื่อ ${respondedText})` : ''}
+              </p>
+            </div>
+          )}
+
+          {detail.applicantVisibleStatus === 'DECLINED' && (
+            <div className="rounded-lg border border-slate-200 bg-slate-100 p-4 text-sm text-slate-700">
+              <p className="font-semibold text-slate-900">
+                คุณได้สละสิทธิ์การเข้าร่วมชมรมนี้แล้ว
+              </p>
+              {respondedText && (
+                <p className="mt-1 text-xs text-slate-500">
+                  ดำเนินการเมื่อ: {respondedText}
                 </p>
               )}
             </div>
@@ -526,6 +699,29 @@ export function MyApplicationDetailPage({
           )}
         </div>
       </SectionCard>
+
+      <ConfirmDialog
+        open={decision !== null}
+        tone={decisionCopy.tone}
+        title={decisionCopy.title}
+        confirmLabel={
+          isProcessing ? decisionCopy.busyAction : decisionCopy.action
+        }
+        busy={isProcessing}
+        onCancel={() => setDecision(null)}
+        onConfirm={submitDecision}
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm leading-relaxed text-slate-700">
+            {decisionCopy.prompt(club.name, round.title)}
+          </p>
+          <div
+            className={`rounded-lg border p-4 text-sm leading-relaxed ${decisionCopy.warningClass}`}
+          >
+            {decisionCopy.warning}
+          </div>
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

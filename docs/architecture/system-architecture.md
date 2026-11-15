@@ -31,12 +31,12 @@ TU-ClubHub สนับสนุนการค้นหาชมรม กา�
 - Login ผ่าน TU API, เก็บสถานะด้วย Spring Session JDBC และ Cookie
 - Session หมดอายุเมื่อไม่มี activity 30 นาที หรือครบ 8 ชั่วโมงหลัง Login สำเร็จ แล้วแต่อย่างใดถึงก่อน
 - ใช้ Flyway จัดการ Schema และใช้ PostgreSQL สำหรับข้อมูลธุรกิจและ Session
-- ส่งมอบบน Render Web Service และ Render PostgreSQL; Build React รวมกับ Spring Boot
+- เป้าหมาย Staging คือ Docker server ที่รัน Spring Boot พร้อม React และ PostgreSQL แยก container; build image ด้วย CI และ deploy ผ่าน SSH
 - เก็บ URL เอกสารและรูปภาพ ไม่อัปโหลดไฟล์หรือดึงไฟล์อัตโนมัติจาก Backend
 
 ### 2.2 Conventions และงานโครงสร้างที่ยังเหลือ
 
-AuthContext, SameSite=Lax, CSRF bootstrap endpoint และ JSON ID แบบ string ใช้อยู่ใน implementation/contract แล้ว [Router หลัก](../../frontend/src/app/AppRoutes.tsx) มีแล้ว ส่วน HTTP client กลางยังเป็นเป้าหมาย Frontend ยังเรียก fetch แยกตามฟีเจอร์ Source-based Docker build บน Render และ Manual Deploy หลัง CI เป็นแผนส่งมอบที่ยังต้องตั้งค่าในบริการจริง
+AuthContext, SameSite=Lax, CSRF bootstrap endpoint และ JSON ID แบบ string ใช้อยู่ใน implementation/contract แล้ว [Router หลัก](../../frontend/src/app/AppRoutes.tsx) มีแล้ว ส่วน HTTP client กลางยังเป็นเป้าหมาย Frontend ยังเรียก fetch แยกตามฟีเจอร์ Staging ผ่าน Docker server และ SSH เป็นแผนส่งมอบที่ยังต้องตั้งค่าและตรวจในบริการจริง
 
 หาก Repository หรือ Contract ที่มีอยู่เลือกแนวทางอื่นแล้ว ให้เปรียบเทียบและบันทึก ADR ก่อนเปลี่ยน ไม่สร้าง Convention สองชุดควบคู่กัน
 
@@ -362,23 +362,23 @@ API รายการประกาศต้องกรองสิทธิ�
 
 ```mermaid
 flowchart TB
-  browser["Browser: React SPA"] -->|"HTTPS"| ingress["Render HTTPS endpoint"]
-  subgraph render["Render — same region"]
-    ingress -->|"Application port"| app["Web Service: Spring Boot + built React assets"]
-    app -->|"Internal JDBC connection"| db[("Render PostgreSQL")]
+  browser["Browser: React SPA"] -->|"HTTPS"| ingress["Staging ingress"]
+  subgraph staging["Dedicated Docker Staging server"]
+    ingress --> app["Spring Boot + React image"]
+    app -->|"Internal JDBC"| db[("PostgreSQL container + volume")]
     config["Server environment / secrets"] -.-> app
   end
   app -->|"HTTPS"| tu["TU Authentication API"]
-  git["GitHub: reviewed commit + passing CI"] -.->|"Selected source revision / Docker build"| app
+  git["GitHub: commit + passing CI"] -.->|"SSH deployment by image digest"| app
 ```
 
 เส้นทึบคือ Runtime communication; เส้นประคือ Configuration หรือ Delivery ไม่ได้แทนการเรียก API ของผู้ใช้
 
 ### 10.1 Build and run
 
-Root Dockerfile สร้าง React dist ด้วย Node → นำเข้า Static Resources ของ Backend → Maven package JAR → Java runtime image รันแอปเดียว Local Compose มี split profile เพิ่มสำหรับ Nginx + Backend แยก ดู [Local demo](../deployment/local-demo.md); Render ยังเป็นแบบเป้าหมาย
+Root Dockerfile สร้าง React dist ด้วย Node → นำเข้า Static Resources ของ Backend → Maven package JAR → Java runtime image รันแอปเดียว Local Compose ใช้ unified app และ database เป็นค่าเริ่มต้น มี split profile สำหรับ Nginx + Backend แยก ดู [Local demo](../deployment/local-demo.md)
 
-Render รองรับ Docker Web Service และกำหนด Environment/Health Check ผ่าน Platform ให้ Bind `0.0.0.0` และ Port ตาม `PORT`; เชื่อม PostgreSQL ผ่าน internal connection ใน Region เดียวกันตามการตั้งค่าบริการจริง [Render Web Services](https://render.com/docs/web-services)
+Staging server ใช้ Docker Compose พร้อม persistent PostgreSQL volume และ deploy image ที่ระบุ digest ผ่าน SSH ดู [Staging deployment guide](../deployment/staging.md); ยังต้องยืนยันการติดตั้งและผลรันจริง
 
 ### 10.2 Environments
 
@@ -386,22 +386,22 @@ Render รองรับ Docker Web Service และกำหนด Environmen
 |---|---|---|
 | Development | Vite proxy ไป Spring Boot + PostgreSQL | Mock TU; migrations สร้าง Schema แต่ไม่มี Seed ชมรม/กรรมการ |
 | CI/Test | Build/tests ใช้ H2 และ isolated PostgreSQL สำหรับ seedtest/recruitment integration | Mock TU API เท่านั้น |
-| Local demo | Compose: app + db | ระบุชัดว่า Mock หรือ Real TU API |
-| Render delivery | Web Service + managed PostgreSQL | Real TU adapter เมื่อผ่าน integration check; mock prohibited in prod |
+| Local demo | Compose: backend-frontend + database | ระบุชัดว่า Mock หรือ Real TU API |
+| Staging target | Docker Compose บน dedicated server; app + PostgreSQL volume | Server config ระบุ auth mode; ไม่ใช้ mock ใน production |
 
 ไม่มี Credential จริงใน Git และ Vite variables Session tables จัดการผ่าน Flyway ด้วย Schema ที่ตรงกับ Spring Session JDBC รุ่นที่ใช้ ปิด Auto Schema Initialization อีกทางเพื่อไม่ให้มีสองระบบสร้างตารางแข่งกัน [Spring Session JDBC](https://docs.spring.io/spring-session/reference/configuration/jdbc.html)
 
 ### 10.3 Routing, trust and persistence
 
 - Same-origin ทำให้ Browser ใช้ Relative API URL; ยังต้องมี CSRF, authorization และ secure cookie
-- Trust proxy headers เฉพาะขอบเขต Platform ที่เชื่อถือได้ ตรวจ URL/scheme และ Cookie หลังผ่าน Render ingress จริง
+- Trust proxy headers เฉพาะขอบเขต Platform ที่เชื่อถือได้ ตรวจ URL/scheme และ Cookie หลังผ่าน Staging ingress จริง
 - SPA fallback รองรับ Client routes โดยไม่ครอบ `/api/**`, `/actuator/**` หรือ missing static assets
 - PostgreSQL เก็บข้อมูลคงทน ส่วน App filesystem ไม่ใช้เก็บไฟล์ผู้ใช้
 - จำกัดการเข้าถึง DB ตามที่ Platform รองรับ ไม่เปิด Credential/Connection URL ให้ Browser
 
 ### 10.4 Availability and recovery
 
-บริการแอปเดียวและฐานข้อมูลหนึ่งชุดเหมาะกับ Scope MVP แต่ยังไม่ใช่ HA design ความพร้อมใช้งานขึ้นกับแผน Render และ TU API ต้องตรวจข้อจำกัดการพักบริการ/อายุฐานข้อมูล/การสำรองข้อมูลของแผนที่ใช้งานก่อนแต่ละรอบสาธิต
+บริการแอปเดียวและฐานข้อมูลหนึ่งชุดเหมาะกับ Scope MVP แต่ยังไม่ใช่ HA design ความพร้อมใช้งานขึ้นกับ Docker server, storage, ingress และ TU API ต้องตรวจการสำรองข้อมูลและการกู้คืนก่อนแต่ละรอบสาธิต
 
 สำรองข้อมูลก่อน Migration ที่มีผลต่อข้อมูล ทดสอบ restore ในสภาพแวดล้อมแยก และเก็บคู่มือ การ Rollback Docker version ไม่ได้ย้อน Schema โดยอัตโนมัติ ต้องตรวจความเข้ากันได้หรือใช้แผน Roll-forward/Restore ที่ทดสอบแล้ว
 
@@ -414,9 +414,9 @@ Render รองรับ Docker Web Service และกำหนด Environmen
 3. Auth integration tests ใน CI ใช้ Mock TU API ไม่มีการส่ง Credential ไปบริการจริง
 4. สมาชิกอื่น Review อย่างน้อย 1 คน; การเปลี่ยน Auth/Schema/Transaction ให้ Lead BE หรือ SA ที่ไม่ได้เป็นผู้เขียนตรวจ
 5. Merge เมื่อ CI และ Review ผ่าน ไม่บังคับให้ทุก PR ต้องผ่านคนเดียวเป็นคอขวด
-6. เลือก commit ที่ผ่านเกณฑ์ให้ Render Build/Deploy ด้วย root Dockerfile แล้วทำ Smoke Test
+6. ให้ CD ตรวจ CI สำหรับ commit เดียวกัน สร้าง image และ deploy digest ไป Staging ผ่าน SSH แล้วตรวจ health/smoke
 
-ค่าเริ่มต้นที่เสนอคือ Manual Deploy หลังผ่าน CI หากใช้ Auto Deploy ภายหลังต้องผูกกับผลตรวจให้ชัด ไม่ให้ PR Build สำเร็จเพียงบางส่วนกลายเป็นหลักฐานว่าทั้งระบบผ่าน [Render Deploys](https://render.com/docs/deploys)
+PR ตรวจ container แยกโดยไม่ deploy; การ deploy จริงต้องมี Staging server และ secrets พร้อม ผล CI หรือ runner verification เพียงอย่างเดียวยังไม่ใช่หลักฐาน Staging
 
 Logs มี request/trace ID, error code และเวลา; ไม่บันทึก credential, session ID, full application answers หรือ private document URLs เป็นค่าเริ่มต้น Health endpoint เผยข้อมูลขั้นต่ำ ส่วนรายละเอียดตรวจระบบใช้สิทธิ์เฉพาะ
 
@@ -454,7 +454,7 @@ Traceability ระดับ Action → Story/AC → Transition/Permission/Rule 
 | OD-05 (ตัดสินใจแล้ว 19 ต.ค. 2026) | ห้ามใช้สิทธิ์กรรมการกับรอบที่ตนมีใบสมัคร; Admin ไม่มี override | ยึด [Permission Matrix](../security/permission-matrix.md); เหลืองาน implementation ตามช่องว่างที่บันทึกไว้ |
 | OD-06 | การนับคน/ใบสมัคร/สมาชิกตามปีการศึกษาและภาคเรียน | ดู T74-D08; Schema ของรอบมี academic_year/semester แล้ว ไม่ถือว่าฟิลด์มีอยู่เท่ากับ Metric/Query รองรับแล้ว |
 | OD-07 | Timeline Sprint/Release ในรายงานและเกณฑ์รายวิชา | วันที่ส่งมอบและชื่อ Release; ไม่อนุมานจาก Sprint number |
-| OD-08 | บริการ Render และการตรวจ compatibility ในสภาพแวดล้อมส่งมอบ | Dependency versions อยู่ใน manifests/lockfile แล้ว; ยังต้องยืนยัน deployment configuration และผลรันจริง |
+| OD-08 | Docker Staging server และการตรวจ compatibility ในสภาพแวดล้อมส่งมอบ | Dependency versions อยู่ใน manifests/lockfile แล้ว; ยังต้องยืนยัน deployment configuration และผลรันจริง |
 
 งานต่อให้ใช้ Contract และนโยบายที่กำหนดแล้ว พร้อมอัปเดตช่องว่างใน README/Permission Matrix แยกจากผลการตรวจรับของแต่ละ workflow
 
@@ -506,7 +506,5 @@ SA ดูแลภาพรวม/ADR/API Contract; Lead BE ดูแล Securit
 - [Spring Security — CSRF](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)
 - [Spring Session — JDBC](https://docs.spring.io/spring-session/reference/configuration/jdbc.html)
 - [Vite — Environment Variables](https://vite.dev/guide/env-and-mode)
-- [Render — Web Services](https://render.com/docs/web-services)
-- [Render — Deploys](https://render.com/docs/deploys)
 
 References ใช้อธิบายแนวคิดและข้อจำกัดทางเทคนิค เวอร์ชันของโค้ดจริงต้องตรวจจาก Dependency ที่ทีมตรึง ไม่คัดลอก Configuration ของ Framework คนละ Major Version โดยตรง
