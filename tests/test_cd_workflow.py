@@ -33,10 +33,12 @@ class CdWorkflowTests(unittest.TestCase):
         integration = job('integration')
         build = job('build-and-verify')
         deploy = job('deploy-staging')
+        publish = job('publish')
         self.assertIn('uses: ./.github/workflows/ci.yml', ci)
         self.assertIn('uses: ./.github/workflows/ci-integration.yml', integration)
         self.assertRegex(build, r'(?m)^    needs: \[ci, integration\]$')
-        self.assertRegex(deploy, r'(?m)^    needs: build-and-verify$')
+        self.assertRegex(publish, r'(?m)^    needs: build-and-verify$')
+        self.assertRegex(deploy, r'(?m)^    needs: publish$')
         for filename in ('ci.yml', 'ci-integration.yml'):
             workflow = (ROOT / '.github/workflows' / filename).read_text()
             self.assertRegex(workflow, r'(?m)^  workflow_call:')
@@ -46,9 +48,17 @@ class CdWorkflowTests(unittest.TestCase):
     def test_pr_cannot_publish_or_invoke_staging(self):
         build = job('build-and-verify')
         deploy = job('deploy-staging')
-        for name in ('Log in to GHCR', 'Publish verified images'):
+        publish = job('publish')
+        for name in ('Save verified images for release', 'Upload verified images for release'):
             self.assertIn(f'if: {RELEASE_GUARD}', step(build, name))
+        for name in ('Log in to GHCR', 'Publish verified images'):
+            self.assertIn(f'if: {RELEASE_GUARD}', step(publish, name))
+        self.assertRegex(publish, rf'(?m)^    if: {re.escape(RELEASE_GUARD)}$')
         self.assertRegex(deploy, rf'(?m)^    if: {re.escape(RELEASE_GUARD)}$')
+        self.assertRegex(build, r'(?m)^    permissions:\n      contents: read$')
+        self.assertNotIn('packages: write', build)
+        self.assertNotIn('secrets.GITHUB_TOKEN', build)
+        self.assertIn('packages: write', publish)
         self.assertRegex(deploy, r'(?m)^    environment: staging$')
         self.assertNotIn('secrets.STAGING_', build)
         self.assertNotRegex(job('ci') + job('integration'), r'(?m)^    secrets:')
@@ -58,12 +68,12 @@ class CdWorkflowTests(unittest.TestCase):
         self.assertRegex(deploy, r'(?m)^      group: tu-clubhub-staging-deployment$')
         self.assertRegex(deploy, r'(?m)^      cancel-in-progress: false$')
         transfer = step(deploy, 'Transfer configuration and deploy immutable images')
-        self.assertIn('${{ needs.build-and-verify.outputs.database_image }}', transfer)
-        self.assertIn('${{ needs.build-and-verify.outputs.app_image }}', transfer)
+        self.assertIn('${{ needs.publish.outputs.database_image }}', transfer)
+        self.assertIn('${{ needs.publish.outputs.app_image }}', transfer)
         self.assertIn('${{ github.sha }}', transfer)
         self.assertIn('image_pattern=', transfer)
         self.assertIn('StrictHostKeyChecking=yes', transfer)
-        publish = step(job('build-and-verify'), 'Publish verified images')
+        publish = step(job('publish'), 'Publish verified images')
         self.assertIn('digest:', publish)
         self.assertNotIn(':staging', publish)
 
@@ -83,7 +93,7 @@ class CdWorkflowTests(unittest.TestCase):
         external = step(deploy, 'Check external staging health and home page')
         self.assertIn('python3 scripts/verify-staging.py "$BASE_URL" "$COMMIT_SHA" "$IMAGE_DIGEST"', external)
         self.assertIn('${{ github.sha }}', external)
-        self.assertIn('${{ needs.build-and-verify.outputs.app_image }}', external)
+        self.assertIn('${{ needs.publish.outputs.app_image }}', external)
         self.assertIn('IMAGE_DIGEST=${APP_IMAGE##*@}', external)
         self.assertNotRegex(external, r'(?m)^        if:')
 

@@ -31,10 +31,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      packages: write
-    outputs:
-      database_image: ${{ steps.publish.outputs.database_image }}
-      app_image: ${{ steps.publish.outputs.app_image }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,6 +75,38 @@ jobs:
       - name: Remove isolated verification stack
         if: always()
         run: docker compose down -v --remove-orphans
+      - name: Save verified images for release
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        run: docker save tu-clubhub-database:verify tu-clubhub-backend-frontend:verify -o "$RUNNER_TEMP/verified-images.tar"
+      - name: Upload verified images for release
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-images
+          path: ${{ runner.temp }}/verified-images.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    name: Publish verified images
+    needs: build-and-verify
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      database_image: ${{ steps.publish.outputs.database_image }}
+      app_image: ${{ steps.publish.outputs.app_image }}
+    steps:
+      - name: Download verified images
+        uses: actions/download-artifact@v4
+        with:
+          name: verified-images
+          path: ${{ runner.temp }}
+      - name: Load verified images
+        run: docker load -i "$RUNNER_TEMP/verified-images.tar"
       - name: Log in to GHCR
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/login-action@v3
@@ -110,7 +138,7 @@ jobs:
 
   deploy-staging:
     name: Deploy verified images to staging
-    needs: build-and-verify
+    needs: publish
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -154,8 +182,8 @@ jobs:
           HOST: ${{ vars.STAGING_HOST }}
           USER: ${{ vars.STAGING_USER }}
           PORT: ${{ vars.STAGING_PORT }}
-          DATABASE_IMAGE: ${{ needs.build-and-verify.outputs.database_image }}
-          APP_IMAGE: ${{ needs.build-and-verify.outputs.app_image }}
+          DATABASE_IMAGE: ${{ needs.publish.outputs.database_image }}
+          APP_IMAGE: ${{ needs.publish.outputs.app_image }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -170,7 +198,7 @@ jobs:
         env:
           BASE_URL: ${{ vars.STAGING_BASE_URL }}
           COMMIT_SHA: ${{ github.sha }}
-          APP_IMAGE: ${{ needs.build-and-verify.outputs.app_image }}
+          APP_IMAGE: ${{ needs.publish.outputs.app_image }}
         run: |
           IMAGE_DIGEST=${APP_IMAGE##*@}
           python3 scripts/verify-staging.py "$BASE_URL" "$COMMIT_SHA" "$IMAGE_DIGEST"
@@ -178,8 +206,8 @@ jobs:
         if: always()
         env:
           COMMIT_SHA: ${{ github.sha }}
-          DATABASE_IMAGE: ${{ needs.build-and-verify.outputs.database_image }}
-          APP_IMAGE: ${{ needs.build-and-verify.outputs.app_image }}
+          DATABASE_IMAGE: ${{ needs.publish.outputs.database_image }}
+          APP_IMAGE: ${{ needs.publish.outputs.app_image }}
         run: |
           {
             echo "## Staging deployment: ${{ job.status }}"
