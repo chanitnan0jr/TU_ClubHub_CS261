@@ -3,6 +3,7 @@ package com.tu.clubhub.club.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
@@ -38,6 +39,7 @@ class PublicClubServiceTest {
     private FixtureQueries queries;
     private AtomicInteger lookups;
     private AtomicInteger clockReads;
+    private ClubSecurity clubSecurity;
     private PublicClubService service;
 
     @BeforeEach
@@ -75,7 +77,8 @@ class PublicClubServiceTest {
             @Override public Instant instant() { clockReads.incrementAndGet(); return NOW; }
         };
 
-        service = new PublicClubService(clubs, queries, clock, mock(ClubSecurity.class));
+        clubSecurity = mock(ClubSecurity.class);
+        service = new PublicClubService(clubs, queries, clock, clubSecurity);
     }
 
     @Test
@@ -85,6 +88,10 @@ class PublicClubServiceTest {
         assertEquals("Coding", result.name());
         assertEquals("Tech", result.category().name());
         assertEquals(List.of("Code"), result.tags().stream().map(tag -> tag.name()).toList());
+        assertEquals(false, result.canEditProfile());
+
+        when(clubSecurity.isCommittee(7L)).thenReturn(true);
+        assertEquals(true, service.getClubProfile("7").canEditProfile());
     }
 
     @Test

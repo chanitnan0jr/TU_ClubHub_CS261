@@ -1202,8 +1202,8 @@ paths:
     get:
       tags: [Public Clubs]
       operationId: getPublicClubProfile
-      x-implementation-status: partial
-      x-sprint2-extensions-status: pending-task81
+      x-implementation-status: implemented
+      x-sprint2-extensions-status: implemented
       summary: Get an active club's public profile
       description: >-
         Public endpoint; authentication is not required. Returns only an ACTIVE
@@ -1552,6 +1552,7 @@ paths:
                     closesAt: '2026-10-31T16:59:59Z'
                     closedAt: null
                     resultsScheduledAt: null
+                canEditProfile: false
         '400':
           description: Invalid club identifier
           content:
@@ -1677,6 +1678,7 @@ paths:
                   - id: '40002'
                     name: Music
                 recruitmentRounds: []
+                canEditProfile: true
         '400':
           description: >-
             Invalid club identifier, or request fields failed validation. fieldErrors
@@ -4528,7 +4530,7 @@ components:
       description: >-
         Whitelisted public profile projection for an ACTIVE club. Does not expose
         persistence metadata, creator identity, committee data, or internal notes.
-      required: [id, name, description, objectives, contactUrl, facebookUrl, instagramUrl, contactEmail, affiliationLevel, affiliationName, imageUrl, bannerUrl, category, tags]
+      required: [id, name, description, objectives, contactUrl, facebookUrl, instagramUrl, contactEmail, affiliationLevel, affiliationName, imageUrl, bannerUrl, category, tags, canEditProfile]
       properties:
         id:
           type: string

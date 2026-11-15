@@ -127,7 +127,8 @@ public class ClubService {
                 club.getStatus(),
                 profileQueryRepository.findCategory(club.getCategoryId()),
                 profileQueryRepository.findTags(club.getId()),
-                profileQueryRepository.findPublishedRounds(club.getId())
+                profileQueryRepository.findPublishedRounds(club.getId()),
+                true
         );
     }
 

@@ -21,7 +21,8 @@ public record ClubResponseDto(
 		String status,
 		ClubCategoryDto category,
 		List<ClubTagDto> tags,
-		List<PublicRecruitmentRoundDto> recruitmentRounds) {
+		List<PublicRecruitmentRoundDto> recruitmentRounds,
+		boolean canEditProfile) {
 
 	public record ClubCategoryDto(String id, String name) {
 	}

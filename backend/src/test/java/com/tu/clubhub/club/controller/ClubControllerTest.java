@@ -70,7 +70,8 @@ class ClubControllerTest {
                 "ACTIVE",
                 new ClubResponseDto.ClubCategoryDto("1", "Music"),
                 List.of(),
-                List.of()
+                List.of(),
+                true
         );
 
         when(clubService.updateClub(
@@ -91,7 +92,8 @@ class ClubControllerTest {
                 .andExpect(jsonPath("$.name").value("Music Club"))
                 .andExpect(jsonPath("$.category.name").value("Music"))
                 .andExpect(jsonPath("$.tags").isArray())
-                .andExpect(jsonPath("$.recruitmentRounds").isArray());
+                .andExpect(jsonPath("$.recruitmentRounds").isArray())
+                .andExpect(jsonPath("$.canEditProfile").value(true));
 
         verify(clubSecurity).isCommittee(41L);
         verify(clubService).updateClub(

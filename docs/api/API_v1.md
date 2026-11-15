@@ -225,7 +225,7 @@ Returns an anonymous, paginated directory of active clubs. `q` is a trimmed, cas
 
 #### `GET /api/v1/public/clubs/{id}`
 
-Returns the public club profile directly as JSON (`PublicClubProfile`). It includes the profile fields already defined by the club API contract, a category summary, and tag summaries. Nullable profile values are present as `null` when unset. It does not include the club's database status, creator, timestamps, version, committee assignments, or internal notes.
+Returns the public club profile directly as JSON (`PublicClubProfile`). It includes the profile fields already defined by the club API contract, a category summary, tag summaries, and `canEditProfile` (`true` only when the caller has an active session with an effective `COMMITTEE` or `PRESIDENT` assignment for this club; `false` for anonymous callers, other users, and `ADMIN` without an effective committee assignment for this club). Because `canEditProfile` depends on the caller session, responses include `Cache-Control: no-store`. Nullable profile values are present as `null` when unset. It does not include the club's database status, creator, timestamps, version, committee assignments, or internal notes.
 
 ```json
 {
@@ -242,7 +242,8 @@ Returns the public club profile directly as JSON (`PublicClubProfile`). It inclu
   "imageUrl": "https://images.example.org/clubs/20001.png",
   "bannerUrl": null,
   "category": { "id": "30001", "name": "Technology" },
-  "tags": [{ "id": "40001", "name": "Programming" }]
+  "tags": [{ "id": "40001", "name": "Programming" }],
+  "canEditProfile": false
 }
 ```
 
@@ -368,7 +369,8 @@ Returns a public club profile without requiring login. `clubId` is a decimal str
       "closedAt": null,
       "resultsScheduledAt": null
     }
-  ]
+  ],
+  "canEditProfile": false
 }
 ```
 

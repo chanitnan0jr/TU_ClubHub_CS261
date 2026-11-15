@@ -5,6 +5,7 @@ import { Button } from "../components/ui/Button";
 import { buttonClass } from "../components/ui/classes";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CircleAlertIcon, ExternalLinkIcon } from "../components/ui/icons";
+import { useAuth } from "../features/auth/AuthContext";
 import { updateClubProfile } from "../features/clubs/api/clubApi";
 import ClubProfileForm from "../features/clubs/components/ClubProfileForm";
 import { useClubProfile } from "../features/clubs/hooks/useClubProfile";
@@ -13,24 +14,33 @@ import NotFoundPage from "./NotFoundPage";
 
 export default function ClubEditRoutePage() {
   const { clubId } = useParams();
+  const { user, isLoading: isAuthLoading } = useAuth();
 
   if (!isValidId(clubId)) return <NotFoundPage />;
+  if (isAuthLoading) return <LoadingProfileStatus />;
+
+  const assignments = user?.activeCommitteeAssignments;
+  if (assignments && !assignments.some((item) => item.clubId === clubId)) {
+    return <Navigate to={`/clubs/${clubId}`} replace />;
+  }
 
   return <ClubProfileEditor key={clubId} clubId={clubId} />;
+}
+
+function LoadingProfileStatus() {
+  return (
+    <PublicLayout>
+      <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
+        กำลังตรวจสอบสิทธิ์และโหลดข้อมูลชมรม...
+      </p>
+    </PublicLayout>
+  );
 }
 
 function ClubProfileEditor({ clubId }: { clubId: string }) {
   const { data, isLoading, errorMessage, refetch } = useClubProfile(clubId);
 
-  if (isLoading) {
-    return (
-      <PublicLayout>
-        <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
-          กำลังตรวจสอบสิทธิ์และโหลดข้อมูลชมรม...
-        </p>
-      </PublicLayout>
-    );
-  }
+  if (isLoading) return <LoadingProfileStatus />;
 
   // Never show an empty form: saving it would overwrite the club with blank values.
   if (!data) {
