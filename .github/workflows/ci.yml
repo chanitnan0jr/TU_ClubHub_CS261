@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   pull_request:
     branches: [ main ]
     paths-ignore:
@@ -20,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-ci-${{ github.workflow == 'CI' && 'standalone' || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -89,6 +90,7 @@ jobs:
           java -jar target/clubhub-0.0.1-SNAPSHOT.jar > "$RUNNER_TEMP/task54-app.log" 2>&1 &
           for attempt in $(seq 1 60); do
             if curl -fsS "$APP_URL/actuator/health" > /dev/null; then exit 0; fi
+            echo "Waiting for test server ($attempt/60)"
             sleep 1
           done
           cat "$RUNNER_TEMP/task54-app.log"
@@ -140,10 +142,12 @@ jobs:
       - name: Write frontend summary
         if: always()
         run: |
-          echo "### Frontend CI (${{ job.status }})" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Linter:** \`npm run lint\` (\`oxlint\`)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Unit Tests:** \`npm test\` (\`tsx --test tests/*.test.ts\`)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Build:** \`npm run build\` (\`tsc -b && vite build\`)" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Frontend CI (${{ job.status }})"
+            echo "- **Linter:** \`npm run lint\` (\`oxlint\`)"
+            echo "- **Unit Tests:** \`npm test\` (\`tsx --test tests/*.test.ts\`)"
+            echo "- **Build:** \`npm run build\` (\`tsc -b && vite build\`)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   backend:
     name: Backend CI (Compile & Verify)

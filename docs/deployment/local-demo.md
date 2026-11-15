@@ -8,7 +8,8 @@ This guide runs the current TU-ClubHub application and PostgreSQL locally using 
 
 - **Docker Engine / Docker Desktop** with Docker Compose V2 support (`docker compose version`)
 - **Port Availability**:
-  - `80`: Frontend HTTP port (Nginx)
+  - `8080`: Unified application HTTP port (or the configured `PORT`)
+  - `80`: Optional split frontend HTTP port (Nginx)
   - `5432`: PostgreSQL database port (bound to loopback `127.0.0.1` only)
 
 ---
@@ -20,26 +21,27 @@ This guide runs the current TU-ClubHub application and PostgreSQL locally using 
    cp .example.env .env
    ```
 2. Verify the default settings in `.env`:
-   - `PORT=8080`: Spring's port when started directly; Compose fixes the backend container port to 8080 and serves the frontend on host port 80.
+   - `PORT=8080`: Host port for the default unified application; the container listens on port 8080.
    - `SPRING_PROFILES_ACTIVE=dev`: Enables Flyway schema migration and local development defaults.
    - `TU_AUTH_MODE=mock`: Uses the internal mock TU Authentication provider (no external university API credentials required).
    - `POSTGRES_DB=tu_clubhub`
    - `POSTGRES_USER=postgres`
    - `POSTGRES_PASSWORD=tu_clubhub_dev_secret`
 
+An existing PostgreSQL volume retains its original password; keep its existing `.env` or `POSTGRES_PASSWORD` when upgrading. Changing an environment variable does not change a PostgreSQL role password. The Compose fallback remains compatible with the original fallback when no password is supplied.
+
 Compose supplies database credentials to the containers. Spring Boot started directly from a terminal does not load this `.env`; follow the [standalone setup](../../README.md#standalone-local-development). To move the database host port, set `POSTGRES_HOST_PORT`; direct JVM connections must use the matching JDBC URL.
 
 ---
 
-## 3. Starting the Full-Stack System
+## 3. Starting the Full-Stack System (2-Container Architecture)
 
-### Compose services
+### Two-Container Stack (`backend-frontend` + `database`)
 
-The default Compose stack uses local `dev` settings; it is not a production deployment:
+The default stack uses local `dev` settings; it is not a production deployment:
 
-- **Database (`db`)**: PostgreSQL 17 Alpine container with persistent storage in named volume `postgres_data`.
-- **Backend (`backend`)**: Spring Boot Java 21, available inside the Compose network on port 8080.
-- **Frontend (`frontend`)**: Nginx serves the React assets on host port 80 and proxies `/api/` to the backend.
+1. **`database` (`tu-clubhub-db`)**: PostgreSQL 17 Alpine with persistent storage in named volume `postgres_data`.
+2. **`backend-frontend` (`tu-clubhub-backend-frontend`)**: Spring Boot with embedded React SPA, serving both the website and REST API.
 
 Execute from the repository root:
 ```bash
@@ -51,9 +53,13 @@ To run in the background (detached mode):
 docker compose up --build -d
 ```
 
-The root Dockerfile can still build an image with the frontend embedded in Spring Boot; it is not a service in the current Compose stack. Nginx proxies `/api/`, not `/actuator/`.
+The optional split profile runs separate backend and Nginx frontend containers. Select the services explicitly to avoid starting the unified service too:
 
-If you previously ran the removed `app` service, its old `tu-clubhub-app` container can continue serving port 8080 separately. To stop that old container when it is no longer needed, run `docker stop tu-clubhub-app`; stopping it does not remove the database volume. Use port 80 to access the current Compose frontend.
+```bash
+docker compose --profile split up -d --build database backend frontend
+```
+
+The split frontend is at `http://localhost`; Nginx proxies `/api/`, not `/actuator/`. Stop other running frontend/application containers first if their ports conflict.
 
 ---
 
@@ -63,13 +69,13 @@ If you previously ran the removed `app` service, its old `tu-clubhub-app` contai
    ```bash
    docker compose ps
    ```
-   Expect `tu-clubhub-db` to be `healthy` and both `backend` and `frontend` to be running.
+   Expect both containers (`tu-clubhub-db` and `tu-clubhub-backend-frontend`) to be running and healthy.
 
 2. **Access the Application**:
-   - Open your web browser and navigate to: [http://localhost](http://localhost)
+   - Open your web browser and navigate to: [http://localhost:8080](http://localhost:8080) (or the configured `PORT`).
    - With `dev` + `TU_AUTH_MODE=mock`, two accounts share the password `tu-clubhub-demo`: `student-demo` (president of ชมรมเขียนโปรแกรม after seeding) and `applicant-demo` (a student with no memberships, for applying to that club).
    - After login the home page has a launcher that takes a club ID (and round ID). The club pages are `/clubs/{clubId}`, `/clubs/{clubId}/edit` and `/clubs/{clubId}/rounds/{roundId}/questions`. A fresh database has no clubs, so load the demo data first (step 3).
-   - Check backend health inside its container: `docker compose exec backend wget -qO- http://localhost:8080/actuator/health`.
+   - Check application health at [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health). For split mode, run `docker compose exec backend wget -qO- http://localhost:8080/actuator/health`.
 
 3. **Database Migrations and Initial Data**:
    - Flyway automatically applies all database migrations (`V1__init_schema.sql`, `V3__create_spring_session_tables.sql`) on startup.
@@ -78,15 +84,15 @@ If you previously ran the removed `app` service, its old `tu-clubhub-app` contai
    - To load local demo data (10 clubs, committee accounts and sample rounds with questions), start the app once so Flyway creates the tables, then run `scripts/seed-dev-data.sh`. It is safe to run again. It makes `student-demo` the president of ชมรมเขียนโปรแกรม so the club editor and question pages work, and prints the page URLs to try. Set `APP_URL` to change the printed login URL for standalone development. It is for local development only.
    - Check application logs:
      ```bash
-     docker compose logs -f backend
+     docker compose logs -f backend-frontend
      ```
 
 4. **Smoke Test**:
    ```bash
-   scripts/smoke-test.sh   # BASE_URL, HEALTH_URL, BACKEND_CONTAINER and DB_CONTAINER override the defaults
+   scripts/smoke-test.sh   # See script for endpoint and container overrides
    ```
    It checks health, pages, the API and database, a mock login, and that PostgreSQL listens on loopback only, and exits non-zero on any failure.
-   The default health check runs inside the backend container. For a standalone backend, set `BASE_URL` and `HEALTH_URL` to its accessible URLs.
+   For split mode: `BASE_URL=http://localhost APP_CONTAINER=tu-clubhub-backend scripts/smoke-test.sh`. For a standalone backend, set the overrides described in the script.
 
 ### Sprint 1 Demo Walkthrough
 
@@ -116,7 +122,7 @@ docker compose stop
 docker compose start
 
 # Rebuild application without affecting database volume
-docker compose up --build -d backend frontend
+docker compose up --build -d backend-frontend
 ```
 
 ### Complete Clean Slate (Resetting Database)
@@ -136,7 +142,7 @@ docker compose up --build
 1. **Loopback Database Binding**:
    - The PostgreSQL service is configured with `- "127.0.0.1:5432:5432"`.
    - This ensures the database port is only reachable from your local machine (localhost) and is not exposed to public/local networks.
-   - The frontend's host port 80 is not limited to loopback by this Compose configuration.
+   - The application host port is not limited to loopback by this Compose configuration.
 2. **Backend Execution**:
    - The backend container runs under an unprivileged system user (`appuser:appgroup`).
 3. **Local Configuration**:

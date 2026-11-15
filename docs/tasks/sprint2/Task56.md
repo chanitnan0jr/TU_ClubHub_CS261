@@ -7,7 +7,7 @@
 | **สถานะบน Trello** | `To Do` |
 | **ผู้รับผิดชอบ (Owner)** | สิรวิชญ์ (QA / DevOps) & วรพล |
 | **ผู้ตรวจรับ (Reviewer)** | สิรวิชญ์ (QA) |
-| **งานที่ต้องทำก่อน (Dependency)** | Deployment Workflow จาก Task84 และ Seed Data จาก Task55 |
+| **งานที่ต้องทำก่อน (Dependency)** | Workflow จาก Task84 และ fixture/seed สำหรับการตรวจชั่วคราว; ไม่ต้องมี server จริงตามที่ผู้ร้องขอระบุ |
 | **SDLC Labels** | 5. Deployment & DevOps |
 | **สมาชิกบนการ์ด Trello** | - |
 | **Trello Card Link** | [https://trello.com/c/5BcWYA6t](https://trello.com/c/5BcWYA6t) |
@@ -19,10 +19,12 @@
 - **Label:** 5. Deployment & DevOps
 - **Owner:** สิรวิชญ์ (QA / DevOps) & วรพล
 - **Reviewer:** สิรวิชญ์ (QA)
-- **Dependency:** Deployment Workflow จาก Task84 และ Seed Data จาก Task55
+- **Dependency:** Workflow จาก Task84 และ fixture/seed สำหรับการตรวจชั่วคราว; ไม่ต้องมี server จริงตามที่ผู้ร้องขอระบุ
 
 **จุดประสงค์ & บริบทของงาน**
 ตรวจสอบความพร้อมของเซิร์ฟเวอร์ Staging และรัน Smoke Test เพื่อยืนยันว่าระบบทำงานพื้นฐานได้สมบูรณ์
+
+**ขอบเขตที่ผู้ร้องขอระบุภายหลัง:** ใช้ GitHub Actions runner และ Compose ชั่วคราว ไม่ต้องมี server จริง ผลตรวจจึงไม่ยืนยัน Staging ถาวรหรือ URL สาธารณะ ให้ Owner/Reviewer ยืนยันเกณฑ์ของ Task56 ก่อนปิด โดยเก็บข้อความและ checkbox เดิมไว้ด้านล่าง
 
 **ขอบเขตงานที่ต้องทำ (Actionable Scope)**
 1. **Environment Verification:** ตรวจสอบ Database, Container, และ Environment Variables บน Staging

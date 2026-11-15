@@ -1,0 +1,162 @@
+name: CD Container Verification
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI for verified commit
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  integration:
+    name: Integration for verified commit
+    uses: ./.github/workflows/ci-integration.yml
+    permissions:
+      contents: read
+
+  build-and-verify:
+    name: Build and verify isolated stack
+    needs: [ci, integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Lint workflow and scripts
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$(go env GOPATH)/bin/actionlint" .github/workflows/cd-deploy.yml .github/workflows/ci.yml .github/workflows/ci-integration.yml
+          shellcheck scripts/smoke-test.sh scripts/seed-dev-data.sh
+      - name: Test workflow contract
+        run: python3 -m unittest discover -s tests -p 'test_cd_workflow.py'
+      - uses: docker/setup-buildx-action@v3
+      - name: Build database image for verification
+        uses: docker/build-push-action@v6
+        with:
+          context: ./database
+          load: true
+          tags: tu-clubhub-database:verify
+          cache-from: type=gha,scope=database
+          cache-to: type=gha,mode=max,scope=database
+      - name: Build application image for verification
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: tu-clubhub-backend-frontend:verify
+          cache-from: type=gha,scope=backend-frontend
+          cache-to: type=gha,mode=max,scope=backend-frontend
+      - name: Verify isolated Compose stack
+        env:
+          DATABASE_IMAGE: tu-clubhub-database:verify
+          BACKEND_FRONTEND_IMAGE: tu-clubhub-backend-frontend:verify
+        run: |
+          cp .example.env .env
+          docker compose config --services
+          docker compose up -d --no-build --wait --wait-timeout 240 database backend-frontend
+          ./scripts/seed-dev-data.sh
+          ./scripts/smoke-test.sh
+      - name: Capture verification diagnostics
+        if: failure()
+        run: docker compose logs --no-color || true
+      - name: Remove isolated verification stack
+        if: always()
+        run: docker compose down -v --remove-orphans
+      - name: Save verified images for release
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        run: docker save tu-clubhub-database:verify tu-clubhub-backend-frontend:verify -o "$RUNNER_TEMP/verified-images.tar"
+      - name: Upload verified images for release
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-images
+          path: ${{ runner.temp }}/verified-images.tar
+          retention-days: 1
+          if-no-files-found: error
+      - name: Summarize isolated verification
+        if: always()
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          JOB_RESULT: ${{ job.status }}
+        run: |
+          {
+            echo "## Isolated container verification: $JOB_RESULT"
+            echo "- Commit: $COMMIT_SHA"
+            echo "- Target: temporary GitHub Actions runner; removed after verification"
+            echo "- No persistent staging server or external deployment is created."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish verified images
+    needs: build-and-verify
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      database_image: ${{ steps.publish.outputs.database_image }}
+      app_image: ${{ steps.publish.outputs.app_image }}
+    steps:
+      - name: Download verified images
+        uses: actions/download-artifact@v4
+        with:
+          name: verified-images
+          path: ${{ runner.temp }}
+      - name: Load verified images
+        run: docker load -i "$RUNNER_TEMP/verified-images.tar"
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish verified images
+        id: publish
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          OWNER: ${{ github.repository_owner }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          registry_owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
+          [[ "$registry_owner" =~ ^[a-z0-9-]+$ && "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          for component in database backend-frontend; do
+            image="ghcr.io/$registry_owner/tu-clubhub-$component"
+            docker tag "tu-clubhub-$component:verify" "$image:sha-$COMMIT_SHA"
+            log=$(mktemp)
+            docker push "$image:sha-$COMMIT_SHA" | tee "$log"
+            digest=$(sed -nE 's/.*digest: (sha256:[0-9a-f]{64}).*/\1/p' "$log" | tail -n 1)
+            rm -f "$log"
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            if [[ "$component" == database ]]; then key=database_image; else key=app_image; fi
+            printf '%s=%s@%s\n' "$key" "$image" "$digest" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Summarize published image digests
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          DATABASE_IMAGE: ${{ steps.publish.outputs.database_image }}
+          APP_IMAGE: ${{ steps.publish.outputs.app_image }}
+        run: |
+          {
+            echo "## Verified images published"
+            echo "- Commit: $COMMIT_SHA"
+            echo "- Database: $DATABASE_IMAGE"
+            echo "- Application: $APP_IMAGE"
+          } >> "$GITHUB_STEP_SUMMARY"
