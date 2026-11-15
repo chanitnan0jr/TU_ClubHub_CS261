@@ -19,6 +19,7 @@ export function toClubDetailData(
   return {
     id: profile.id,
     name: profile.name,
+    canEditProfile: profile.canEditProfile === true,
     category: profile.category?.name ?? '',
     description: profile.description,
     objectives: profile.objectives ?? '',

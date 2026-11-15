@@ -293,6 +293,7 @@ class ClubServiceTest {
         assertEquals(category, response.category());
         assertEquals(tags, response.tags());
         assertTrue(response.recruitmentRounds().isEmpty());
+        assertTrue(response.canEditProfile());
     }
 
     @Test

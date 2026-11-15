@@ -21,6 +21,7 @@ const { ClubDetailPage } = await import('../src/features/clubs/components/ClubDe
 const profile = {
   id: '20001',
   name: 'ชมรมตัวอย่าง',
+  canEditProfile: false,
   description: 'รายละเอียดชมรม',
   objectives: null,
   contactUrl: null,
@@ -67,6 +68,7 @@ test('club page shows round details and results date, and falls back for broken 
   })))
   try {
     await screen.findByRole('heading', { level: 1, name: 'ชมรมตัวอย่าง' })
+    assert.equal(screen.queryByRole('link', { name: 'แก้ไขข้อมูลชมรม' }), null)
 
     const [first, second] = screen.getAllByRole('article')
     const round = within(first)
@@ -103,5 +105,19 @@ test('club page without a logo or banner never loads an external placeholder', a
     await screen.findByRole('heading', { level: 1, name: 'ชมรมตัวอย่าง' })
     assert.ok(screen.queryByRole('img') === null)
     assert.doesNotMatch(document.body.innerHTML, /<img|unsplash/)
+  } finally { cleanup(); stub.restore() }
+})
+
+test('club page shows the edit link only when the profile grants permission', async () => {
+  const stub = stubFetch(request => json(request.url.endsWith('/recruitment-rounds')
+    ? { ...rounds, items: [] }
+    : { ...profile, canEditProfile: true }))
+  render(createElement(MemoryRouter, null, createElement(ClubDetailPage, { clubId: '20001' })))
+  try {
+    await screen.findByRole('heading', { level: 1, name: 'ชมรมตัวอย่าง' })
+    assert.equal(
+      screen.getByRole('link', { name: 'แก้ไขข้อมูลชมรม' }).getAttribute('href'),
+      '/clubs/20001/edit',
+    )
   } finally { cleanup(); stub.restore() }
 })

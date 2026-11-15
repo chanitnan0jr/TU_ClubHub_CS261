@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import com.tu.clubhub.committee.security.ClubSecurity;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -36,15 +37,18 @@ public class PublicClubService {
     private final ClubRepository clubRepository;
     private final ClubProfileQueryRepository profileQueryRepository;
     private final Clock clock;
+    private final ClubSecurity clubSecurity;
 
     public PublicClubService(
             ClubRepository clubRepository,
             ClubProfileQueryRepository profileQueryRepository,
-            Clock clock
+            Clock clock,
+            ClubSecurity clubSecurity
     ) {
         this.clubRepository = clubRepository;
         this.profileQueryRepository = profileQueryRepository;
         this.clock = clock;
+        this.clubSecurity = clubSecurity;
     }
 
     @Transactional(readOnly = true)
@@ -75,7 +79,8 @@ public class PublicClubService {
                 club.getImageUrl(),
                 club.getBannerUrl(),
                 new PublicClubCategoryDto(category.id(), category.name()),
-                tags
+                tags,
+                clubSecurity.isCommittee(club.getId())
         );
     }
 

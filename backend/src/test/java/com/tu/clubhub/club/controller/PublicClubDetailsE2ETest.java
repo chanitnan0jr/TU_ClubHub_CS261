@@ -196,7 +196,9 @@ class PublicClubDetailsE2ETest {
                     .andExpect(jsonPath("$.keys()", containsInAnyOrder(
                             "id", "name", "description", "objectives", "contactUrl",
                             "facebookUrl", "instagramUrl", "contactEmail", "affiliationLevel",
-                            "affiliationName", "imageUrl", "bannerUrl", "category", "tags")));
+                            "affiliationName", "imageUrl", "bannerUrl", "category", "tags",
+                            "canEditProfile")))
+                    .andExpect(jsonPath("$.canEditProfile").value(false));
         }
     }
 
