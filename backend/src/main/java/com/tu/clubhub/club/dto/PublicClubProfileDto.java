@@ -18,7 +18,7 @@ public record PublicClubProfileDto(
         String bannerUrl,
         PublicClubCategoryDto category,
         List<PublicClubTagDto> tags,
-boolean canEditProfile) {
+        boolean canEditProfile) {
 
     public PublicClubProfileDto {
         tags = List.copyOf(tags);

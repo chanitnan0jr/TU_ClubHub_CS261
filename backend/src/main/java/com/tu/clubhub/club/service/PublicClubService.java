@@ -36,9 +36,9 @@ public class PublicClubService {
     private final ClubRepository clubRepository;
     private final ClubProfileQueryRepository profileQueryRepository;
     private final Clock clock;
-        private final ClubSecurity clubSecurity;
+    private final ClubSecurity clubSecurity;
 
-        public PublicClubService(
+    public PublicClubService(
             ClubRepository clubRepository,
             ClubProfileQueryRepository profileQueryRepository,
             Clock clock,

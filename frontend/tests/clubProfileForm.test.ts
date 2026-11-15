@@ -151,6 +151,9 @@ test('a student is redirected away from a directly opened edit route', async () 
 
     await screen.findByText('Public club')
     assert.equal(screen.queryByLabelText(/^ชื่อชมรม/), null)
+    assert.equal(stub.requests.some(request => request.url === '/api/v1/public/clubs/20001'), false)
+    assert.equal(stub.requests.some(request => request.url === '/api/v1/public/club-categories'), false)
+    assert.equal(stub.requests.some(request => request.url === '/api/v1/public/interest-tags'), false)
   } finally { cleanup(); stub.restore() }
 })
 
@@ -174,6 +177,32 @@ test('a committee member of another club is redirected from this club edit route
 
     await screen.findByText('Public club')
     assert.equal(screen.queryByLabelText(/^ชื่อชมรม/), null)
+    assert.equal(stub.requests.some(request => request.url === '/api/v1/public/clubs/20001'), false)
+    assert.equal(stub.requests.some(request => request.url === '/api/v1/public/club-categories'), false)
+    assert.equal(stub.requests.some(request => request.url === '/api/v1/public/interest-tags'), false)
+  } finally { cleanup(); stub.restore() }
+})
+
+test('an assignment that lost backend edit permission still redirects away from the edit route', async () => {
+  const stub = stubFetch(request => {
+    if (request.url === '/api/v1/auth/me') {
+      return json({ user: { id: '4', role: 'USER', activeCommitteeAssignments: [assignment] } })
+    }
+    if (request.url === '/api/v1/public/clubs/20001') return json({ ...profile, canEditProfile: false })
+    if (request.url === '/api/v1/public/club-categories') return json({ items: categories })
+    if (request.url === '/api/v1/public/interest-tags') return json({ items: tags })
+    return json({ detail: 'Unexpected request' }, 500)
+  })
+  try {
+    render(createElement(MemoryRouter, { initialEntries: ['/clubs/20001/edit'] },
+      createElement(AuthProvider, null,
+        createElement(Routes, null,
+          createElement(Route, { path: '/clubs/:clubId/edit', element: createElement(ClubEditRoutePage) }),
+          createElement(Route, { path: '/clubs/:clubId', element: createElement('p', null, 'Public club') })))))
+
+    await screen.findByText('Public club')
+    assert.equal(screen.queryByLabelText(/^ชื่อชมรม/), null)
+    assert.equal(stub.requests.some(request => request.url === '/api/v1/public/clubs/20001'), true)
   } finally { cleanup(); stub.restore() }
 })
 

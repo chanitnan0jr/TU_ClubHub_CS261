@@ -148,6 +148,24 @@ class PublicClubControllerIntegrationTest {
         mockMvc.perform(get("/api/v1/public/clubs/{id}", otherClubId).with(signedIn))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.canEditProfile").value(false));
+
+        var adminPrincipal = new com.tu.clubhub.auth.service.ClubHubPrincipal(userId, username, "ADMIN");
+        var adminAuth = UsernamePasswordAuthenticationToken.authenticated(
+                adminPrincipal,
+                null,
+                java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN")));
+        mockMvc.perform(get("/api/v1/public/clubs/{id}", otherClubId)
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.authentication(adminAuth)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.canEditProfile").value(false));
+
+        // Exclusive end-of-term boundary (ends_at == NOW) revokes edit capability immediately.
+        jdbc.update("UPDATE club_committee_assignments SET ends_at = ? WHERE membership_id = ?",
+                OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC), membership.getId());
+        mockMvc.perform(get("/api/v1/public/clubs/{id}", activeClubId).with(signedIn))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.canEditProfile").value(false));
     }
 
     @Test
