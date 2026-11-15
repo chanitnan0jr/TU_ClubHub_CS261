@@ -31,13 +31,10 @@ server:
 
 # This file replaces src/main/resources/application.yaml in tests; keep the health settings identical.
 management:
-  info:
-    defaults:
-      enabled: false
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health
   endpoint:
     health:
       show-details: never

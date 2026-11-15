@@ -1,19 +1,18 @@
-# Task84 — CD Staging verification report
+# Task84 — temporary stack verification report
 
-**Status: Pending verification and review.** This document is a handoff, not evidence of an approved task, merged PR, or successful Staging deployment. Record results for the final commit and link the actual runs after they happen.
+**Status: Pending Owner/Reviewer confirmation.** The requester stated that no real server is needed. The proposed verification scope is an ephemeral GitHub Actions runner; it has no persistent Staging service or public URL. The original Task84 acceptance criteria describe deployment to Staging and remain unchecked until the responsible people confirm the revised criteria. This report is not evidence of approval or merge.
 
-| Check | Environment / evidence needed | Status |
+| Check | Evidence and limits | Status |
 |---|---|---|
-| Frontend lint, test and build | GitHub CI for the revision under review | Pending final run |
-| Backend verify and system integration / Flyway | GitHub CI with isolated PostgreSQL for the same revision | Pending final run |
-| Compose build and smoke | Ephemeral runner and disposable database; mock authentication | Pending final run |
-| PR deploy isolation | PR run, including same-repository PR; no Staging deployment | Pending final run |
-| Existing PostgreSQL volume upgrade | Disposable old-version volume with sentinel data and original password | Pending Docker-capable test |
-| Real deployment, image identity and health | Dedicated Staging server, requested image digests and commit, `/actuator/health`, `/actuator/info` matching the full deployed commit and application image digest, and home page | Pending infrastructure and execution |
-| Reviewer approval / merge | Actual review and merge evidence | Pending |
+| Frontend lint, test and build | [PR #82 CI run for `3bd9f51`](https://github.com/chanitnan0jr/TU_ClubHub_CS261/actions/runs/43659516796) | Passed for that earlier revision; rerun for the current revision |
+| Backend and system integration / Flyway | [PR #82 CI](https://github.com/chanitnan0jr/TU_ClubHub_CS261/actions/runs/43659516796) and [integration CI](https://github.com/chanitnan0jr/TU_ClubHub_CS261/actions/runs/43659516759) for `3bd9f51` | Passed for that earlier revision; rerun for the current revision |
+| Compose build and smoke | [PR #82 isolated stack job](https://github.com/chanitnan0jr/TU_ClubHub_CS261/actions/runs/43659516765/job/132646052307), using disposable DB and mock auth | Passed for `3bd9f51`; rerun after the scope adjustment |
+| PR publish isolation | In the same prior [CD run](https://github.com/chanitnan0jr/TU_ClubHub_CS261/actions/runs/43659516765), publish and deploy jobs were skipped | Earlier revision only; check the current PR run |
+| Existing PostgreSQL volume compatibility | Local disposable volume, sentinel data and original password fallback | Passed in isolated test before the latest main merge |
+| GHCR release publish | Eligible `main`/release run with tested images | Pending a real eligible run |
+| Persistent staging / external deployment | Outside the scope requested by the requester | Not performed; no claim of a live deployment |
+| Owner/Reviewer confirmation and merge | Confirm adjusted acceptance criteria and review the current PR | Pending |
 
-Local pre-review checks on 2026-11-15 used an isolated checkout: after merging main at `eb3dd2d`, frontend `npm run lint`, `npm test` (184 passed), and `npm run build` passed. Backend `./mvnw clean verify` passed 841 tests and the system-integration test selection passed 550 tests against disposable PostgreSQL 17; applying the Sprint 2 seed twice and verifying its invariants also passed. The CD script/workflow unit suite (16 tests), actionlint and ShellCheck passed locally. Before that main merge, a separate disposable Docker Compose project built both images, completed the mock-auth smoke test (10/10 checks), and retained sentinel data when recreated with the original password fallback. A rebuilt application returned the supplied synthetic commit and image digest from `/actuator/info` with `Cache-Control: no-store`. These checks do not replace the final GitHub run or a real staging deployment.
+Local pre-review checks on 2026-11-15 after merging main at `eb3dd2d` passed frontend lint, 184 tests and build; backend verify (841 tests), system integration selection (550 tests), and Sprint 2 seed re-application/invariant checks on disposable PostgreSQL 17. These precede the no-server scope adjustment and do not replace the current PR run.
 
-The deployment script supplies `DEPLOY_COMMIT` and `DEPLOY_IMAGE_DIGEST` to Compose; `GET /actuator/info` exposes `commit` and `imageDigest` fields that must equal the full 40-character SHA and application `sha256:` image digest (`unknown` when invalid or unset). A successful Compose run on a GitHub runner validates a disposable stack only. It does not establish deployment to a separate Staging server. Record actual commands, run URLs, timestamps and failures here or in a linked reviewer artifact; do not include credentials, session cookies or private data.
-
-The deployment procedure, server prerequisites, rollback limitations and troubleshooting are in the [Staging deployment guide](../deployment/staging.md). Follow [Task56](../tasks/sprint2/Task56.md) for the real Staging smoke test and [Task84](../tasks/sprint2/Task84.md) for acceptance and review status.
+See the [temporary verification guide](../deployment/staging.md) for reproduction and the distinction between runner checks and a live deployment. Never include credentials, session cookies, or private data in the evidence.

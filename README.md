@@ -19,7 +19,7 @@ TU-ClubHub is a web platform in development for Thammasat University students to
 | Admin assignments (Task78) | Session/CSRF Admin create/read/replace/revoke APIs; fresh DB role, expected versions, PostgreSQL locks, retained history and durable audit; [contract](docs/api/API_v1.md#admin-committee-assignments-task78) and [local test report](docs/testing/task78-assignment-concurrency.md) | Team review, deployment, Admin UI and membership bootstrap; dashboards remain separate |
 | Selection results (Task67) | Individual/atomic batch decisions, separate evaluation editor snapshot, PRESIDENT publication, transactional audit/notifications, applicant draft masking and real PostgreSQL HTTP tests; [contract §15](docs/api/API_v1.md#15-selection-decisions-and-publication-task67) and [review packet](docs/testing/task67-selection-results.md) | PO/team review and release CI; WAITLIST is unsupported; no selection UI added |
 | Later workflows | Schema and design for membership and notifications | Membership confirmation/decline and external notification delivery |
-| Runtime | Flyway, health endpoint, Docker/Compose, CI and CD workflow | Staging infrastructure, real deployment evidence and reviewer approval pending |
+| Runtime | Flyway, health endpoint, Docker/Compose, CI and temporary runner-based stack verification | Owner/reviewer confirmation of revised Task84 scope pending |
 
 See the [permission matrix implementation gaps](docs/security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย). An implemented endpoint does not mean the entire story or adopted authorization policy is complete.
 
@@ -33,7 +33,7 @@ See the [permission matrix implementation gaps](docs/security/permission-matrix.
 | Authentication | TU Authentication API with server-side Spring Session JDBC and CSRF protection |
 | API | REST JSON under `/api/v1`; Markdown and OpenAPI contracts include implementation status |
 | Local delivery | Compose runs a unified Spring Boot + React application with PostgreSQL 17 by default; an optional split profile serves React with Nginx |
-| Staging target | Dedicated Docker server with PostgreSQL volume and deployment over SSH; actual Staging readiness and deployment remain unverified |
+| Delivery verification | GitHub Actions runs Docker Compose and smoke tests in an isolated, temporary runner; no persistent staging server or public URL |
 
 Dependency versions are recorded in [frontend/package.json](frontend/package.json), its lockfile, and [backend/pom.xml](backend/pom.xml). Docker builds use Node 22.14 and Java 21. CI provisions PostgreSQL 18; local Compose uses 17.
 
@@ -53,7 +53,7 @@ Dependency versions are recorded in [frontend/package.json](frontend/package.jso
 | [Database design](docs/database/TU-ClubHub-ERD-Updated.dbml) / [migrations](backend/src/main/resources/db/migration) | Domain model and executable schema; migrations are authoritative |
 | [User stories](docs/stories) / [sequence diagram index](docs/diagrams/README.md) | Acceptance requirements and exchanges for Sprint 1 and Draft Sprint 2 workflows, with pending contracts and dependencies marked |
 | [Local demonstration guide](docs/deployment/local-demo.md) | Compose services, demo login, persistence, and reset instructions |
-| [Staging deployment guide](docs/deployment/staging.md) | Staging prerequisites, immutable image deployment, verification, and recovery |
+| [Temporary stack verification guide](docs/deployment/staging.md) | Runner-based verification, release image publishing, limits and evidence |
 | [Frontend guide](frontend/README.md) | Current screens, components, and API integration gaps |
 | [Test reports and handoffs](docs/testing) | Historical results for the revision/date recorded in each report |
 

@@ -1,6 +1,6 @@
-"""Static safety-contract tests for the CD workflow, without GitHub credentials.
+"""Static checks for CI isolation and publication of verified Docker images.
 
-These check the workflow's declared guards and wiring, not GitHub's event engine.
+These assert workflow wiring; GitHub Actions runs remain the integration test.
 """
 
 from pathlib import Path
@@ -28,76 +28,62 @@ def step(block, name):
 
 
 class CdWorkflowTests(unittest.TestCase):
-    def test_release_paths_depend_on_both_ci_workflows(self):
-        ci = job('ci')
-        integration = job('integration')
-        build = job('build-and-verify')
-        deploy = job('deploy-staging')
-        publish = job('publish')
-        self.assertIn('uses: ./.github/workflows/ci.yml', ci)
-        self.assertIn('uses: ./.github/workflows/ci-integration.yml', integration)
-        self.assertRegex(build, r'(?m)^    needs: \[ci, integration\]$')
-        self.assertRegex(publish, r'(?m)^    needs: build-and-verify$')
-        self.assertRegex(deploy, r'(?m)^    needs: publish$')
+    def test_triggers_include_pr_main_and_release_tags(self):
+        self.assertRegex(WORKFLOW, r'(?m)^  pull_request:$')
+        self.assertRegex(WORKFLOW, r'(?m)^    branches: \[main\]$')
+        self.assertRegex(WORKFLOW, r"(?m)^    tags: \['v\*'\]$")
+
+    def test_verification_requires_both_ci_workflows(self):
+        self.assertIn('uses: ./.github/workflows/ci.yml', job('ci'))
+        self.assertIn('uses: ./.github/workflows/ci-integration.yml', job('integration'))
+        self.assertRegex(job('build-and-verify'), r'(?m)^    needs: \[ci, integration\]$')
+        self.assertRegex(job('publish'), r'(?m)^    needs: build-and-verify$')
         for filename in ('ci.yml', 'ci-integration.yml'):
             workflow = (ROOT / '.github/workflows' / filename).read_text()
             self.assertRegex(workflow, r'(?m)^  workflow_call:')
-            self.assertRegex(workflow, r'(?m)^  contents: read$')
             self.assertNotIn('secrets: inherit', workflow)
 
-    def test_pr_cannot_publish_or_invoke_staging(self):
+    def test_pr_build_cannot_publish_or_access_staging(self):
         build = job('build-and-verify')
-        deploy = job('deploy-staging')
         publish = job('publish')
         for name in ('Save verified images for release', 'Upload verified images for release'):
             self.assertIn(f'if: {RELEASE_GUARD}', step(build, name))
-        for name in ('Log in to GHCR', 'Publish verified images'):
-            self.assertIn(f'if: {RELEASE_GUARD}', step(publish, name))
         self.assertRegex(publish, rf'(?m)^    if: {re.escape(RELEASE_GUARD)}$')
-        self.assertRegex(deploy, rf'(?m)^    if: {re.escape(RELEASE_GUARD)}$')
         self.assertRegex(build, r'(?m)^    permissions:\n      contents: read$')
         self.assertNotIn('packages: write', build)
         self.assertNotIn('secrets.GITHUB_TOKEN', build)
         self.assertIn('packages: write', publish)
-        self.assertRegex(deploy, r'(?m)^    environment: staging$')
-        self.assertNotIn('secrets.STAGING_', build)
-        self.assertNotRegex(job('ci') + job('integration'), r'(?m)^    secrets:')
+        self.assertNotIn('STAGING_', WORKFLOW)
+        self.assertNotIn('ssh ', WORKFLOW)
+        self.assertNotIn('environment: staging', WORKFLOW)
 
-    def test_single_staging_group_and_immutable_images(self):
-        deploy = job('deploy-staging')
-        self.assertRegex(deploy, r'(?m)^      group: tu-clubhub-staging-deployment$')
-        self.assertRegex(deploy, r'(?m)^      cancel-in-progress: false$')
-        transfer = step(deploy, 'Transfer configuration and deploy immutable images')
-        self.assertIn('${{ needs.publish.outputs.database_image }}', transfer)
-        self.assertIn('${{ needs.publish.outputs.app_image }}', transfer)
-        self.assertIn('${{ github.sha }}', transfer)
-        self.assertIn('image_pattern=', transfer)
-        self.assertIn('StrictHostKeyChecking=yes', transfer)
-        publish = step(job('publish'), 'Publish verified images')
-        self.assertIn('digest:', publish)
-        self.assertNotIn(':staging', publish)
+    def test_isolated_stack_is_verified_and_removed(self):
+        build = job('build-and-verify')
+        verify = step(build, 'Verify isolated Compose stack')
+        self.assertIn('docker compose up -d --no-build --wait', verify)
+        self.assertIn('./scripts/seed-dev-data.sh', verify)
+        self.assertIn('./scripts/smoke-test.sh', verify)
+        cleanup = step(build, 'Remove isolated verification stack')
+        self.assertIn('if: always()', cleanup)
+        self.assertIn('docker compose down -v', cleanup)
+        self.assertIn('temporary GitHub Actions runner', step(build, 'Summarize isolated verification'))
+        self.assertIn('No persistent staging server', build)
 
-    def test_stale_main_is_rejected_after_the_deployment_lock(self):
-        deploy = job('deploy-staging')
-        guard = step(deploy, 'Reject an outdated main deployment')
-        self.assertIn("github.ref == 'refs/heads/main'", guard)
-        self.assertIn('gh api "repos/$GITHUB_REPOSITORY/commits/main"', guard)
-        self.assertIn('"$current_main" == "$COMMIT_SHA"', guard)
-        self.assertIn('exit 1', guard)
+    def test_published_images_are_verified_artifact_with_immutable_digest(self):
+        build = job('build-and-verify')
+        publish = job('publish')
+        self.assertIn('docker save tu-clubhub-database:verify tu-clubhub-backend-frontend:verify', build)
+        self.assertIn('actions/upload-artifact@v4', build)
+        self.assertIn('actions/download-artifact@v4', publish)
+        self.assertIn('docker load', publish)
+        self.assertNotIn('docker build', publish)
+        publish_step = step(publish, 'Publish verified images')
+        self.assertIn('digest:', publish_step)
+        self.assertNotIn(':staging', publish_step)
+        self.assertIn('steps.publish.outputs.database_image', publish)
+        self.assertIn('steps.publish.outputs.app_image', publish)
 
-    def test_staging_requires_configuration_and_external_health(self):
-        deploy = job('deploy-staging')
-        configure = step(deploy, 'Configure verified SSH host')
-        for name in ('SSH_KEY', 'KNOWN_HOSTS', 'HOST', 'USER', 'BASE_URL'):
-            self.assertIn(f'-n "${name}"', configure)
-        external = step(deploy, 'Check external staging health and home page')
-        self.assertIn('python3 scripts/verify-staging.py "$BASE_URL" "$COMMIT_SHA" "$IMAGE_DIGEST"', external)
-        self.assertIn('${{ github.sha }}', external)
-        self.assertIn('${{ needs.publish.outputs.app_image }}', external)
-        self.assertIn('IMAGE_DIGEST=${APP_IMAGE##*@}', external)
-        self.assertNotRegex(external, r'(?m)^        if:')
-
-    def test_untrusted_ref_is_not_interpolated_into_shell(self):
+    def test_untrusted_ref_not_interpolated_into_shell(self):
         lines = WORKFLOW.splitlines()
         shell = []
         inside = False
@@ -109,8 +95,7 @@ class CdWorkflowTests(unittest.TestCase):
                 inside = False
             if inside:
                 shell.append(line)
-        code = '\n'.join(shell)
-        self.assertNotRegex(code, r'\$\{\{\s*github\.(?:ref|ref_name|head_ref|event\.)')
+        self.assertNotRegex('\n'.join(shell), r'\$\{\{\s*github\.(?:ref|ref_name|head_ref|event\.)')
 
 
 if __name__ == '__main__':

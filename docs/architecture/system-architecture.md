@@ -31,12 +31,12 @@ TU-ClubHub สนับสนุนการค้นหาชมรม กา�
 - Login ผ่าน TU API, เก็บสถานะด้วย Spring Session JDBC และ Cookie
 - Session หมดอายุเมื่อไม่มี activity 30 นาที หรือครบ 8 ชั่วโมงหลัง Login สำเร็จ แล้วแต่อย่างใดถึงก่อน
 - ใช้ Flyway จัดการ Schema และใช้ PostgreSQL สำหรับข้อมูลธุรกิจและ Session
-- เป้าหมาย Staging คือ Docker server ที่รัน Spring Boot พร้อม React และ PostgreSQL แยก container; build image ด้วย CI และ deploy ผ่าน SSH
+- ตามขอบเขตที่ผู้ร้องขอระบุ ใช้ GitHub Actions runner ชั่วคราวตรวจ Spring Boot พร้อม React และ PostgreSQL แยก container โดยไม่ต้องมี Staging server
 - เก็บ URL เอกสารและรูปภาพ ไม่อัปโหลดไฟล์หรือดึงไฟล์อัตโนมัติจาก Backend
 
 ### 2.2 Conventions และงานโครงสร้างที่ยังเหลือ
 
-AuthContext, SameSite=Lax, CSRF bootstrap endpoint และ JSON ID แบบ string ใช้อยู่ใน implementation/contract แล้ว [Router หลัก](../../frontend/src/app/AppRoutes.tsx) มีแล้ว ส่วน HTTP client กลางยังเป็นเป้าหมาย Frontend ยังเรียก fetch แยกตามฟีเจอร์ Staging ผ่าน Docker server และ SSH เป็นแผนส่งมอบที่ยังต้องตั้งค่าและตรวจในบริการจริง
+AuthContext, SameSite=Lax, CSRF bootstrap endpoint และ JSON ID แบบ string ใช้อยู่ใน implementation/contract แล้ว [Router หลัก](../../frontend/src/app/AppRoutes.tsx) มีแล้ว ส่วน HTTP client กลางยังเป็นเป้าหมาย Frontend ยังเรียก fetch แยกตามฟีเจอร์ การตรวจ Docker Compose บน GitHub runner เป็นการตรวจชั่วคราว ไม่ใช่การ deploy Staging ถาวร
 
 หาก Repository หรือ Contract ที่มีอยู่เลือกแนวทางอื่นแล้ว ให้เปรียบเทียบและบันทึก ADR ก่อนเปลี่ยน ไม่สร้าง Convention สองชุดควบคู่กัน
 
@@ -362,14 +362,13 @@ API รายการประกาศต้องกรองสิทธิ�
 
 ```mermaid
 flowchart TB
-  browser["Browser: React SPA"] -->|"HTTPS"| ingress["Staging ingress"]
-  subgraph staging["Dedicated Docker Staging server"]
-    ingress --> app["Spring Boot + React image"]
-    app -->|"Internal JDBC"| db[("PostgreSQL container + volume")]
-    config["Server environment / secrets"] -.-> app
+  git["GitHub: commit + passing CI"] --> build["Build images"]
+  subgraph runner["Temporary GitHub Actions runner"]
+    build --> app["Spring Boot + React container"]
+    app -->|"Internal JDBC"| db[("Disposable PostgreSQL container")]
+    smoke["Health and smoke tests"] --> app
   end
-  app -->|"HTTPS"| tu["TU Authentication API"]
-  git["GitHub: commit + passing CI"] -.->|"SSH deployment by image digest"| app
+  build -.->|"Eligible main/tag runs"| registry["GHCR: tested images"]
 ```
 
 เส้นทึบคือ Runtime communication; เส้นประคือ Configuration หรือ Delivery ไม่ได้แทนการเรียก API ของผู้ใช้
@@ -378,7 +377,7 @@ flowchart TB
 
 Root Dockerfile สร้าง React dist ด้วย Node → นำเข้า Static Resources ของ Backend → Maven package JAR → Java runtime image รันแอปเดียว Local Compose ใช้ unified app และ database เป็นค่าเริ่มต้น มี split profile สำหรับ Nginx + Backend แยก ดู [Local demo](../deployment/local-demo.md)
 
-Staging server ใช้ Docker Compose พร้อม persistent PostgreSQL volume และ deploy image ที่ระบุ digest ผ่าน SSH ดู [Staging deployment guide](../deployment/staging.md); ยังต้องยืนยันการติดตั้งและผลรันจริง
+Task84 ใช้ Docker Compose และ disposable PostgreSQL บน GitHub runner เพื่อตรวจสุขภาพและ smoke test; run จบแล้ว stack ถูกลบ และไม่มี Staging URL ถาวร ดู [Temporary verification guide](../deployment/staging.md)
 
 ### 10.2 Environments
 
@@ -387,21 +386,21 @@ Staging server ใช้ Docker Compose พร้อม persistent PostgreSQL vo
 | Development | Vite proxy ไป Spring Boot + PostgreSQL | Mock TU; migrations สร้าง Schema แต่ไม่มี Seed ชมรม/กรรมการ |
 | CI/Test | Build/tests ใช้ H2 และ isolated PostgreSQL สำหรับ seedtest/recruitment integration | Mock TU API เท่านั้น |
 | Local demo | Compose: backend-frontend + database | ระบุชัดว่า Mock หรือ Real TU API |
-| Staging target | Docker Compose บน dedicated server; app + PostgreSQL volume | Server config ระบุ auth mode; ไม่ใช้ mock ใน production |
+| Temporary stack verification | Docker Compose ใน GitHub-hosted runner; ลบ stack และ volume หลัง job | ใช้ mock auth และข้อมูลทดสอบ ไม่ใช่ Staging ถาวร |
 
 ไม่มี Credential จริงใน Git และ Vite variables Session tables จัดการผ่าน Flyway ด้วย Schema ที่ตรงกับ Spring Session JDBC รุ่นที่ใช้ ปิด Auto Schema Initialization อีกทางเพื่อไม่ให้มีสองระบบสร้างตารางแข่งกัน [Spring Session JDBC](https://docs.spring.io/spring-session/reference/configuration/jdbc.html)
 
 ### 10.3 Routing, trust and persistence
 
 - Same-origin ทำให้ Browser ใช้ Relative API URL; ยังต้องมี CSRF, authorization และ secure cookie
-- Trust proxy headers เฉพาะขอบเขต Platform ที่เชื่อถือได้ ตรวจ URL/scheme และ Cookie หลังผ่าน Staging ingress จริง
+- หากมีการเพิ่ม ingress ในอนาคต ให้ trust proxy headers เฉพาะขอบเขตที่เชื่อถือได้ และตรวจ URL/scheme กับ cookie ในสภาพแวดล้อมนั้น
 - SPA fallback รองรับ Client routes โดยไม่ครอบ `/api/**`, `/actuator/**` หรือ missing static assets
 - PostgreSQL เก็บข้อมูลคงทน ส่วน App filesystem ไม่ใช้เก็บไฟล์ผู้ใช้
 - จำกัดการเข้าถึง DB ตามที่ Platform รองรับ ไม่เปิด Credential/Connection URL ให้ Browser
 
 ### 10.4 Availability and recovery
 
-บริการแอปเดียวและฐานข้อมูลหนึ่งชุดเหมาะกับ Scope MVP แต่ยังไม่ใช่ HA design ความพร้อมใช้งานขึ้นกับ Docker server, storage, ingress และ TU API ต้องตรวจการสำรองข้อมูลและการกู้คืนก่อนแต่ละรอบสาธิต
+Runner ชั่วคราวไม่ใช่บริการที่พร้อมใช้งานต่อเนื่องหรือ HA; หากเพิ่ม environment ถาวรภายหลัง ทีมต้องออกแบบ storage, ingress, availability และ recovery เพิ่มเติม
 
 สำรองข้อมูลก่อน Migration ที่มีผลต่อข้อมูล ทดสอบ restore ในสภาพแวดล้อมแยก และเก็บคู่มือ การ Rollback Docker version ไม่ได้ย้อน Schema โดยอัตโนมัติ ต้องตรวจความเข้ากันได้หรือใช้แผน Roll-forward/Restore ที่ทดสอบแล้ว
 
@@ -414,9 +413,9 @@ Staging server ใช้ Docker Compose พร้อม persistent PostgreSQL vo
 3. Auth integration tests ใน CI ใช้ Mock TU API ไม่มีการส่ง Credential ไปบริการจริง
 4. สมาชิกอื่น Review อย่างน้อย 1 คน; การเปลี่ยน Auth/Schema/Transaction ให้ Lead BE หรือ SA ที่ไม่ได้เป็นผู้เขียนตรวจ
 5. Merge เมื่อ CI และ Review ผ่าน ไม่บังคับให้ทุก PR ต้องผ่านคนเดียวเป็นคอขวด
-6. ให้ CD ตรวจ CI สำหรับ commit เดียวกัน สร้าง image และ deploy digest ไป Staging ผ่าน SSH แล้วตรวจ health/smoke
+6. ให้ workflow ตรวจ CI สำหรับ commit เดียวกัน สร้าง image และตรวจ health/smoke บน runner ชั่วคราว; publish image ที่ตรวจแล้วเฉพาะ main/tag ตามเงื่อนไข
 
-PR ตรวจ container แยกโดยไม่ deploy; การ deploy จริงต้องมี Staging server และ secrets พร้อม ผล CI หรือ runner verification เพียงอย่างเดียวยังไม่ใช่หลักฐาน Staging
+PR ตรวจ container แยกโดยไม่ publish หรือ deploy; ผล runner verification ไม่ใช่หลักฐานว่ามี Staging ถาวรหรือ URL สาธารณะ และเกณฑ์ Task84 เดิมยังรอ Owner/Reviewer ยืนยันขอบเขตใหม่
 
 Logs มี request/trace ID, error code และเวลา; ไม่บันทึก credential, session ID, full application answers หรือ private document URLs เป็นค่าเริ่มต้น Health endpoint เผยข้อมูลขั้นต่ำ ส่วนรายละเอียดตรวจระบบใช้สิทธิ์เฉพาะ
 
@@ -454,7 +453,7 @@ Traceability ระดับ Action → Story/AC → Transition/Permission/Rule 
 | OD-05 (ตัดสินใจแล้ว 19 ต.ค. 2026) | ห้ามใช้สิทธิ์กรรมการกับรอบที่ตนมีใบสมัคร; Admin ไม่มี override | ยึด [Permission Matrix](../security/permission-matrix.md); เหลืองาน implementation ตามช่องว่างที่บันทึกไว้ |
 | OD-06 | การนับคน/ใบสมัคร/สมาชิกตามปีการศึกษาและภาคเรียน | ดู T74-D08; Schema ของรอบมี academic_year/semester แล้ว ไม่ถือว่าฟิลด์มีอยู่เท่ากับ Metric/Query รองรับแล้ว |
 | OD-07 | Timeline Sprint/Release ในรายงานและเกณฑ์รายวิชา | วันที่ส่งมอบและชื่อ Release; ไม่อนุมานจาก Sprint number |
-| OD-08 | Docker Staging server และการตรวจ compatibility ในสภาพแวดล้อมส่งมอบ | Dependency versions อยู่ใน manifests/lockfile แล้ว; ยังต้องยืนยัน deployment configuration และผลรันจริง |
+| OD-08 | เกณฑ์รับมอบการตรวจ stack ชั่วคราวแทน Staging server | ผู้ร้องขอระบุว่าไม่ต้องมี server จริง; Owner/Reviewer ต้องยืนยัน AC ของ Task84 และ Task56 |
 
 งานต่อให้ใช้ Contract และนโยบายที่กำหนดแล้ว พร้อมอัปเดตช่องว่างใน README/Permission Matrix แยกจากผลการตรวจรับของแต่ละ workflow
 
