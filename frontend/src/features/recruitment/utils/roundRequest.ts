@@ -51,7 +51,7 @@ export const toRoundWriteRequest = (input: RecruitmentRoundFormInput): RoundWrit
     prompt: question.questionText.trim(),
     required: question.isRequired,
     displayOrder: index + 1,
-    maxLength: QUESTION_MAX_LENGTH,
+    maxLength: question.maxLength ?? QUESTION_MAX_LENGTH,
   })),
 });
 
@@ -92,6 +92,7 @@ export const toRoundFormInput = (round: RoundFormSource): RecruitmentRoundFormIn
     .sort((a, b) => a.displayOrder - b.displayOrder)
     .map((question, orderIndex) => ({
       id: question.id,
+      maxLength: question.maxLength,
       questionText: question.prompt,
       isRequired: question.required,
       orderIndex,

@@ -160,6 +160,12 @@ export function MyApplicationsPage() {
             ))}
           </dl>
 
+          {meta.totalPages > 1 && (
+            <p className="text-sm text-slate-600">
+              จำนวนตามสถานะและตัวกรองแสดงเฉพาะใบสมัครในหน้านี้
+            </p>
+          )}
+
           <div
             role="group"
             aria-label="กรองตามสถานะใบสมัคร"
@@ -188,8 +194,8 @@ export function MyApplicationsPage() {
           {filteredItems.length === 0 ? (
             <EmptyState
               headingLevel={2}
-              title="ไม่พบใบสมัครในสถานะที่เลือก"
-              description="ลองเปลี่ยนตัวกรองเป็นสถานะอื่นเพื่อดูรายการใบสมัครทั้งหมดของคุณ"
+              title="ไม่พบใบสมัครในสถานะที่เลือกในหน้านี้"
+              description="ลองเปลี่ยนตัวกรองหรือไปหน้าอื่นเพื่อดูใบสมัครเพิ่มเติม"
               action={
                 <Button variant="secondary" onClick={() => setActiveTab('ALL')}>
                   แสดงทั้งหมด
