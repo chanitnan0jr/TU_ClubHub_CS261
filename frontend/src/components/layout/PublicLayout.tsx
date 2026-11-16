@@ -80,6 +80,11 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
                   ชมรมที่ฉันดูแล
                 </NavLink>
               )}
+              {isAuthenticated && user?.role === 'ADMIN' && (
+                <NavLink to="/admin/dashboard" className={navLinkClass}>
+                  แดชบอร์ดส่วนกลาง
+                </NavLink>
+              )}
             </nav>
             {isAuthenticated ? (
               <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
