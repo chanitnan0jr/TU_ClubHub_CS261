@@ -10,7 +10,7 @@ import com.tu.clubhub.application.dto.ApplicantApplicationPage.VisibleStatus;
 import com.tu.clubhub.application.repository.MyApplicationRepository;
 import com.tu.clubhub.application.repository.MyApplicationRepository.ApplicationRow;
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
-import com.tu.clubhub.club.dto.PublicPageMetadataDto;
+import com.tu.clubhub.common.dto.PageResponse;
 import com.tu.clubhub.user.repository.UserAccountRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -64,11 +64,9 @@ public class MyApplicationService {
                 .map(row -> summary(row, now))
                 .toList();
 
-        long pages = total / size + (total % size == 0 ? 0 : 1);
-
         return new ApplicantApplicationPage(
                 items,
-                new PublicPageMetadataDto(page, size, total, pages));
+                PageResponse.metadata(page, size, total));
     }
 
     @Transactional(

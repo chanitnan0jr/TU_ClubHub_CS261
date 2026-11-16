@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.method.ParameterErrors;
@@ -141,6 +142,20 @@ public class ApiExceptionHandler {
 
     protected static ProblemResponse.FieldError field(String name) {
         return new ProblemResponse.FieldError(name, "INVALID", "Value does not meet this field's constraints.");
+    }
+
+    protected static void clearSessionIfAccountNotAllowed(String code, HttpServletRequest request) {
+        if (!"ACCOUNT_NOT_ALLOWED".equals(code)) return;
+        var session = request.getSession(false);
+        if (session != null) session.invalidate();
+        SecurityContextHolder.clearContext();
+    }
+
+    protected static <T extends Throwable> T findCause(Throwable exception, Class<T> type) {
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (type.isInstance(cause)) return type.cast(cause);
+        }
+        return null;
     }
 
     public static ResponseEntity<ProblemResponse> problem(HttpServletRequest request, int status, String code, String detail,

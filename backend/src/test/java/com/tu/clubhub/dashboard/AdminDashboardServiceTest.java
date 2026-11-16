@@ -1,6 +1,7 @@
 package com.tu.clubhub.dashboard;
 
 import com.tu.clubhub.club.dto.PublicPageMetadataDto;
+import com.tu.clubhub.common.dto.PageResponse;
 import com.tu.clubhub.dashboard.dto.AdminDashboardFilter;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse;
 import com.tu.clubhub.dashboard.repository.AdminDashboardRepository;
@@ -51,7 +52,7 @@ class AdminDashboardServiceTest {
                 AdminDashboardStatsResponse.SummaryMetrics.class);
         when(summary.totalClubs()).thenReturn(6L);
 
-        var clubs = new AdminDashboardStatsResponse.ClubStatsPage(
+        var clubs = new PageResponse<AdminDashboardStatsResponse.ClubStats>(
                 List.of(),
                 new PublicPageMetadataDto(0, 20, 6, 1));
 
