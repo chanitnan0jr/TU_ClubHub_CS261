@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { isValidUrl } from '../../utils/validation';
+import { isValidClubImageUrl } from '../../utils/validation';
 import { inputClass } from './classes';
 import { Field } from './Field';
 import { ImageIcon } from './icons';
@@ -21,10 +21,10 @@ export function ImageUrlField({ id, label, value, onChange, variant, hint, error
   // The URL that failed to load; a new URL gets a fresh attempt.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const url = value.trim();
-  const canPreview = isValidUrl(url) && url !== failedUrl;
+  const canPreview = isValidClubImageUrl(url) && url !== failedUrl;
   const placeholderText = !url
     ? 'ยังไม่มีรูป'
-    : !isValidUrl(url)
+    : !isValidClubImageUrl(url)
       ? 'ต้องใช้ https://'
       : 'โหลดรูปไม่สำเร็จ';
 
