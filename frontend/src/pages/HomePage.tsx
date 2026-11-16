@@ -2,23 +2,23 @@ import { Link } from "react-router";
 import LoadingScreen from "../app/LoadingScreen";
 import PublicLayout from "../components/layout/PublicLayout";
 import { buttonClass } from "../components/ui/classes";
-import { CalendarDaysIcon, UsersIcon } from "../components/ui/icons";
+import { CalendarDays, Users } from "lucide-react";
 import { useAuth, type ActiveCommitteeAssignment } from "../features/auth/AuthContext";
 import Login from "../features/auth/Login";
 
 const roleLabel = (assignment: ActiveCommitteeAssignment) =>
   assignment.positionName?.trim() || (assignment.permissionRole === "PRESIDENT" ? "ประธานชมรม" : "กรรมการชมรม");
 
-function OpenCallsLink({ primary }: { primary: boolean }) {
+function ClubDirectoryLink({ primary }: { primary: boolean }) {
   return (
-    <Link to="/open-calls" className={`${buttonClass(primary ? "primary" : "secondary")} shrink-0`}>
-      <CalendarDaysIcon className="size-4" />
-      ดูรอบที่เปิดรับสมัคร
+    <Link to="/clubs" className={`${buttonClass(primary ? "primary" : "secondary")} shrink-0`}>
+      <CalendarDays aria-hidden="true" strokeWidth={1.75} className="size-4 shrink-0" />
+      ดูรายชื่อชมรม
     </Link>
   );
 }
 
-// Visitors see the login form; signed-in users get the open-call board and the
+// Visitors see the login form; signed-in users can browse clubs and see the
 // clubs they manage, from the active committee assignments in /auth/me.
 export default function HomePage() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -30,7 +30,7 @@ export default function HomePage() {
       <PublicLayout>
         <div className="mx-auto flex w-full max-w-md flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-6 text-slate-700">ดูรอบที่ชมรมเปิดรับสมัครได้โดยไม่ต้องเข้าสู่ระบบ</p>
-          <OpenCallsLink primary={false} />
+          <ClubDirectoryLink primary={false} />
         </div>
         <Login />
       </PublicLayout>
@@ -52,7 +52,7 @@ export default function HomePage() {
               ดูรอบรับสมัครที่เปิดอยู่ของทุกชมรม แล้วสมัครเข้าร่วมชมรมที่สนใจ
             </p>
           </div>
-          <OpenCallsLink primary />
+          <ClubDirectoryLink primary />
         </section>
 
         {assignments.length > 0 && (
@@ -68,7 +68,7 @@ export default function HomePage() {
                     className="flex h-full items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-tu-maroon hover:bg-tu-maroon-50"
                   >
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-tu-maroon-50 text-tu-maroon">
-                      <UsersIcon className="size-5" />
+                      <Users aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
                     </span>
                     <span className="min-w-0">
                       <span className="block font-semibold text-slate-900">{assignment.clubName}</span>

@@ -12,14 +12,29 @@ const badges: Record<RoundStatus, { label: string; className: string; dot: strin
   CANCELLED: { label: 'ยกเลิก', className: 'bg-red-50 text-red-800 ring-red-200', dot: 'bg-red-500' },
 };
 
-export function StatusBadge({ status }: { status: RoundStatus }) {
-  const badge = badges[status];
+export function StatusPill({
+  label,
+  className,
+  dot,
+  variant = 'ring',
+}: {
+  label: string;
+  className: string;
+  dot?: string;
+  variant?: 'ring' | 'border';
+}) {
+  const base =
+    variant === 'border'
+      ? 'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold'
+      : 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset';
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${badge.className}`}
-    >
-      <span aria-hidden="true" className={`size-1.5 rounded-full ${badge.dot}`} />
-      {badge.label}
+    <span className={`${base} ${className}`}>
+      {dot && <span aria-hidden="true" className={`size-1.5 rounded-full ${dot}`} />}
+      {label}
     </span>
   );
+}
+
+export function StatusBadge({ status }: { status: RoundStatus }) {
+  return <StatusPill {...badges[status]} />;
 }

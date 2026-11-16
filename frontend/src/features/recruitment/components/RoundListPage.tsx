@@ -4,7 +4,7 @@ import { Button } from '../../../components/ui/Button';
 import { buttonClass } from '../../../components/ui/classes';
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 import { EmptyState } from '../../../components/ui/EmptyState';
-import { CalendarDaysIcon, CircleAlertIcon, CircleCheckIcon, XIcon } from '../../../components/ui/icons';
+import { CalendarDays, CircleAlert, CircleCheck, X } from 'lucide-react';
 import { StatusBadge, type RoundStatus } from '../../../components/ui/StatusBadge';
 import { useApiResource } from '../../../hooks/useApiResource';
 import { ApiError, describeApiError } from '../../../lib/api';
@@ -164,11 +164,15 @@ export function RoundListPage({ clubId, notice = null }: RoundListPageProps) {
           }`}
         >
           <span className="flex items-start gap-2 py-2.5">
-            {message.tone === 'error' ? <CircleAlertIcon className="mt-0.5 size-4" /> : <CircleCheckIcon className="mt-0.5 size-4" />}
+            {message.tone === 'error' ? (
+              <CircleAlert aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
+            ) : (
+              <CircleCheck aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
+            )}
             {message.text}
           </span>
           <Button variant="ghost" size="icon" onClick={() => setMessage(null)} aria-label="ปิดข้อความ">
-            <XIcon className="size-4" />
+            <X aria-hidden="true" strokeWidth={1.75} className="size-4 shrink-0" />
           </Button>
         </div>
       )}
@@ -178,7 +182,7 @@ export function RoundListPage({ clubId, notice = null }: RoundListPageProps) {
       {rounds.error !== undefined && (
         <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-red-200 bg-white p-6">
           <p className="flex items-start gap-2 text-sm font-semibold text-red-800">
-            <CircleAlertIcon className="mt-0.5 size-5" />
+            <CircleAlert aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-5 shrink-0" />
             {describeApiError(rounds.error, 'โหลดรายการรอบรับสมัครไม่สำเร็จ กรุณาลองใหม่')}
           </p>
           <Button onClick={rounds.reload}>ลองใหม่</Button>
@@ -188,7 +192,7 @@ export function RoundListPage({ clubId, notice = null }: RoundListPageProps) {
       {rounds.data && rounds.data.totalElements === 0 && (
         <EmptyState
           headingLevel={2}
-          icon={<CalendarDaysIcon className="size-6" />}
+          icon={<CalendarDays aria-hidden="true" strokeWidth={1.75} className="size-6 shrink-0" />}
           title="ยังไม่มีรอบรับสมัคร"
           description="สร้างรอบรับสมัครแรกของชมรม กำหนดช่วงเวลาและคำถามคัดเลือก แล้วเผยแพร่เมื่อพร้อม"
           action={
