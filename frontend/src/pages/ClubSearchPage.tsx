@@ -142,13 +142,13 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
   const searchKey = JSON.stringify([query.trim(), category, recruitmentOpen, page, retryKey]);
   const currentSearch = searchResult?.key === searchKey ? searchResult : null;
   const searchError = searchFailure?.key === searchKey ? searchFailure.message : null;
-  const categoryId = currentCategories.find((item) => item.name === category)?.id ?? '';
+  const categoryId = category;
   const hasFilters = Boolean(query.trim() || category || recruitmentOpen);
-  const filteredClubs = (usesApi ? currentSearch?.items ?? [] : clubs ?? []).filter((club) => {
+  const filteredClubs = usesApi ? currentSearch?.items ?? [] : (clubs ?? []).filter((club) => {
     const matchesQuery = !query.trim()
       || club.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())
       || club.description.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
-    const matchesCategory = !category || club.category.name === category;
+    const matchesCategory = !category || club.category.id === category;
     const matchesRecruitment = !recruitmentOpen || club.hasOpenRecruitment;
     return matchesQuery && matchesCategory && matchesRecruitment;
   });
@@ -348,10 +348,9 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
                   className="h-14 w-full appearance-none rounded-xl border border-[#E2D9CE] bg-white pl-4 pr-11 text-base text-[#231B17] outline-none transition focus:border-[#8B1E3F] focus:ring-4 focus:ring-[#8B1E3F]/10"
                 >
                   <option value="">ทุกหมวดหมู่</option>
-                  {(usesApi
-                    ? currentCategories.map((item) => item.name)
-                    : Array.from(new Set((clubs ?? []).map((item) => item.category?.name).filter((name): name is string => Boolean(name))))
-                  ).map((name) => <option key={name} value={name}>{name}</option>)}
+                  {(usesApi ? currentCategories : (clubs ?? []).map((club) => club.category))
+                    .filter((item, index, items) => items.findIndex((other) => other.id === item.id) === index)
+                    .map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
                 <svg
                   aria-hidden="true"

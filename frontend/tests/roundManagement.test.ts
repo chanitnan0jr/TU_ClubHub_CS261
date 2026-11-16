@@ -187,7 +187,7 @@ function renderEdit(round: Record<string, unknown>, onWrite: (request: RecordedR
 test('the edit page fills the form from the draft and saves it with its version', async () => {
   const draft = makeRound('1', 'รอบร่างเดิม', {
     publicationStatus: 'DRAFT', version: 3, eligibilityText: 'ปี 1-2',
-    questions: [{ id: '81', prompt: 'ทำไมจึงสนใจ', required: true, displayOrder: 1, maxLength: 2000 }],
+    questions: [{ id: '81', prompt: 'ทำไมจึงสนใจ', required: true, displayOrder: 1, maxLength: 500 }],
   })
   const stub = renderEdit(draft, request => json({ ...draft, ...(request.body as object), version: 4 }))
   try {
@@ -208,7 +208,7 @@ test('the edit page fills the form from the draft and saves it with its version'
     assert.equal(body.eligibilityText, 'ปี 1-2')
     // An untouched date keeps its seconds; only milliseconds are dropped.
     assert.equal(body.opensAt, draft.opensAt.replace(/\.\d{3}Z$/, '.000Z'))
-    assert.deepEqual(body.questions, [{ prompt: 'ทำไมจึงสนใจ', required: true, displayOrder: 1, maxLength: 2000 }])
+    assert.deepEqual(body.questions, [{ prompt: 'ทำไมจึงสนใจ', required: true, displayOrder: 1, maxLength: 500 }])
   } finally { cleanup(); stub.restore() }
 })
 
