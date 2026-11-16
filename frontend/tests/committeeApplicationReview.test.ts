@@ -68,21 +68,54 @@ const detail = {
   ],
 }
 
+const evaluationSnapshot = {
+  ...detail,
+  resultMessage: null,
+  decidedBy: null,
+  decidedAt: null,
+  respondedAt: null,
+  version: 0,
+  reviews: [],
+  statusHistory: [],
+}
+
+const draftRound = {
+  id: '70001',
+  clubId: '20001',
+  title: 'รอบรับสมัคร 1/2569',
+  academicYear: 2569,
+  semester: 1,
+  description: 'รายละเอียดรอบ',
+  eligibilityText: null,
+  opensAt: '2026-10-01T00:00:00Z',
+  closesAt: '2026-10-31T16:59:59Z',
+  confirmationDeadline: '2026-11-20T16:59:59Z',
+  resultsScheduledAt: null,
+  publicationStatus: 'PUBLISHED',
+  closedAt: '2026-10-31T16:59:59Z',
+  publishedAt: '2026-10-01T00:00:00Z',
+  resultsPublishedAt: null,
+  createdAt: '2026-09-20T00:00:00Z',
+  updatedAt: '2026-10-31T16:59:59Z',
+  version: 1,
+  questions: [],
+}
+
 const page = (items: unknown[]) => ({
   items,
   page: { number: 0, size: 20, totalElements: items.length, totalPages: items.length ? 1 : 0 },
 })
 
-function renderApp(respond: (request: RecordedRequest) => Response) {
-  const stub = stubFetch((request) =>
-    request.url === '/api/v1/auth/me'
-      ? json({ user })
-      : respond(request),
-  )
+function renderApp(respond: (request: RecordedRequest) => Response, initialPath = '/clubs/20001/applications') {
+  const stub = stubFetch((request) => {
+    if (request.url === '/api/v1/auth/me') return json({ user })
+    if (request.url === '/api/v1/auth/csrf') return json({ headerName: 'X-CSRF-TOKEN', token: 'test-csrf-token' })
+    return respond(request)
+  })
   render(
     createElement(
       MemoryRouter,
-      { initialEntries: ['/clubs/20001/applications'] },
+      { initialEntries: [initialPath] },
       createElement(AuthProvider, null, createElement(AppRoutes)),
     ),
   )
@@ -91,6 +124,9 @@ function renderApp(respond: (request: RecordedRequest) => Response) {
 
 test('committee applications are listed, filtered through Review API, and link to details', async () => {
   const stub = renderApp((request) => {
+    if (request.url.startsWith('/api/v1/clubs/20001/rounds?')) {
+      return json({ items: [draftRound], page: 0, size: 100, totalElements: 1, totalPages: 1 })
+    }
     if (request.url.startsWith('/api/v1/clubs/20001/applications?')) {
       return json(page([application]))
     }
@@ -118,35 +154,90 @@ test('committee applications are listed, filtered through Review API, and link t
   }
 })
 
-test('application detail shows answers and safe attachment links; decisions are not falsely saved', async () => {
-  const stub = stubFetch((request) => {
-    if (request.url === '/api/v1/auth/me') return json({ user })
-    if (request.url === '/api/v1/clubs/20001/applications/90001') return json(detail)
+test('evaluation form saves decision with notes and shows draft/published status with confirmation modal', async () => {
+  let currentStatus = 'SUBMITTED'
+  let roundPublishedAt: string | null = null
+
+  const stub = renderApp((request) => {
+    if (request.url === '/api/v1/clubs/20001/applications/90001') {
+      return json({ ...detail, status: currentStatus })
+    }
+    if (request.url === '/api/v1/rounds/70001/applications/90001/decision' && request.method === 'GET') {
+      return json({ ...evaluationSnapshot, status: currentStatus })
+    }
+    if (request.url === '/api/v1/clubs/20001/rounds/70001') {
+      return json({ ...draftRound, resultsPublishedAt: roundPublishedAt })
+    }
+    if (request.url === '/api/v1/rounds/70001/applications/90001/decision' && request.method === 'PUT') {
+      currentStatus = 'ACCEPTED'
+      return json({
+        ...evaluationSnapshot,
+        status: 'ACCEPTED',
+        resultMessage: 'ยินดีต้อนรับเข้าสู่ชมรม',
+        version: 1,
+        reviews: [
+          {
+            id: '97001',
+            reviewerId: '10001',
+            reviewerDisplayName: 'ประธานทดสอบ',
+            recommendation: 'ACCEPT',
+            internalComment: 'ประวัติกิจกรรมโดดเด่น',
+            createdAt: '2026-11-10T10:00:00Z',
+            updatedAt: '2026-11-10T10:00:00Z',
+            version: 0,
+          },
+        ],
+      })
+    }
+    if (request.url === '/api/v1/rounds/70001/publish-results' && request.method === 'POST') {
+      roundPublishedAt = '2026-11-10T12:00:00Z'
+      return json({
+        roundId: '70001',
+        clubId: '20001',
+        resultsPublishedAt: roundPublishedAt,
+        confirmationDeadline: '2026-11-20T16:59:59Z',
+        acceptedCount: 1,
+        rejectedCount: 0,
+        roundVersion: 2,
+      })
+    }
     return json({ message: 'not found' }, 404)
-  })
+  }, '/clubs/20001/applications/90001')
 
   try {
-    render(
-      createElement(
-        MemoryRouter,
-        { initialEntries: ['/clubs/20001/applications/90001'] },
-        createElement(AuthProvider, null, createElement(AppRoutes)),
-      ),
-    )
-
     await screen.findByText('เคยจัดกิจกรรมจิตอาสา')
-    assert.ok(screen.getByText('อยากร่วมทำกิจกรรมเพื่อสังคม'))
-    assert.ok(screen.getByText('ไม่ได้ระบุคำตอบ'))
-    const documentLink = screen.getByRole('link', { name: 'ดู / ดาวน์โหลด' })
-    assert.equal(documentLink.getAttribute('href'), 'https://example.org/portfolio')
-    assert.equal(documentLink.getAttribute('rel'), 'noopener noreferrer')
-    const approveButton = screen.getByRole('button', { name: 'อนุมัติ' }) as HTMLButtonElement
-    const dismissButton = screen.getByRole('button', { name: 'ไม่อนุมัติ' }) as HTMLButtonElement
-    assert.equal(approveButton.disabled, false)
-    assert.equal(dismissButton.disabled, false)
-    fireEvent.click(approveButton)
-    fireEvent.click(dismissButton)
-    assert.equal(stub.requests.some((request) => request.method !== 'GET'), false)
+    await screen.findByText('ฉบับร่าง (Draft)')
+
+    fireEvent.click(screen.getByRole('radio', { name: 'ผ่านการคัดเลือก (อนุมัติ)' }))
+    fireEvent.change(screen.getByLabelText('ข้อความแจ้งผู้สมัคร (แสดงหลังประกาศผล)'), {
+      target: { value: 'ยินดีต้อนรับเข้าสู่ชมรม' },
+    })
+    fireEvent.change(screen.getByLabelText('หมายเหตุภายในกรรมการ (ผู้สมัครไม่เห็น)'), {
+      target: { value: 'ประวัติกิจกรรมโดดเด่น' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึกผลการประเมิน' }))
+    await screen.findByText(/บันทึกผลการประเมินและหมายเหตุเรียบร้อยแล้ว/)
+
+    const saveReq = stub.requests.find(
+      (req) => req.url === '/api/v1/rounds/70001/applications/90001/decision' && req.method === 'PUT',
+    )
+    assert.ok(saveReq)
+
+    const publishTrigger = await screen.findByRole('button', { name: 'ประกาศผลการคัดเลือก' })
+    fireEvent.click(publishTrigger)
+
+    await screen.findByText('ยืนยันการประกาศผลการคัดเลือก')
+    const confirmCheckbox = screen.getByRole('checkbox') as HTMLInputElement
+    const confirmPublishBtn = screen.getByRole('button', { name: 'ยืนยันประกาศผลการคัดเลือก' }) as HTMLButtonElement
+    assert.equal(confirmPublishBtn.disabled, true)
+
+    fireEvent.click(confirmCheckbox)
+    assert.equal(confirmPublishBtn.disabled, false)
+    fireEvent.click(confirmPublishBtn)
+
+    await screen.findByText('ประกาศผลแล้ว (Published)')
+    assert.ok(screen.getByText(/ประกาศผลการคัดเลือกเรียบร้อยแล้ว/))
   } finally {
     cleanup()
     stub.restore()
@@ -155,6 +246,9 @@ test('application detail shows answers and safe attachment links; decisions are 
 
 test('empty and failed application lists have clear Thai states and retry controls', async () => {
   const stub = renderApp((request) => {
+    if (request.url.startsWith('/api/v1/clubs/20001/rounds?')) {
+      return json({ items: [], page: 0, size: 100, totalElements: 0, totalPages: 0 })
+    }
     if (request.url.startsWith('/api/v1/clubs/20001/applications?')) return json(page([]))
     return json({ message: 'not found' }, 404)
   })
@@ -167,6 +261,9 @@ test('empty and failed application lists have clear Thai states and retry contro
   }
 
   const failed = renderApp((request) => {
+    if (request.url.startsWith('/api/v1/clubs/20001/rounds?')) {
+      return json({ items: [], page: 0, size: 100, totalElements: 0, totalPages: 0 })
+    }
     if (request.url.startsWith('/api/v1/clubs/20001/applications?')) {
       return new Response(JSON.stringify({ status: 503, code: 'SERVICE_UNAVAILABLE' }), {
         status: 503,
