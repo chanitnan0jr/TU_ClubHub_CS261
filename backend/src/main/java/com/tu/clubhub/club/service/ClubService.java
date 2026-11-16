@@ -151,8 +151,8 @@ public class ClubService {
         }
 
         validateHttpsUrl("contactUrl", request.contactUrl(), errors);
-        validateHttpsUrl("imageUrl", request.imageUrl(), errors);
-        validateHttpsUrl("bannerUrl", request.bannerUrl(), errors);
+        validateClubImageUrl("imageUrl", request.imageUrl(), errors);
+        validateClubImageUrl("bannerUrl", request.bannerUrl(), errors);
 
         validateSocialUrl(
                 "facebookUrl",
@@ -223,6 +223,23 @@ public class ClubService {
         } catch (NumberFormatException exception) {
             return false;
         }
+    }
+
+    private void validateClubImageUrl(
+            String field,
+            String value,
+            Map<String, String> errors
+    ) {
+        if (value != null && value.startsWith("/images/")) {
+            boolean validLocalPath = value.length() <= 2048
+                    && value.matches("^/images/[A-Za-z0-9._/-]+$")
+                    && !value.contains("..");
+            if (!validLocalPath) {
+                errors.put(field, "Must be a valid HTTPS URL or /images/ path");
+            }
+            return;
+        }
+        validateHttpsUrl(field, value, errors);
     }
 
     private URI validateHttpsUrl(
