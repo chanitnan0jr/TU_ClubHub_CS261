@@ -137,3 +137,54 @@ export interface CommitteeApplicationDetail extends CommitteeApplicationSummary 
   links: (ApplicantDocumentLinkView & { id: string; displayOrder: number })[];
 }
 
+export type SelectionDecisionChoice = 'ACCEPTED' | 'REJECTED';
+
+export interface CommitteeReviewEntry {
+  id: string;
+  reviewerId: string;
+  reviewerDisplayName: string;
+  recommendation: 'ACCEPT' | 'REJECT' | 'DISCUSS';
+  internalComment: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+}
+
+export interface CommitteeStatusHistoryEntry {
+  fromStatus: CommitteeApplicationStatus | null;
+  toStatus: CommitteeApplicationStatus;
+  actorId: string | null;
+  reason: string | null;
+  changedAt: string;
+}
+
+export interface CommitteeEvaluationDetail extends CommitteeApplicationDetail {
+  resultMessage: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  respondedAt: string | null;
+  version: number;
+  reviews: CommitteeReviewEntry[];
+  statusHistory: CommitteeStatusHistoryEntry[];
+}
+
+export interface ApplicationDecisionRequest {
+  decision: SelectionDecisionChoice;
+  resultMessage?: string | null;
+  internalNote?: string | null;
+  version: number;
+}
+
+export interface BatchApplicationDecisionItem extends ApplicationDecisionRequest {
+  applicationId: string;
+}
+
+export interface PublishResultsResponse {
+  roundId: string;
+  clubId: string;
+  resultsPublishedAt: string;
+  confirmationDeadline: string;
+  acceptedCount: number;
+  rejectedCount: number;
+  roundVersion: number;
+}
