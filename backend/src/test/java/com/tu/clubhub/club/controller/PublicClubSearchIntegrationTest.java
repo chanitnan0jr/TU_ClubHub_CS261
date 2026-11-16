@@ -39,6 +39,29 @@ class PublicClubSearchIntegrationTest {
     }
 
     @Test
+    @Transactional
+    void lastClosingTimeUsesActualPublishedCloseAndExcludesDraftsAndFutureRounds() throws Exception {
+        jdbcTemplate.update("""
+                INSERT INTO recruitment_rounds
+                    (club_id, title, academic_year, semester, description, opens_at, closes_at,
+                     closed_at, confirmation_deadline, publication_status, published_at, created_by)
+                SELECT c.id, v.title, 2569, 1, 'test', v.opens_at::timestamptz, v.closes_at::timestamptz,
+                       v.closed_at::timestamptz, v.deadline::timestamptz, v.status,
+                       CASE WHEN v.status = 'PUBLISHED' THEN v.opens_at::timestamptz ELSE NULL END,
+                       (SELECT id FROM users LIMIT 1)
+                FROM clubs c CROSS JOIN (VALUES
+                    ('early', '2020-01-01T00:00:00Z', '2020-01-10T00:00:00Z', '2020-01-05T12:30:00Z', '2020-01-11T00:00:00Z', 'PUBLISHED'),
+                    ('draft', '2020-02-01T00:00:00Z', '2020-02-10T00:00:00Z', NULL, '2020-02-11T00:00:00Z', 'DRAFT'),
+                    ('future', '2099-01-01T00:00:00Z', '2099-01-10T00:00:00Z', NULL, '2099-01-11T00:00:00Z', 'PUBLISHED')
+                ) v(title, opens_at, closes_at, closed_at, deadline, status)
+                WHERE c.name = 'ชมรม AI และวิทยาการข้อมูล'
+                """);
+        mockMvc.perform(get("/api/v1/public/clubs").param("q", "AI"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].lastRecruitmentClosedAt").value("2020-01-05T12:30:00Z"));
+    }
+
+    @Test
     void searchReturnsEmptyPageWhenNoClubMatches()
             throws Exception {
         mockMvc.perform(get("/api/v1/public/clubs")
