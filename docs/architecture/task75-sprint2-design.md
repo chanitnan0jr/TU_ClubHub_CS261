@@ -273,7 +273,7 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
      - ไม่พบใบสมัคร -> `404 RESOURCE_NOT_FOUND`
      - `applicant_id != sessionUserId` -> `403 ACCESS_DENIED`
   3. **จับ Row Lock ตามลำดับมาตรฐานก่อนตรวจสถานะและเวลา (`§4.2`):**
-     - ล็อกแถว `users` / `student_profiles` ของผู้สมัคร (`FOR UPDATE`) -> ล็อก `clubs` (`FOR SHARE`) -> ล็อก `recruitment_rounds` (`FOR SHARE`) -> ล็อก `applications` (`FOR UPDATE`)
+     - ล็อกแถว `users` ของผู้สมัคร (`FOR NO KEY UPDATE`) -> ล็อก `student_profiles` (`FOR UPDATE`) -> ล็อก `clubs` (`FOR SHARE`) -> ล็อก `recruitment_rounds` (`FOR SHARE`) -> ล็อก `applications` (`FOR UPDATE`); ข้อยกเว้น Lock Mode ของ `users` สำหรับ Task69 ได้รับอนุมัติแล้ว ดูเหตุผลเรื่อง Notification FK ใน §4.2
      - อ่านเวลา `serverNow = clock.instant()` และอ่านค่าล่าสุดของ `application`, `round`, `student_profile`, `club` **หลังจากได้ Lock ครบแล้ว**
   4. **ตรวจสอบ Idempotent Same-Action Replay ภายใต้ Lock (`T74-D05` / `T74-D07`):**
      - หากเรียก `/confirm` และสถานะใบสมัครที่ล็อกไว้เป็น `CONFIRMED` อยู่แล้ว -> คืน `200 OK` (`idempotentReplay: true`) พร้อมข้อมูลการตอบรับเดิม (`responded_at` และ `membershipId` ที่ผูกกับ `source_application_id = application.id`) ทันที โดย **ไม่** ตรวจเวลา Deadline ซ้ำ, **ไม่** ตรวจสถานะนักศึกษา/ชมรมซ้ำ, และ **ไม่** เขียนตาราง `club_memberships`, `membership_history`, หรือ `application_status_history` เพิ่ม
@@ -604,16 +604,21 @@ Backend ต้องไม่อ่านเฉพาะ Role ที่เก็
 
 ### 4.2 ลำดับการล็อกข้อมูล (Deterministic Locking Order) และการป้องกัน Race Condition
 
-เพื่อป้องกัน Deadlock และ Race Condition ในสถานการณ์ที่มีคำขอเกิดพร้อมกัน ทุก Service Transaction ที่มีการเขียนข้อมูลต้องจับ Row Lock ตามลำดับขั้น (Hierarchy) เดียวกัน โดยระบุโหมด `FOR SHARE` (`PESSIMISTIC_READ`) และ `FOR UPDATE` (`PESSIMISTIC_WRITE`) ให้ชัดเจนดังนี้:
+เพื่อป้องกัน Deadlock และ Race Condition ในสถานการณ์ที่มีคำขอเกิดพร้อมกัน ทุก Service Transaction ที่มีการเขียนข้อมูลต้องจับ Row Lock ตามลำดับขั้น (Hierarchy) เดียวกัน โดยระบุโหมด `FOR SHARE` (`PESSIMISTIC_READ`), `FOR UPDATE` (`PESSIMISTIC_WRITE`) และข้อยกเว้น `users FOR NO KEY UPDATE` ของ Task69 ให้ชัดเจนดังนี้:
 
 ```mermaid
 flowchart LR
-    L1["1. users / student_profiles<br/>(FOR UPDATE on applicant;<br/>confirm / decline only)"] --> L2["2. club_committee_assignments<br/>(FOR SHARE via ClubSecurity;<br/>committee writes only)"]
+    L1["1. applicant: users FOR NO KEY UPDATE<br/>then student_profiles FOR UPDATE<br/>(confirm / decline)"] --> L2["2. club_committee_assignments<br/>(FOR SHARE via ClubSecurity;<br/>committee writes only)"]
     L2 --> L3["3. clubs<br/>(FOR SHARE / FOR UPDATE)"]
     L3 --> L4["4. recruitment_rounds<br/>(FOR SHARE for child writes;<br/>FOR UPDATE for round state / publish)"]
     L4 --> L5["5. applications<br/>(FOR UPDATE)"]
     L5 --> L6["6. club_memberships /<br/>application_questions"]
 ```
+
+- **ข้อยกเว้น Lock Mode ที่อนุมัติสำหรับ Task69 (`confirm` / `decline`):** ใช้ `users FOR NO KEY UPDATE` แทน `users FOR UPDATE` และคง `student_profiles FOR UPDATE` จากนั้นล็อก club → round → application ตามลำดับเดิม โดยอ่าน `serverNow` หลังได้ Lock ครบ ข้อยกเว้นนี้เปลี่ยนเฉพาะโหมด Lock ของ `users` ไม่เปลี่ยน Authentication, Ownership, Idempotent Replay, Deadline หรือเพดานสมาชิก 5 ชมรม
+  - **เหตุผล:** การประกาศผลใน `SelectionResultService` ถือ Lock ของ round/application ก่อน INSERT `notifications`; FK `notifications.recipient_id → users.id` ต้องใช้ `FOR KEY SHARE` บนผู้สมัคร หาก Confirm/Decline ถือ `users FOR UPDATE` แล้วรอ round จะเกิดวงจร: Confirm/Decline รอ round ของ Publisher และ Publisher รอ user ของ Confirm/Decline
+  - `FOR NO KEY UPDATE` เข้ากันได้กับ `FOR KEY SHARE` ของ FK ดังกล่าว แต่ยังป้องกันการแก้ไขสถานะบัญชีระหว่าง Transaction ส่วน `student_profiles FOR UPDATE` ทำให้การยืนยันข้ามชมรมของผู้สมัครเดียวกันทำงานเรียงกันก่อนนับสมาชิก การยืนยันต้องไม่แก้ Primary Key ของ `users`
+  - Regression ที่เกี่ยวข้องอยู่ใน `ApplicationConfirmationHttpIntegrationTest`: `publishingResultsCanInsertNotificationWhileApplicantWaitsForRound` และ `concurrentConfirmationAcrossClubsCannotExceedFiveMemberships` ซึ่งตรวจการรอ Lock จริงด้วย `pg_blocking_pids` โดยไม่เปลี่ยน Schema
 
 - **กฎการเลือกใช้ `FOR SHARE` vs `FOR UPDATE` บน `club_committee_assignments` และ `recruitment_rounds`:**
   - **`club_committee_assignments`:** รายการเขียนของกรรมการตรวจสิทธิ์ซ้ำผ่าน [`ClubSecurity.isCommittee`](../../backend/src/main/java/com/tu/clubhub/committee/security/ClubSecurity.java) ภายใน Transaction ซึ่งเรียก `lockEffectiveAssignments` ใน [`ClubCommitteeAssignmentRepository.java`](../../backend/src/main/java/com/tu/clubhub/committee/repository/ClubCommitteeAssignmentRepository.java) และล็อกเฉพาะแถว Assignment ที่ให้สิทธิ์ด้วย `PESSIMISTIC_READ` (`FOR SHARE`) จนจบ Transaction เพื่อไม่ให้การเพิกถอนแทรกกลางคันโดยไม่บล็อกกรรมการคนอื่นของชมรมเดียวกัน ส่วนสถานะบัญชี นักศึกษา สมาชิกภาพ และชมรมอ่านค่าที่ Commit แล้ว **ไม่ล็อก** (ไม่ล็อกแถว `users` ของกรรมการผู้เรียก)
@@ -625,8 +630,8 @@ flowchart LR
 | สถานการณ์ที่เกิดพร้อมกัน (Concurrency Scenario) | กลไกการป้องกันที่ Backend ต้องใช้ |
 |---|---|
 | **1. ส่งใบสมัครแข่งกับการปิดรับสมัครก่อนกำหนด (`POST /applications` vs `PATCH CLOSE`)** | `POST /applications` จับ `FOR SHARE` บน `recruitment_rounds` ส่วน `PATCH CLOSE` จับ `FOR UPDATE` บน `recruitment_rounds` ก่อนอ่าน `serverNow = clock.instant()` และตรวจ `closed_at IS NULL AND serverNow < closes_at` |
-| **2. ยืนยันสิทธิ์ข้ามชมรมพร้อมกันใกล้เพดาน 5 ชมรม (`POST /confirm` บนชมรม A และ B พร้อมกัน)** | ล็อกแถว `users` / `student_profiles` ของนักศึกษาคนนั้นด้วย `FOR UPDATE` เป็นลำดับที่ 1 ก่อนนับจำนวนสมาชิก `ACTIVE` ปัจจุบันใน `club_memberships` เพื่อบังคับให้การยืนยันสิทธิ์ของนักศึกษาคนเดียวกันทำงานเรียงทีละ Transaction เสมอ |
-| **3. กดยืนยัน/สละสิทธิ์ซ้ำสองครั้งติดกัน หรือกดยืนยันพร้อมสละสิทธิ์ (`POST /confirm` vs `POST /decline`)** | จับ Lock ตามลำดับ (`student_profiles FOR UPDATE` -> `clubs FOR SHARE` -> `recruitment_rounds FOR SHARE` -> `applications FOR UPDATE`) ก่อนอ่านสถานะ; Transaction ที่สองเมื่อได้ Lock จะเห็นสถานะใหม่ทันที หากเป็น Action เดิมจะคืน `200 OK` (`idempotentReplay: true`) และหากเป็น Action สวนทางจะคืน `409 ALREADY_RESPONDED` |
+| **2. ยืนยันสิทธิ์ข้ามชมรมพร้อมกันใกล้เพดาน 5 ชมรม (`POST /confirm` บนชมรม A และ B พร้อมกัน)** | ล็อก `users FOR NO KEY UPDATE` แล้ว `student_profiles FOR UPDATE` ของนักศึกษาคนนั้นเป็นลำดับที่ 1 ก่อนนับจำนวนสมาชิก `ACTIVE` ปัจจุบันใน `club_memberships` เพื่อบังคับให้การยืนยันสิทธิ์ของนักศึกษาคนเดียวกันทำงานเรียงทีละ Transaction เสมอ |
+| **3. กดยืนยัน/สละสิทธิ์ซ้ำสองครั้งติดกัน หรือกดยืนยันพร้อมสละสิทธิ์ (`POST /confirm` vs `POST /decline`)** | จับ Lock ตามลำดับ (`users FOR NO KEY UPDATE` -> `student_profiles FOR UPDATE` -> `clubs FOR SHARE` -> `recruitment_rounds FOR SHARE` -> `applications FOR UPDATE`) ก่อนอ่านสถานะ; Transaction ที่สองเมื่อได้ Lock จะเห็นสถานะใหม่ทันที หากเป็น Action เดิมจะคืน `200 OK` (`idempotentReplay: true`) และหากเป็น Action สวนทางจะคืน `409 ALREADY_RESPONDED` |
 | **4. ยืนยันสิทธิ์แข่งกับ Background Expiry Worker รอบเส้นตาย (`POST /confirm` vs `ExpiryWorker`)** | ทั้งคู่ล็อกแถว `applications` (`FOR UPDATE`) และอ่าน `serverNow = clock.instant()` หลังได้ Lock โดยใช้กฎเวลาที่ไม่อำพรางกัน: การยืนยันใหม่ต้อง `serverNow < confirmation_deadline` ส่วน Worker ต้อง `serverNow >= confirmation_deadline` |
 | **5. แก้ผลคัดเลือกภายในแข่งกับการประกาศผลโดยประธาน (`PUT /decision` vs `POST /publish-results`) หรือกดประกาศผลซ้ำพร้อมกัน** | `PUT /decision` จับ `FOR SHARE` บน `recruitment_rounds` ส่วน `POST /publish-results` จับ `FOR UPDATE` บน `recruitment_rounds` (และล็อก `applications` ในรอบนั้น) **ก่อน** ตรวจสอบเงื่อนไข `409` ทั้ง 7 ข้อ (`RESULTS_ALREADY_PUBLISHED`, `APPLICATIONS_INCOMPLETE`, ฯลฯ) และก่อน insert `notifications` |
 

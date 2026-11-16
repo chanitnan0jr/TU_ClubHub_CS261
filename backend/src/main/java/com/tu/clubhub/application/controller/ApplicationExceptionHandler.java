@@ -19,7 +19,9 @@ import org.springframework.web.server.ResponseStatusException;
         ClubApplicationController.class,
         CommitteeApplicationController.class,
         SelectionResultController.class,
-        MyApplicationController.class
+        MyApplicationController.class,
+        ApplicationConfirmationController.class
+
 })
 @Order(0)
 public class ApplicationExceptionHandler extends ApiExceptionHandler {
