@@ -10,13 +10,13 @@ import com.tu.clubhub.auth.dto.ProblemResponse;
 import com.tu.clubhub.auth.integration.tu.TuAuthProviderUnavailableException;
 import com.tu.clubhub.auth.integration.tu.TuAuthRequestRejectedException;
 import com.tu.clubhub.auth.service.AccountNotAllowedException;
+import com.tu.clubhub.auth.service.AuthSessionEstablisher;
 import com.tu.clubhub.auth.service.AuthenticationFailedException;
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import com.tu.clubhub.auth.service.CurrentUserService;
 import com.tu.clubhub.auth.service.InvalidLoginRequestException;
 import com.tu.clubhub.auth.service.LoginRateLimitedException;
 import com.tu.clubhub.auth.service.LoginService;
-import com.tu.clubhub.config.AbsoluteSessionTimeoutFilter;
 import com.tu.clubhub.user.domain.UserAccount;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -24,16 +24,9 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
-import org.springframework.security.web.csrf.CsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,24 +42,15 @@ public class AuthController {
 
 	private final LoginService loginService;
 	private final CurrentUserService currentUserService;
-	private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
-	private final SecurityContextRepository securityContextRepository;
-	private final CsrfTokenRepository csrfTokenRepository;
-	private final CsrfTokenRequestHandler csrfTokenRequestHandler;
+	private final AuthSessionEstablisher sessionEstablisher;
 
 	public AuthController(
 			LoginService loginService,
 			CurrentUserService currentUserService,
-			SessionAuthenticationStrategy sessionAuthenticationStrategy,
-			SecurityContextRepository securityContextRepository,
-			CsrfTokenRepository csrfTokenRepository,
-			CsrfTokenRequestHandler csrfTokenRequestHandler) {
+			AuthSessionEstablisher sessionEstablisher) {
 		this.loginService = loginService;
 		this.currentUserService = currentUserService;
-		this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
-		this.securityContextRepository = securityContextRepository;
-		this.csrfTokenRepository = csrfTokenRepository;
-		this.csrfTokenRequestHandler = csrfTokenRequestHandler;
+		this.sessionEstablisher = sessionEstablisher;
 	}
 
 	@GetMapping("/csrf")
@@ -88,30 +72,11 @@ public class AuthController {
 
 		UserAccount account = loginService.login(
 				request.username(), request.password(), servletRequest.getRemoteAddr());
-		ClubHubPrincipal principal = new ClubHubPrincipal(
-				account.getId(), account.getTuUsername(), account.getSystemRole());
-		Authentication authentication = UsernamePasswordAuthenticationToken.authenticated(
-				principal,
-				null,
-				List.of(new SimpleGrantedAuthority("ROLE_" + account.getSystemRole())));
-
-		// Rotate the pre-authentication session ID and invalidate its old CSRF token.
-		sessionAuthenticationStrategy.onAuthentication(authentication, servletRequest, servletResponse);
-		CsrfToken freshCsrfToken = csrfTokenRepository.generateToken(servletRequest);
-		csrfTokenRepository.saveToken(freshCsrfToken, servletRequest, servletResponse);
-		csrfTokenRequestHandler.handle(servletRequest, servletResponse, () -> freshCsrfToken);
-		CsrfToken responseCsrfToken = (CsrfToken) servletRequest.getAttribute("_csrf");
-		servletRequest.getSession(true).setAttribute(
-				AbsoluteSessionTimeoutFilter.LOGIN_AT_ATTRIBUTE, System.currentTimeMillis());
-		SecurityContext context = SecurityContextHolder.createEmptyContext();
-		context.setAuthentication(authentication);
-		SecurityContextHolder.setContext(context);
-		securityContextRepository.saveContext(context, servletRequest, servletResponse);
+		CsrfTokenResponse csrf = sessionEstablisher.establish(account, servletRequest, servletResponse);
 
 		return ResponseEntity.ok()
 				.cacheControl(CacheControl.noStore())
-				.body(new LoginResponse(toSummary(account),
-						new CsrfTokenResponse(responseCsrfToken.getHeaderName(), responseCsrfToken.getToken())));
+				.body(new LoginResponse(toSummary(account), csrf));
 	}
 
 	@GetMapping("/me")

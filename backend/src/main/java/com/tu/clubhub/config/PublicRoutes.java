@@ -18,6 +18,7 @@ final class PublicRoutes {
             get("/index.html"),
             get("/favicon.ico"),
             get("/assets/**"),
+            get("/images/**"),
             get("/*.svg"),
             get("/*.png"),
             get("/*.ico"),
@@ -40,6 +41,8 @@ final class PublicRoutes {
             // Authentication bootstrap.
             get("/api/v1/auth/csrf"),
             post("/api/v1/auth/login"),
+            get("/api/v1/auth/dev/accounts"),
+            post("/api/v1/auth/dev/switch"),
 
             // Public club APIs defined by Task75.
             get("/api/v1/public/clubs"),
