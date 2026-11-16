@@ -1,4 +1,4 @@
-package com.tu.clubhub.auth.service;
+package com.tu.clubhub.dev.service;
 
 import com.tu.clubhub.user.service.UserAccountService.StudentIdentity;
 

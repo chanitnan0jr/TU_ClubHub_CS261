@@ -1,4 +1,4 @@
-package com.tu.clubhub.auth.controller;
+package com.tu.clubhub.dev.controller;
 
 import java.util.List;
 
@@ -6,9 +6,9 @@ import com.tu.clubhub.auth.dto.CurrentUserResponse;
 import com.tu.clubhub.auth.service.AccountNotAllowedException;
 import com.tu.clubhub.auth.service.AuthSessionEstablisher;
 import com.tu.clubhub.auth.service.CurrentUserService;
-import com.tu.clubhub.auth.service.DevAuthService;
-import com.tu.clubhub.auth.service.DevAuthService.DevAccountSummary;
-import com.tu.clubhub.auth.service.DevMockRole;
+import com.tu.clubhub.dev.service.DevAuthService;
+import com.tu.clubhub.dev.service.DevAuthService.DevAccountSummary;
+import com.tu.clubhub.dev.service.DevMockRole;
 import com.tu.clubhub.user.domain.UserAccount;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

@@ -1,4 +1,4 @@
-package com.tu.clubhub.auth.config;
+package com.tu.clubhub.dev.config;
 
 import java.util.Arrays;
 
