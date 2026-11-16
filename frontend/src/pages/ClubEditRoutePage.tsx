@@ -4,11 +4,12 @@ import PublicLayout from "../components/layout/PublicLayout";
 import { Button } from "../components/ui/Button";
 import { buttonClass } from "../components/ui/classes";
 import { EmptyState } from "../components/ui/EmptyState";
-import { CircleAlertIcon, ExternalLinkIcon } from "../components/ui/icons";
+import { CircleAlert, ExternalLink } from "lucide-react";
 import { useAuth } from "../features/auth/AuthContext";
-import { updateClubProfile } from "../features/clubs/api/clubApi";
+import { getClubProfile, listClubCategories, listInterestTags, updateClubProfile } from "../features/clubs/api/clubApi";
 import ClubProfileForm from "../features/clubs/components/ClubProfileForm";
-import { useClubProfile } from "../features/clubs/hooks/useClubProfile";
+import { useApiResource } from "../hooks/useApiResource";
+import { describeApiError } from "../lib/api";
 import { isValidId } from "../lib/ids";
 import NotFoundPage from "./NotFoundPage";
 
@@ -38,7 +39,18 @@ function LoadingProfileStatus() {
 }
 
 function ClubProfileEditor({ clubId }: { clubId: string }) {
-  const { data, isLoading, errorMessage, refetch } = useClubProfile(clubId);
+  const { data, isLoading, error, reload: refetch } = useApiResource(
+    `club-profile:${clubId}`,
+    async () => {
+      const [profile, categories, tags] = await Promise.all([
+        getClubProfile(clubId),
+        listClubCategories(),
+        listInterestTags(),
+      ]);
+      return { profile, categories: categories.items, tags: tags.items };
+    },
+  );
+  const errorMessage = error ? describeApiError(error, "เกิดข้อผิดพลาดในการโหลดข้อมูล") : null;
 
   if (isLoading) return <LoadingProfileStatus />;
 
@@ -47,7 +59,7 @@ function ClubProfileEditor({ clubId }: { clubId: string }) {
     return (
       <PublicLayout>
         <EmptyState
-          icon={<CircleAlertIcon className="size-6" />}
+          icon={<CircleAlert aria-hidden="true" strokeWidth={1.75} className="size-6 shrink-0" />}
           title="โหลดข้อมูลชมรมไม่สำเร็จ"
           description={errorMessage ?? "ไม่สามารถโหลดข้อมูลชมรมได้"}
           action={
@@ -72,7 +84,7 @@ function ClubProfileEditor({ clubId }: { clubId: string }) {
       breadcrumbs={[{ label: "โปรไฟล์ชมรม" }]}
       actions={
         <Link to={`/clubs/${clubId}`} className={buttonClass("secondary")}>
-          <ExternalLinkIcon className="size-4" />
+          <ExternalLink aria-hidden="true" strokeWidth={1.75} className="size-4 shrink-0" />
           ดูหน้าโปรไฟล์สาธารณะ
         </Link>
       }

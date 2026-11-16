@@ -157,6 +157,7 @@ export interface ClubDetailData {
   category: string;
   description: string;
   objectives: string;
+  affiliationName?: string;
   tags: string[];
   imageUrl?: string;
   bannerUrl?: string;

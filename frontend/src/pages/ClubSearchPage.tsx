@@ -1,44 +1,65 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
+import { ArrowRight, ArrowUpRight, CalendarDays, Image as LucideImage, Search, UserPlus } from 'lucide-react';
 import PublicLayout from '../components/layout/PublicLayout';
 import { searchPublicClubs } from '../features/clubs/services/publicClubSearchService';
 import type { PublicClubSearchItem } from '../features/clubs/types/publicClubSearch';
+import type { PublicOpenRound } from '../features/clubs/types/club';
+import { earliestOpenRound, recruitmentCountdown } from '../features/clubs/utils/clubRecruitment';
 import { apiRequest, describeApiError } from '../lib/api';
 
 interface PublicClubCategoriesResponse {
   items: { id: string; name: string }[];
 }
 
-function SearchIcon({ className = 'size-4' }: { className?: string }) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <circle cx="8.8" cy="8.8" r="5.5" />
-      <path strokeLinecap="round" d="m13 13 4 4" />
-    </svg>
-  );
-}
-
-function ArrowRightIcon({ className = 'size-4' }: { className?: string }) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 10h12m0 0-4.5-4.5M16 10l-4.5 4.5" />
-    </svg>
-  );
-}
-
 const HERO_IMAGE_URL = '/images/CampusHomepage.webp';
 const HERO_ETCHING_URL = '/images/campus-etching.webp';
+const closeDateFormat = new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeZone: 'Asia/Bangkok' });
+const closeTimeFormat = new Intl.DateTimeFormat('th-TH', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Bangkok' });
 
 function ClubCard({ club }: { club: PublicClubSearchItem }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [rounds, setRounds] = useState<{ clubId: string; round: PublicOpenRound | null; failed: boolean } | null>(null);
+  const [now, setNow] = useState(Date.now);
+  const [refresh, setRefresh] = useState(0);
   const imageSrc = club.imageUrl ?? null;
+  const currentRounds = rounds?.clubId === club.id ? rounds : null;
+  const round = currentRounds?.round;
+  const hint = round ? recruitmentCountdown(round.closesAt, now) : null;
+  const isOpen = Boolean(round && hint);
+  const closesAt = round ? new Date(round.closesAt) : null;
+  const lastClosedAt = club.lastRecruitmentClosedAt ? new Date(club.lastRecruitmentClosedAt) : null;
+
+  useEffect(() => {
+    if (!club.hasOpenRecruitment) return;
+    const controller = new AbortController();
+    earliestOpenRound(club.id, controller.signal).then((round) => {
+      if (!controller.signal.aborted) {
+        setNow(Date.now());
+        setRounds({ clubId: club.id, round, failed: false });
+      }
+    }).catch(() => {
+      if (!controller.signal.aborted) setRounds({ clubId: club.id, round: null, failed: true });
+    });
+    return () => controller.abort();
+  }, [club.id, club.hasOpenRecruitment, refresh]);
+
+  useEffect(() => {
+    if (!round || !hint) return;
+    const remaining = Date.parse(round.closesAt) - now;
+    const timer = window.setTimeout(() => {
+      const current = Date.now();
+      setNow(current);
+      if (current >= Date.parse(round.closesAt)) setRefresh((value) => value + 1);
+    }, Math.min(60_000, remaining));
+    return () => window.clearTimeout(timer);
+  }, [round, hint, now]);
 
   return (
-    <Link
-      to={`/clubs/${club.id}`}
-      className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#EAE2D8] bg-white shadow-[0_2px_10px_rgba(35,27,23,0.04)] transition-transform duration-200 hover:-translate-y-1 hover:border-[#D9B8C2] hover:shadow-[0_14px_28px_-10px_rgba(139,30,63,0.14)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8B1E3F]"
+    <article
+      className="group flex h-full flex-col overflow-hidden rounded-[15px] border border-[#E8E1DB] bg-white motion-safe:transition-transform motion-safe:duration-200 motion-safe:hover:-translate-y-0.5"
     >
-      <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden bg-gradient-to-br from-[#F3EDE5] to-[#E8DFD4]">
+      <div className="relative flex aspect-[1.85/1] items-center justify-center overflow-hidden bg-[#F3EFEA]">
         {imageSrc && !imageFailed ? (
           <img
             src={imageSrc}
@@ -46,64 +67,60 @@ function ClubCard({ club }: { club: PublicClubSearchItem }) {
             loading="lazy"
             decoding="async"
             onError={() => setImageFailed(true)}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full object-cover motion-safe:transition-transform motion-safe:duration-[250ms] motion-safe:group-hover:scale-[1.025]"
           />
         ) : (
           <div className="flex flex-col items-center gap-1.5 text-[#9A8F86]">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="size-7 opacity-75">
-              <rect x="3" y="5" width="18" height="14" rx="2.5" />
-              <circle cx="8.5" cy="10" r="1.5" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="m21 16-5-5-4.5 4.5L9 13l-6 5" />
-            </svg>
+            <LucideImage aria-hidden="true" strokeWidth={1.5} className="size-7 opacity-75" />
             <span className="text-xs font-medium">ยังไม่มีภาพกิจกรรม</span>
           </div>
         )}
       </div>
 
-      <div className="flex flex-1 flex-col p-6">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="text-xl font-bold leading-snug text-[#231B17] transition-colors group-hover:text-[#8B1E3F]">
-            {club.name}
-          </h3>
-          <span
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-              club.hasOpenRecruitment
-                ? 'bg-[#E9F5EE] text-[#1F6B45]'
-                : 'bg-[#F2EFEA] text-[#6B625B]'
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className={`size-1.5 rounded-full ${
-                club.hasOpenRecruitment ? 'bg-[#248A57]' : 'bg-[#A89F97]'
-              }`}
-            />
-            {club.hasOpenRecruitment ? 'เปิดรับสมัคร' : 'ยังไม่เปิดรับสมัคร'}
-          </span>
-        </div>
+      <div className="flex flex-1 flex-col px-5 py-5 sm:px-7 sm:pb-6 sm:pt-5">
+        <h3 className="text-[22px] font-bold leading-tight text-[#861638] sm:text-2xl">
+          <Link to={`/clubs/${club.id}`} className="rounded-sm transition-colors hover:text-[#68112B] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#861638]">{club.name}</Link>
+        </h3>
 
-        <p className="mt-2.5 line-clamp-2 flex-1 text-[15px] leading-6 text-[#645B53]">
+        <p className="mt-1.5 line-clamp-2 min-h-12 text-[15px] leading-6 text-[#706B70]">
           {club.description}
         </p>
 
-        <div className="mt-5 flex items-center justify-between gap-3 pt-1">
-          <div className="flex flex-wrap items-center gap-2">
-            {club.tags.slice(0, 2).map((tag) => (
-              <span
-                key={tag.id}
-                className="rounded-full bg-[#F3EFEA] px-3 py-1 text-xs font-medium text-[#5F564F]"
-              >
-                {tag.name}
-              </span>
-            ))}
-            <span className="rounded-full bg-[#F9EBEE] px-3 py-1 text-xs font-medium text-[#8B1E3F]">
-              {club.category.name}
+        <p className="mt-1.5 self-start rounded-full bg-[#F8EBEF] px-3 py-1 text-sm font-semibold text-[#861638]">{club.category.name}</p>
+
+        <div className="mt-4 border-t border-[#E8E1DB] pt-3">
+          <div className="grid min-h-14 grid-cols-2 items-center">
+            <span className={`flex min-w-0 items-center gap-2.5 pr-3 text-sm leading-5 ${isOpen ? 'font-bold text-[#25202A]' : 'font-semibold text-[#25202A]'}`}>
+              <CalendarDays aria-hidden="true" size={20} strokeWidth={isOpen ? 2 : 1.8} className={`shrink-0 ${isOpen ? 'text-[#861638]' : 'text-[#706B70]'}`} />
+              {club.hasOpenRecruitment && !currentRounds ? 'กำลังโหลดรอบรับสมัคร...' : currentRounds?.failed ? 'โหลดรอบรับสมัครไม่สำเร็จ' : hint ?? 'ยังไม่เปิดรับสมัคร'}
             </span>
+            {isOpen && closesAt && <span className="min-w-0 border-l border-[#E8E1DB] pl-3 text-right text-sm font-semibold leading-5 text-[#25202A]">ถึง {closeTimeFormat.format(closesAt)} น.<br />{closeDateFormat.format(closesAt)}</span>}
+            {!isOpen && (!club.hasOpenRecruitment || currentRounds) && !currentRounds?.failed && lastClosedAt && Number.isFinite(lastClosedAt.getTime()) && lastClosedAt.getTime() <= now && <span className="min-w-0 border-l border-[#E8E1DB] pl-3 text-right text-sm leading-5 text-[#706B70]">ปิดรับสมัครเมื่อ<br />{closeTimeFormat.format(lastClosedAt)} น. {closeDateFormat.format(lastClosedAt)}</span>}
           </div>
-          <ArrowRightIcon className="size-4 shrink-0 text-[#8B1E3F] transition-transform group-hover:translate-x-1" />
+        </div>
+
+        <div className="mt-auto flex items-center gap-2.5 pt-5">
+          {isOpen && round && (
+            <Link
+              to={`/clubs/${club.id}/rounds/${round.id}/apply`}
+              aria-label={`สมัคร ${round.name}`}
+              className="inline-flex min-h-12 w-[55%] items-center justify-center gap-2 rounded-xl bg-[#861638] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#68112B] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#861638]"
+            >
+              <UserPlus aria-hidden="true" size={17} strokeWidth={1.9} className="shrink-0" />
+              <span>สมัครเข้าชมรม</span>
+            </Link>
+          )}
+          <Link
+            to={`/clubs/${club.id}`}
+            aria-label={`ดูรายละเอียดชมรม ${club.name}`}
+            className="group/detail inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-[#861638]/55 bg-white px-3 py-2 text-sm font-semibold text-[#861638] transition-colors hover:border-[#861638] hover:bg-[#FAF2F4] hover:text-[#68112B] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#861638]"
+          >
+            <span>{isOpen ? 'รายละเอียด' : 'รายละเอียดชมรม'}</span>
+            <ArrowUpRight aria-hidden="true" size={16} strokeWidth={2} className="shrink-0 motion-safe:transition-transform motion-safe:group-hover/detail:translate-x-0.5 motion-safe:group-hover/detail:-translate-y-0.5" />
+          </Link>
         </div>
       </div>
-    </Link>
+    </article>
   );
 }
 
@@ -291,7 +308,7 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
                     className="inline-flex min-h-12 items-center gap-3 rounded-xl bg-[#8B1E3F] px-7 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-[#731733]"
                   >
                     <span>สำรวจชมรม</span>
-                    <ArrowRightIcon className="size-4" />
+                    <ArrowRight aria-hidden="true" strokeWidth={1.75} className="size-4" />
                   </a>
                 </div>
               </div>
@@ -327,7 +344,7 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
               <div className="relative flex-1">
                 <label htmlFor="club-search" className="sr-only">ค้นหาชมรม</label>
                 <span aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#9A8F86]">
-                  <SearchIcon className="size-5" />
+                  <Search aria-hidden="true" strokeWidth={1.75} className="size-5" />
                 </span>
                 <input
                   id="club-search"
@@ -386,7 +403,7 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
                 type="submit"
                 className="inline-flex h-14 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#8B1E3F] px-7 text-base font-semibold text-white transition hover:bg-[#731733]"
               >
-                <SearchIcon className="size-4" />
+                <Search aria-hidden="true" strokeWidth={1.75} className="size-4" />
                 <span>ค้นหา</span>
               </button>
             </form>
@@ -430,7 +447,7 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
                 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-[#8B1E3F] transition hover:text-[#6E1832]"
               >
                 <span>ดูชมรมทั้งหมด</span>
-                <ArrowRightIcon className="size-4" />
+                <ArrowRight aria-hidden="true" strokeWidth={1.75} className="size-4" />
               </button>
             </div>
 
@@ -458,7 +475,7 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
             ) : (
               <section aria-live="polite" className="rounded-2xl border border-dashed border-[#D8CEC2] bg-white px-5 py-14 text-center sm:py-20">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F9EBEE] text-[#8B1E3F]" aria-hidden="true">
-                  <SearchIcon className="size-7" />
+                  <Search aria-hidden="true" strokeWidth={1.75} className="size-7" />
                 </div>
                 <h3 className="mt-4 text-lg font-bold text-[#231B17]">ไม่พบชมรม</h3>
               </section>
