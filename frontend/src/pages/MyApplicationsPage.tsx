@@ -9,7 +9,7 @@ import NotFoundPage from './NotFoundPage';
 
 export default function MyApplicationsPage() {
   return (
-    <PublicLayout>
+    <PublicLayout fullBleed>
       <MyApplicationsContent />
     </PublicLayout>
   );
@@ -19,7 +19,7 @@ export function MyApplicationDetailRoutePage() {
   const { applicationId } = useParams();
   if (!isValidId(applicationId)) return <NotFoundPage />;
   return (
-    <PublicLayout>
+    <PublicLayout fullBleed>
       <MyApplicationDetailPage applicationId={applicationId} />
     </PublicLayout>
   );

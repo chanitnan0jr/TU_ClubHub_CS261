@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../../../components/ui/Button';
-import { CircleAlertIcon } from '../../../components/ui/icons';
+import { CircleAlert } from 'lucide-react';
 import { describeApiError } from '../../../lib/api';
 import { formatThaiDateTime } from '../../../lib/format';
 import type { Round } from '../../recruitment/api/roundApi';
@@ -71,7 +71,7 @@ export function PublishResultsModal({
       <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
         <div className="flex items-start gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
-            <CircleAlertIcon className="size-5" />
+            <CircleAlert aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
           </span>
           <div className="min-w-0">
             <h2 id="publish-results-modal-title" className="text-lg font-semibold text-slate-900">

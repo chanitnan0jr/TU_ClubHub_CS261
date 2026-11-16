@@ -59,7 +59,7 @@ export default function ApplicationResultRoutePage() {
   }
 
   return (
-    <PublicLayout>
+    <PublicLayout fullBleed>
       <ApplicationSuccessPage
         clubId={clubId}
         club={location.state.club}
