@@ -1,5 +1,6 @@
 package com.tu.clubhub.recruitment.controller;
 
+import com.tu.clubhub.common.error.ApiExceptionHandler;
 import com.tu.clubhub.recruitment.service.ApplicationQuestionService;
 import com.tu.clubhub.recruitment.service.ApplicationQuestionService.QuestionListView;
 import com.tu.clubhub.recruitment.service.ApplicationQuestionService.QuestionView;
@@ -29,7 +30,7 @@ class ApplicationQuestionControllerTest {
     void setUp() {
         service = mock(ApplicationQuestionService.class);
         mvc = MockMvcBuilders.standaloneSetup(new ApplicationQuestionController(service))
-                .setControllerAdvice(new RecruitmentRoundExceptionHandler())
+                .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
 

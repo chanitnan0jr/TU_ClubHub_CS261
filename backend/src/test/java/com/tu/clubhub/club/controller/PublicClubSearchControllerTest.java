@@ -12,9 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import com.tu.clubhub.club.dto.PublicClubSearchPageDto;
+import com.tu.clubhub.club.dto.PublicClubSearchItemDto;
 import com.tu.clubhub.club.dto.PublicPageMetadataDto;
 import com.tu.clubhub.club.service.PublicClubService;
+import com.tu.clubhub.common.dto.PageResponse;
 
 class PublicClubSearchControllerTest {
 
@@ -33,7 +34,7 @@ class PublicClubSearchControllerTest {
 
     @Test
     void searchesClubsWithDefaultParameters() throws Exception {
-        var response = new PublicClubSearchPageDto(
+        var response = new PageResponse<PublicClubSearchItemDto>(
                 List.of(),
                 new PublicPageMetadataDto(0, 20, 0, 0)
         );
@@ -54,7 +55,7 @@ class PublicClubSearchControllerTest {
 
     @Test
     void forwardsSearchFiltersToService() throws Exception {
-        var response = new PublicClubSearchPageDto(
+        var response = new PageResponse<PublicClubSearchItemDto>(
                 List.of(),
                 new PublicPageMetadataDto(1, 5, 0, 0)
         );
