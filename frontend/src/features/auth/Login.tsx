@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "../../components/ui/Button";
 import { inputClass } from "../../components/ui/classes";
 import { Field } from "../../components/ui/Field";
-import { CircleAlertIcon } from "../../components/ui/icons";
+import { CircleAlert } from "lucide-react";
 import { useAuth } from "./AuthContext";
 
 export default function Login() {
@@ -48,7 +48,7 @@ export default function Login() {
 
         {(error || notice) && (
           <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <CircleAlertIcon className="mt-0.5 size-4" />
+            <CircleAlert aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
             <span>{error || notice}</span>
           </div>
         )}

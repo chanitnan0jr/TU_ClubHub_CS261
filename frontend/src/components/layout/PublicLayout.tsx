@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router';
 import { useAuth } from '../../features/auth/AuthContext';
 import { Button } from '../ui/Button';
 import { buttonClass } from '../ui/classes';
-import { LogOutIcon, MenuIcon, XIcon } from '../ui/icons';
+import { LogOut, Menu, X } from 'lucide-react';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `relative flex min-h-11 items-center px-1.5 text-[15px] transition-colors sm:px-1 ${
@@ -23,6 +23,8 @@ export function SkipLink() {
   );
 }
 
+export const WIDE_CONTAINER_CLASS = 'mx-auto w-full max-w-[1680px] px-4 sm:px-8 lg:px-12 xl:px-16';
+
 /** Top bar for public and student pages. */
 export default function PublicLayout({
   children,
@@ -41,31 +43,22 @@ export default function PublicLayout({
   const loginPath = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
   const displayName = user?.displayName?.trim() || 'ผู้ใช้';
   const avatarInitial = displayName.slice(0, 1).toUpperCase();
+  const isCommitteeWorkspace =
+    location.pathname === '/dashboard' ||
+    /^\/clubs\/[^/]+\/(manage|edit|rounds|applications)(\/|$)/.test(location.pathname);
 
-  const containerWidthClass = fullBleed
-    ? 'mx-auto w-full max-w-[1680px] px-4 sm:px-8 lg:px-12 xl:px-16'
-    : 'mx-auto w-full max-w-6xl px-4 sm:px-6';
+  const navItems = [
+    { to: '/', label: 'สำรวจชมรม', end: true, forceActive: location.pathname === '/clubs', visible: true },
+    { to: '/me/applications', label: 'ใบสมัครของฉัน', end: false, forceActive: location.pathname.startsWith('/profile/applications'), visible: isAuthenticated },
+    { to: myClubsPath, label: 'ชมรมที่ฉันดูแล', end: true, forceActive: isCommitteeWorkspace, visible: assignments.length > 0 },
+    { to: '/admin/dashboard', label: 'แดชบอร์ดส่วนกลาง', end: false, forceActive: false, visible: user?.role === 'ADMIN' },
+  ].filter((item) => item.visible);
 
   return (
     <div className="min-h-screen bg-[#FAF7F3] text-[#231B17]">
       <SkipLink />
-      <div className="relative overflow-hidden border-b border-[#EAE2D8] bg-[#F6F2EC]">
-        <div className={`${containerWidthClass} flex h-9 items-center justify-between`}>
-          <p className="font-['Manrope',var(--font-sans)] text-xs font-medium tracking-[0.06em] text-[#6B625B]">
-            THAMMASAT UNIVERSITY <span className="mx-2 text-[#C8BEB3]">|</span> มหาวิทยาลัยธรรมศาสตร์
-          </p>
-        </div>
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute right-0 top-0 hidden h-full w-44 sm:block"
-        >
-          <div className="absolute inset-0 bg-[#7A1835] [clip-path:polygon(24%_0,100%_0,100%_100%,0%_100%)]" />
-          <div className="absolute inset-y-0 left-0 w-10 bg-[#C79C60]/80 [clip-path:polygon(92%_0,100%_0,8%_100%,0%_100%)]" />
-        </div>
-      </div>
-
       <header className="sticky top-0 z-40 border-b border-[#EAE2D8] bg-white">
-        <div className={`${containerWidthClass} flex h-[72px] items-center justify-between gap-4`}>
+        <div className={`${WIDE_CONTAINER_CLASS} flex h-[72px] items-center justify-between gap-4`}>
           <Link to="/" className="flex items-center gap-3 rounded-lg" aria-label="TU ClubHub หน้าหลัก">
             <span
               aria-hidden="true"
@@ -88,7 +81,11 @@ export default function PublicLayout({
             aria-label={menuOpen ? 'ปิดเมนู' : 'เปิดเมนู'}
             onClick={() => setMenuOpen((open) => !open)}
           >
-            {menuOpen ? <XIcon /> : <MenuIcon />}
+            {menuOpen ? (
+              <X aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
+            ) : (
+              <Menu aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
+            )}
           </button>
 
           <div
@@ -97,22 +94,16 @@ export default function PublicLayout({
             className={`${menuOpen ? 'flex' : 'hidden'} absolute inset-x-0 top-[72px] flex-col gap-2 border-b border-[#EAE2D8] bg-white px-4 py-3 shadow-sm sm:static sm:flex sm:flex-row sm:items-center sm:gap-6 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none`}
           >
             <nav aria-label="เมนูหลัก" className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-7">
-              <NavLink to="/" end className={navLinkClass}>
-                สำรวจชมรม
-              </NavLink>
-              <NavLink to="/open-calls" className={navLinkClass}>
-                รอบที่เปิดรับ
-              </NavLink>
-              {isAuthenticated && (
-                <NavLink to="/me/applications" className={navLinkClass}>
-                  ใบสมัครของฉัน
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) => navLinkClass({ isActive: isActive || item.forceActive })}
+                >
+                  {item.label}
                 </NavLink>
-              )}
-              {assignments.length > 0 && (
-                <NavLink to={myClubsPath} end className={navLinkClass}>
-                  ชมรมที่ฉันดูแล
-                </NavLink>
-              )}
+              ))}
             </nav>
             {isAuthenticated ? (
               <div className="flex items-center justify-between gap-2.5 border-t border-[#EFE9E1] pt-2 sm:border-l sm:border-t-0 sm:border-[#E5DDD3] sm:pl-4 sm:pt-0">
@@ -128,7 +119,7 @@ export default function PublicLayout({
                   </span>
                 </div>
                 <Button variant="ghost" onClick={() => void logout()}>
-                  <LogOutIcon className="size-4" />
+                  <LogOut aria-hidden="true" strokeWidth={1.75} className="size-4 shrink-0" />
                   ออกจากระบบ
                 </Button>
               </div>

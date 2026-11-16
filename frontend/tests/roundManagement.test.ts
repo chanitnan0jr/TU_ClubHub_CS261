@@ -235,7 +235,7 @@ test('home lists the clubs the user manages and links to the open-call board', a
     const card = within(section).getByRole('link', { name: /ชมรมอาสาพัฒนาชุมชน/ })
     assert.equal(card.getAttribute('href'), '/clubs/20001/manage')
     assert.match(card.textContent ?? '', /ประธานชมรม/)
-    assert.equal(screen.getByRole('link', { name: 'ดูรอบที่เปิดรับสมัคร' }).getAttribute('href'), '/open-calls')
+    assert.equal(screen.getByRole('link', { name: 'ดูรายชื่อชมรม' }).getAttribute('href'), '/clubs')
     assert.equal(screen.queryByRole('textbox'), null)
   } finally { cleanup(); stub.restore() }
 })
@@ -244,7 +244,7 @@ test('home shows the login form and the open-call link to visitors', async () =>
   const stub = renderHome(() => problem(401, 'AUTHENTICATION_REQUIRED', 'x'))
   try {
     assert.ok(await screen.findByRole('heading', { level: 1, name: 'เข้าสู่ระบบ' }))
-    assert.equal(screen.getByRole('link', { name: 'ดูรอบที่เปิดรับสมัคร' }).getAttribute('href'), '/open-calls')
+    assert.equal(screen.getByRole('link', { name: 'ดูรายชื่อชมรม' }).getAttribute('href'), '/clubs')
     assert.equal(screen.queryByRole('heading', { name: 'ชมรมที่ฉันดูแล' }), null)
   } finally { cleanup(); stub.restore() }
 })
