@@ -43,7 +43,7 @@ Open `http://localhost:5173`. [vite.config.ts](vite.config.ts) proxies `/api` to
 
 For backend mock authentication, use the `dev` profile with `TU_AUTH_MODE=mock` and `student-demo` / `tu-clubhub-demo`. This creates a local user but does not grant committee access or verify student eligibility.
 
-`AuthContext` also contains a separate browser-only mock enabled by `VITE_MOCK_AUTH=true` or `VITE_ENABLE_MOCK_AUTH=true`. It skips authentication requests and stores a fake user in `sessionStorage`; it does not create a backend session. Leave both unset for API integration and production builds. The current check is not restricted to Vite development mode.
+For quick multi-role testing in local development, set `DEV=true` on the backend (with `TU_AUTH_MODE=mock` and `dev` profile). The self-contained `src/features/dev/DevRoleSwitcherPill.tsx` component (mounted in `src/App.tsx`) probes `GET /api/v1/auth/dev/accounts`, stays hidden when the endpoint returns `404`, and switches real backend sessions via `POST /api/v1/auth/dev/switch` + `AuthContext.establishSession`. Removing `src/features/dev/` and the `<DevRoleSwitcherPill />` tag in `src/App.tsx` cleanly strips the frontend feature.
 
 ### Login confirmation (issue #78)
 
