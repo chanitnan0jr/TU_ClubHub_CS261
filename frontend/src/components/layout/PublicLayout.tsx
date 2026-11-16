@@ -64,7 +64,7 @@ export default function PublicLayout({
         </div>
       </div>
 
-      <header className="sticky top-0 z-40 border-b border-[#EAE2D8] bg-white/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-40 border-b border-[#EAE2D8] bg-white">
         <div className={`${containerWidthClass} flex h-[72px] items-center justify-between gap-4`}>
           <Link to="/" className="flex items-center gap-3 rounded-lg" aria-label="TU ClubHub หน้าหลัก">
             <span
