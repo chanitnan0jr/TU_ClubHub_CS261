@@ -17,6 +17,14 @@ export function isValidUrl(value: string): boolean {
   }
 }
 
+export function isValidClubImageUrl(value: string): boolean {
+  const trimmed = value.trim()
+  if (/^\/images\/[A-Za-z0-9._/-]+$/.test(trimmed) && !trimmed.includes('..') && trimmed.length <= 2048) {
+    return true
+  }
+  return isValidUrl(trimmed)
+}
+
 export function isValidFacebookUrl(value: string): boolean {
   return isValidSocialUrl(value, [
     'facebook.com',
