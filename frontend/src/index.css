@@ -11,7 +11,7 @@
   --color-tu-maroon-100: #f5e1e8;
   --color-tu-maroon-800: #6e1832;
 
-  --font-sans: "IBM Plex Sans Thai", ui-sans-serif, system-ui, -apple-system,
+  --font-sans: "IBM Plex Sans Thai", "Manrope", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", "Noto Sans Thai", "Leelawadee UI", sans-serif;
 }
 
@@ -22,8 +22,8 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  color: var(--color-slate-900);
-  background: var(--color-slate-50);
+  color: #231b17;
+  background: #faf7f3;
 }
 
 body {
