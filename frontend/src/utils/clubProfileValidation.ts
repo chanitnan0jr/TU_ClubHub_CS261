@@ -2,6 +2,7 @@ import type { ClubUpdateRequestDto } from '../features/clubs/types/club'
 import {
   isRequired,
   isValidClubContactEmail,
+  isValidClubImageUrl,
   isValidFacebookUrl,
   isValidInstagramHandle,
   isValidUrl,
@@ -55,8 +56,8 @@ export function validateClubProfile(
       value: profile.facebookUrl,
       isValid: isValidFacebookUrl,
     },
-    { field: 'imageUrl', value: profile.imageUrl, isValid: isValidUrl },
-    { field: 'bannerUrl', value: profile.bannerUrl, isValid: isValidUrl },
+    { field: 'imageUrl', value: profile.imageUrl, isValid: isValidClubImageUrl },
+    { field: 'bannerUrl', value: profile.bannerUrl, isValid: isValidClubImageUrl },
   ]
 
   for (const { field, value, isValid } of urlFields) {
