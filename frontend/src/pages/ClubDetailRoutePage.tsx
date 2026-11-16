@@ -14,7 +14,7 @@ export default function ClubDetailRoutePage() {
   if (!isValidId(clubId)) return <NotFoundPage />;
 
   return (
-    <PublicLayout>
+    <PublicLayout fullBleed>
       <ClubDetailPage
         clubId={clubId}
         isLoggedIn={isAuthenticated}

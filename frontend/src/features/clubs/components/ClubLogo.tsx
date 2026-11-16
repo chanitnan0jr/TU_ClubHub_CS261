@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ImageIcon } from '../../../components/ui/icons';
+import { Image as LucideImage } from 'lucide-react';
 
 interface ClubLogoProps {
   src?: string | null;
@@ -29,7 +29,7 @@ export function ClubLogo({ src, clubName, iconClassName = 'size-8' }: ClubLogoPr
 
   return (
     <div className="flex size-full items-center justify-center rounded-lg bg-tu-maroon-50 text-tu-maroon">
-      <ImageIcon className={iconClassName} />
+      <LucideImage aria-hidden="true" strokeWidth={1.75} className={`shrink-0 ${iconClassName}`} />
     </div>
   );
 }
