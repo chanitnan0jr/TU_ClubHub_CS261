@@ -26,8 +26,8 @@ function ArrowRightIcon({ className = 'size-4' }: { className?: string }) {
   );
 }
 
-const HERO_IMAGE_URL = '/images/CampusHomepage.png';
-const HERO_ETCHING_URL = '/images/Elegant%20Ivory%20University%20Campus%20Etching.png';
+const HERO_IMAGE_URL = '/images/CampusHomepage.webp';
+const HERO_ETCHING_URL = '/images/campus-etching.webp';
 
 function ClubCard({ club }: { club: PublicClubSearchItem }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -36,7 +36,7 @@ function ClubCard({ club }: { club: PublicClubSearchItem }) {
   return (
     <Link
       to={`/clubs/${club.id}`}
-      className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#EAE2D8] bg-white shadow-[0_2px_10px_rgba(35,27,23,0.04)] transition duration-200 hover:-translate-y-1 hover:border-[#D9B8C2] hover:shadow-[0_14px_28px_-10px_rgba(139,30,63,0.14)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8B1E3F]"
+      className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#EAE2D8] bg-white shadow-[0_2px_10px_rgba(35,27,23,0.04)] transition-transform duration-200 hover:-translate-y-1 hover:border-[#D9B8C2] hover:shadow-[0_14px_28px_-10px_rgba(139,30,63,0.14)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8B1E3F]"
     >
       <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden bg-gradient-to-br from-[#F3EDE5] to-[#E8DFD4]">
         {imageSrc && !imageFailed ? (
@@ -44,8 +44,9 @@ function ClubCard({ club }: { club: PublicClubSearchItem }) {
             src={imageSrc}
             alt={club.name}
             loading="lazy"
+            decoding="async"
             onError={() => setImageFailed(true)}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <div className="flex flex-col items-center gap-1.5 text-[#9A8F86]">
@@ -179,7 +180,7 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
   useEffect(() => {
     if (!usesApi || !categoriesReady) return;
     let ignore = false;
-    const timeout = window.setTimeout(() => {
+    const runSearch = () => {
       searchPublicClubs({
         query,
         categoryId,
@@ -209,7 +210,9 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
             });
           }
         });
-    }, 250);
+    };
+    const delayMs = query.trim() ? 250 : 0;
+    const timeout = window.setTimeout(runSearch, delayMs);
     return () => {
       ignore = true;
       window.clearTimeout(timeout);
@@ -244,12 +247,13 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
             <img
               src={HERO_ETCHING_URL}
               alt=""
-              className="absolute bottom-0 right-0 h-full w-auto max-w-none object-contain object-right-bottom opacity-95 [mask-image:linear-gradient(to_right,transparent_0%,black_25%,black_100%)]"
+              decoding="async"
+              className="absolute bottom-0 right-0 h-full w-auto max-w-none object-contain object-right-bottom opacity-95"
             />
           </div>
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-[#FAF6F0]/80 via-[#FAF6F0]/40 to-transparent"
+            className="pointer-events-none absolute inset-y-0 left-0 w-2/5 bg-gradient-to-r from-[#FAF6F0] via-[#FAF6F0]/70 to-transparent"
           />
 
           <div className="relative mx-auto w-full max-w-[1680px] lg:min-h-[490px] xl:min-h-[540px]">
@@ -299,6 +303,8 @@ export default function ClubSearchPage({ clubs }: ClubSearchPageProps) {
               <img
                 src={HERO_IMAGE_URL}
                 alt="นักศึกษาธรรมศาสตร์ร่วมกิจกรรมชมรมในบรรยากาศแคมปัส"
+                decoding="async"
+                fetchPriority="high"
                 className="h-full w-full object-cover object-center"
               />
               <div
