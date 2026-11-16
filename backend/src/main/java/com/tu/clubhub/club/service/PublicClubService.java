@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 
 import com.tu.clubhub.club.dto.PublicClubSearchItemDto;
-import com.tu.clubhub.club.dto.PublicClubSearchPageDto;
 import com.tu.clubhub.club.domain.Club;
 import com.tu.clubhub.club.dto.OpenPublicRecruitmentRoundDto;
 import com.tu.clubhub.club.dto.PublicClubCategoryDto;
@@ -21,9 +20,7 @@ import com.tu.clubhub.club.dto.PublicClubProfileDto;
 import com.tu.clubhub.club.dto.PublicClubTagDto;
 import com.tu.clubhub.club.dto.PublicItemListDto;
 import com.tu.clubhub.club.dto.PublicOpenCallDto;
-import com.tu.clubhub.club.dto.PublicOpenCallPageDto;
-import com.tu.clubhub.club.dto.PublicPageMetadataDto;
-import com.tu.clubhub.club.dto.PublicRecruitmentRoundPageDto;
+import com.tu.clubhub.common.dto.PageResponse;
 import com.tu.clubhub.club.repository.ClubProfileQueryRepository;
 import com.tu.clubhub.club.repository.ClubRepository;
 import com.tu.clubhub.club.service.ClubService.ClubNotFoundException;
@@ -85,7 +82,7 @@ public class PublicClubService {
     }
 
     @Transactional(readOnly = true)
-    public PublicRecruitmentRoundPageDto getOpenRecruitmentRounds(
+    public PageResponse<OpenPublicRecruitmentRoundDto> getOpenRecruitmentRounds(
             String rawId,
             int page,
             int size
@@ -100,12 +97,12 @@ public class PublicClubService {
                 profileQueryRepository.findOpenPublicRounds(club.getId(), now, size, offset);
         long totalElements = profileQueryRepository.countOpenPublicRounds(club.getId(), now);
 
-        return new PublicRecruitmentRoundPageDto(items, pageMetadata(page, size, totalElements));
+        return PageResponse.of(items, page, size, totalElements);
     }
 
     /** Open Call Board: rounds open now across every ACTIVE club, soonest deadline first. */
     @Transactional(readOnly = true)
-    public PublicOpenCallPageDto getOpenCalls(int page, int size) {
+    public PageResponse<PublicOpenCallDto> getOpenCalls(int page, int size) {
         validatePage(page, size);
 
         // One instant is shared by both the page query and total count.
@@ -114,11 +111,11 @@ public class PublicClubService {
         List<PublicOpenCallDto> items = profileQueryRepository.findOpenCalls(now, size, offset);
         long totalElements = profileQueryRepository.countOpenCalls(now);
 
-        return new PublicOpenCallPageDto(items, pageMetadata(page, size, totalElements));
+        return PageResponse.of(items, page, size, totalElements);
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public PublicClubSearchPageDto searchPublicClubs(
+    public PageResponse<PublicClubSearchItemDto> searchPublicClubs(
             String q,
             String rawCategoryId,
             String rawTagId,
@@ -189,10 +186,7 @@ public class PublicClubService {
                         now
                 );
 
-        return new PublicClubSearchPageDto(
-                items,
-                pageMetadata(page, size, totalElements)
-        );
+        return PageResponse.of(items, page, size, totalElements);
     }
 
     @Transactional(readOnly = true)
@@ -203,11 +197,6 @@ public class PublicClubService {
     @Transactional(readOnly = true)
     public PublicItemListDto<PublicClubTagDto> listTags() {
         return new PublicItemListDto<>(profileQueryRepository.findAllTags());
-    }
-
-    private static PublicPageMetadataDto pageMetadata(int page, int size, long totalElements) {
-        long totalPages = totalElements == 0 ? 0 : (totalElements + size - 1) / size;
-        return new PublicPageMetadataDto(page, size, totalElements, totalPages);
     }
 
     private Club findActiveClub(Long id) {
