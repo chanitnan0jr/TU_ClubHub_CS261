@@ -23,6 +23,7 @@ export function toClubDetailData(
     category: profile.category?.name ?? '',
     description: profile.description,
     objectives: profile.objectives ?? '',
+    affiliationName: orUndefined(profile.affiliationName),
     tags: profile.tags.map((tag) => tag.name),
     imageUrl: orUndefined(profile.imageUrl),
     bannerUrl: orUndefined(profile.bannerUrl),

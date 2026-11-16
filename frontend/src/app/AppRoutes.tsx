@@ -1,5 +1,5 @@
 import { CentralDashboardPage } from '../features/admin-dashboard/pages/CentralDashboardPage';
-import { Route, Routes } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
 import ApplicationRoutePage from "../pages/ApplicationRoutePage";
 import ApplicationResultRoutePage from "../pages/ApplicationResultRoutePage";
 import CommitteeApplicationDetailPage from "../features/applications/pages/CommitteeApplicationDetailPage";
@@ -14,7 +14,6 @@ import MyApplicationsPage, {
   MyApplicationDetailRoutePage,
 } from "../pages/MyApplicationsPage";
 import NotFoundPage from "../pages/NotFoundPage";
-import OpenCallsPage from "../pages/OpenCallsPage";
 import QuestionManagementRoutePage from "../pages/QuestionManagementRoutePage";
 import RoundCreateRoutePage from "../pages/RoundCreateRoutePage";
 import RoundEditRoutePage from "../pages/RoundEditRoutePage";
@@ -30,7 +29,7 @@ export default function AppRoutes() {
       <Route path="/clubs" element={<ClubSearchPage />} />
       <Route path="/dashboard" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/open-calls" element={<OpenCallsPage />} />
+      <Route path="/open-calls" element={<Navigate to="/clubs" replace />} />
       <Route path="/clubs/:clubId" element={<ClubDetailRoutePage />} />
       <Route
         path="/clubs/:clubId/applications"
