@@ -51,6 +51,21 @@ public class ClubMembership {
 		this.status = status;
 	}
 
+	public ClubMembership(Long clubId, Long userId, String status, Instant joinedAt) {
+		this.clubId = clubId;
+		this.userId = userId;
+		this.status = status;
+		this.joinedAt = joinedAt;
+	}
+
+	public void activate(Instant at) {
+		this.status = "ACTIVE";
+		this.endedAt = null;
+		if (this.joinedAt == null || at.isBefore(this.joinedAt)) {
+			this.joinedAt = at;
+		}
+	}
+
 	@PrePersist
 	void setTimestamps() {
 		Instant now = Instant.now();
