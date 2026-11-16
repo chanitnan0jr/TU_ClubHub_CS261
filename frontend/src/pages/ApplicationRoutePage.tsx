@@ -10,7 +10,7 @@ export default function ApplicationRoutePage() {
   if (!isValidId(clubId) || !isValidId(roundId)) return <NotFoundPage />;
 
   return (
-    <PublicLayout>
+    <PublicLayout fullBleed>
       <DynamicApplicationForm
         key={`${clubId}:${roundId}`}
         clubId={clubId}

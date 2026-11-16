@@ -1,3 +1,4 @@
+import { isValidHttpsUrl } from '../../../utils/validation.ts';
 import type {
   ApplicationFormData,
   ApplicationFormErrors,
@@ -9,30 +10,6 @@ import type {
 
 const characterLength = (value: string) => Array.from(value).length;
 const isBlank = (value: string) => value.trim().length === 0;
-
-function isValidHttpsUrl(value: string): boolean {
-  if (
-    characterLength(value) > 2048 ||
-    /\s/u.test(value) ||
-    Array.from(value, (character) => character.codePointAt(0) ?? 0).some(
-      (codePoint) => codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f),
-    )
-  ) {
-    return false;
-  }
-
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === 'https:' &&
-      url.hostname.length > 0 &&
-      url.username.length === 0 &&
-      url.password.length === 0
-    );
-  } catch {
-    return false;
-  }
-}
 
 export function validateApplicationForm(
   form: ApplicationFormData,

@@ -4,16 +4,18 @@ import CommitteeLayout from '../../../components/layout/CommitteeLayout';
 import { Button } from '../../../components/ui/Button';
 import { buttonClass, inputClass } from '../../../components/ui/classes';
 import { EmptyState } from '../../../components/ui/EmptyState';
-import { CircleAlertIcon, ExternalLinkIcon } from '../../../components/ui/icons';
+import { CircleAlert, ExternalLink } from 'lucide-react';
 import { SectionCard } from '../../../components/ui/SectionCard';
 import { useApiResource } from '../../../hooks/useApiResource';
 import { describeApiError } from '../../../lib/api';
 import { formatThaiDateTime } from '../../../lib/format';
 import { isValidId } from '../../../lib/ids';
+import { isValidHttpsUrl } from '../../../utils/validation';
 import NotFoundPage from '../../../pages/NotFoundPage';
 import { useAuth } from '../../auth/AuthContext';
 import { getRound, type Round } from '../../recruitment/api/roundApi';
-import { CommitteeApplicationStatusBadge } from '../components/CommitteeApplicationStatusBadge';
+import { StatusPill } from '../../../components/ui/StatusBadge';
+import { COMMITTEE_APPLICATION_STATUS_PRESENTATION } from '../components/committeeApplicationStatus';
 import { PublishResultsModal } from '../components/PublishResultsModal';
 import {
   fetchApplicationDecisionSnapshot,
@@ -52,14 +54,6 @@ function ApplicantInformation({ application }: { application: CommitteeApplicati
       ))}
     </dl>
   );
-}
-
-function isHttpsUrl(value: string) {
-  try {
-    return new URL(value).protocol === 'https:';
-  } catch {
-    return false;
-  }
 }
 
 function ResultPublicationBadge({ isPublished }: { isPublished: boolean }) {
@@ -196,7 +190,7 @@ function ApplicationDetail({ clubId, applicationId }: { clubId: string; applicat
         </div>
       ) : !data ? (
         <EmptyState
-          icon={<CircleAlertIcon className="size-6" />}
+          icon={<CircleAlert aria-hidden="true" strokeWidth={1.75} className="size-6 shrink-0" />}
           title="โหลดรายละเอียดใบสมัครไม่สำเร็จ"
           description={describeApiError(error, 'ไม่สามารถโหลดรายละเอียดใบสมัครได้ กรุณาลองใหม่อีกครั้ง')}
           action={<Button variant="primary" onClick={reload}>ลองใหม่</Button>}
@@ -206,7 +200,7 @@ function ApplicationDetail({ clubId, applicationId }: { clubId: string; applicat
           <SectionCard
             title="ข้อมูลใบสมัคร"
             description={`เลขที่ใบสมัคร ${data.id} · รอบรับสมัครรหัส ${data.roundId}${round ? ` (${round.title})` : ''}`}
-            actions={<CommitteeApplicationStatusBadge status={currentStatus} />}
+            actions={<StatusPill {...COMMITTEE_APPLICATION_STATUS_PRESENTATION[currentStatus]} />}
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -262,7 +256,7 @@ function ApplicationDetail({ clubId, applicationId }: { clubId: string; applicat
                     >
                       <div className="min-w-0">
                         <p className="break-words text-sm font-medium text-slate-900">{link.label}</p>
-                        {isHttpsUrl(link.url) ? (
+                        {isValidHttpsUrl(link.url) ? (
                           <a
                             href={link.url}
                             target="_blank"
@@ -275,14 +269,14 @@ function ApplicationDetail({ clubId, applicationId }: { clubId: string; applicat
                           <p className="mt-1 text-sm text-red-700">ลิงก์นี้ไม่สามารถเปิดได้อย่างปลอดภัย</p>
                         )}
                       </div>
-                      {isHttpsUrl(link.url) && (
+                      {isValidHttpsUrl(link.url) && (
                         <a
                           href={link.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className={`${buttonClass('secondary')} shrink-0`}
                         >
-                          <ExternalLinkIcon className="size-4" />
+                          <ExternalLink aria-hidden="true" strokeWidth={1.75} className="size-4 shrink-0" />
                           ดู / ดาวน์โหลด
                         </a>
                       )}

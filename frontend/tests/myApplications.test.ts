@@ -158,12 +158,22 @@ test('my applications list shows empty state when applicant has no applications 
   const stub = renderApp(() => json(pageOf([], 0, 0, 0)))
   try {
     assert.ok(await screen.findByRole('heading', { level: 2, name: 'คุณยังไม่มีประวัติการสมัครชมรม' }))
-    assert.equal(screen.getByRole('link', { name: 'ดูรอบที่เปิดรับสมัคร' }).getAttribute('href'), '/open-calls')
+    assert.equal(screen.getByRole('link', { name: 'ดูรายชื่อชมรม' }).getAttribute('href'), '/clubs')
     assert.equal(screen.queryByRole('article'), null)
   } finally {
     cleanup()
     stub.restore()
   }
+})
+
+test('the retired open-calls route redirects to the club directory', async () => {
+  const stub = renderApp(request => request.url === '/api/v1/public/club-categories'
+    ? json({ items: [] })
+    : json({ items: [], page: { number: 0, size: 20, totalElements: 0, totalPages: 0 } }), '/open-calls')
+  try {
+    assert.ok(await screen.findByRole('heading', { name: 'ชมรมที่น่าสนใจ' }))
+    assert.equal(screen.queryByRole('link', { name: 'รอบที่เปิดรับ' }), null)
+  } finally { cleanup(); stub.restore() }
 })
 
 test('my applications list shows error state without server SQL text and retries on click (TC-04-11)', async () => {
