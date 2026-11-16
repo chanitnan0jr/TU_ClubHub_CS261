@@ -1,8 +1,8 @@
 # TU-ClubHub — System Architecture
 
-วันที่: 11 ตุลาคม 2026 · ปรับปรุง Context: 27 ตุลาคม 2026 · Version: 1.3 · สถานะ: Target Architecture; ส่วนเพิ่มเติม Sprint 2 / Task74 เป็น **Draft / Pending Review**
+วันที่: 11 ตุลาคม 2026 · ปรับปรุง Context: 17 พฤศจิกายน 2026 · Version: 1.3 · สถานะ: Target Architecture; ส่วนเพิ่มเติม Sprint 2 / Task74 เป็น **Draft / Pending Review**
 
-เอกสารนี้อธิบายแบบเป้าหมาย ใช้ [README](../../README.md) และ [Repository context](scaffold-context.md) สำหรับสถานะและโครงสร้างปัจจุบัน มี Auth, Public Club APIs, Profile PUT และ Round/Question writes แล้ว Frontend มี [routes ของ Login/ชมรม/แก้โปรไฟล์/คำถาม](../../frontend/src/app/AppRoutes.tsx) แต่ [submission service ยังเป็น mock](../../frontend/src/features/applications/services/applicationService.ts) และยังไม่มี Submission API เอกสารนี้ไม่ใช่หลักฐาน Deploy หรือผลรันทดสอบ
+เอกสารนี้อธิบายแบบเป้าหมาย ใช้ [README](../../README.md) และ [Repository context](scaffold-context.md) สำหรับสถานะและโครงสร้างปัจจุบัน มี Auth, Public Club APIs, Profile PUT, Round/Question, Application Submission/History, Committee Review/Results และ Admin Dashboard/Assignments แล้ว (Offer confirm/decline ยังไม่มี Backend handler) Frontend เชื่อมผ่าน [Router หลัก](../../frontend/src/app/AppRoutes.tsx) และ [HTTP Client กลาง](../../frontend/src/lib/api.ts) เอกสารนี้ไม่ใช่หลักฐาน Deploy หรือผลรันทดสอบ
 
 Contract อ้างอิง [API_v1.md](../api/API_v1.md), [Main OpenAPI](../api/openapi.yaml), [Recruitment OpenAPI](../api/rounds.openapi.yaml) และ [ERD](../database/TU-ClubHub-ERD-Updated.dbml); Schema ที่รันจริงอยู่ใน [Flyway migrations](../../backend/src/main/resources/db/migration)
 
@@ -36,7 +36,7 @@ TU-ClubHub สนับสนุนการค้นหาชมรม กา�
 
 ### 2.2 Conventions และงานโครงสร้างที่ยังเหลือ
 
-AuthContext, SameSite=Lax, CSRF bootstrap endpoint และ JSON ID แบบ string ใช้อยู่ใน implementation/contract แล้ว [Router หลัก](../../frontend/src/app/AppRoutes.tsx) มีแล้ว ส่วน HTTP client กลางยังเป็นเป้าหมาย Frontend ยังเรียก fetch แยกตามฟีเจอร์ การตรวจ Docker Compose บน GitHub runner เป็นการตรวจชั่วคราว ไม่ใช่การ deploy Staging ถาวร
+AuthContext, SameSite=Lax, CSRF bootstrap endpoint และ JSON ID แบบ string ใช้อยู่ใน implementation/contract แล้ว และ Frontend ใช้ [Router หลัก](../../frontend/src/app/AppRoutes.tsx) ร่วมกับ [HTTP Client กลาง](../../frontend/src/lib/api.ts) การตรวจ Docker Compose บน GitHub runner เป็นการตรวจชั่วคราว ไม่ใช่การ deploy Staging ถาวร
 
 หาก Repository หรือ Contract ที่มีอยู่เลือกแนวทางอื่นแล้ว ให้เปรียบเทียบและบันทึก ADR ก่อนเปลี่ยน ไม่สร้าง Convention สองชุดควบคู่กัน
 
@@ -99,7 +99,7 @@ flowchart TB
 
 โครงสร้างเป้าหมาย: `src/app/` ประกอบ Router/Providers; `src/pages/` ประกอบหน้าจอ; `src/features/<feature>/` เก็บ components/hooks/api/types/utils ของฟีเจอร์นั้น; ส่วนกลางอยู่ใน `components/`, `lib/`, `hooks/`, `types/`
 
-ปัจจุบันใช้ `src/main.tsx` และ `src/App.tsx` ประกอบ AuthProvider/Login โดยยังไม่มี Router; มี `features/auth`, `clubs`, `recruitment`, `applications` และฟอร์ม/preview ที่ root ของ `src` สถานะการเชื่อม API ของแต่ละส่วนอยู่ใน [Frontend README](../../frontend/README.md)
+ปัจจุบันใช้ `src/main.tsx`, `src/App.tsx` และ `src/app/AppRoutes.tsx` ประกอบ AuthProvider และ Router; มี `features/auth`, `clubs`, `recruitment`, `applications`, `admin-dashboard`, `dev` พร้อม shared `components/layout` (`PublicLayout`, `CommitteeLayout`) และ `components/ui` สถานะการเชื่อม API และ routes ทั้งหมดอยู่ใน [Frontend README](../../frontend/README.md)
 
 Shared UI ต้องไม่ Import Feature เฉพาะ เช่น Button กลางไม่รู้จัก ApplicationService ส่วน Feature API ต้องเรียก HTTP Client กลาง ไม่สร้าง Fetch/Cookie/CSRF logic ซ้ำในแต่ละหน้า
 
@@ -114,7 +114,7 @@ Client State เช่น Modal และคำตอบระหว่างก
 - หน้าแก้ไขชมรม/ใบสมัครต้องมี API authorization ที่ Backend ประกอบเสมอ
 - แยก Loading, Empty, Not Found, Forbidden และ Network Error เพื่อไม่แสดงข้อผิดพลาดทุกชนิดเป็น “ไม่มีข้อมูล”
 - ใช้ Code Splitting ระดับหน้าเมื่อเหมาะสม ไม่เพิ่ม SSR หรือ Framework ใหม่ใน Scaffold
-- URL รูปภาพภายนอกที่เสียแสดง Default Image; External links ใช้ HTTPS และป้องกันการควบคุม opener เมื่อเปิดแท็บใหม่
+- URL รูปภาพภายนอกที่เสียแสดง Default Image (ส่วน `imageUrl`/`bannerUrl` ของชมรมรองรับทั้ง HTTPS URL และ local `/images/...` assets ตาม V7); External links ใช้ HTTPS และป้องกันการควบคุม opener เมื่อเปิดแท็บใหม่
 
 ## 6. Backend Component Architecture
 
@@ -133,11 +133,12 @@ Client State เช่น Modal และคำตอบระหว่างก
 | `membership` | club_memberships, membership_history |
 | `notification` | notifications |
 | `dashboard` | Read-only aggregations; ไม่มีตาราง Dashboard โดยจำเป็น |
-| `config` / `common` | Framework wiring / รูปแบบ Error และ utility ที่ใช้ร่วมกันจริง |
+| `dev` | Optional local-dev mock role switcher (`clubhub.dev=true` + `mock` + `dev`/`test`) |
+| `config` / `common` | Framework wiring / Shared `PageResponse`, `LockTimeouts` และ `ApiExceptionHandler` |
 
 ERD Reference มี 17 ตารางธุรกิจ ตาราง Session เป็น Infrastructure แยกจาก ERD ธุรกิจ ไม่สร้างตารางสำหรับ Open Call Board หรือ Dashboard เพียงเพราะมีหน้าจอนี้
 
-ตาราง Module ด้านบนเป็นขอบเขตเป้าหมาย ปัจจุบันมี `auth`, `user`, `club`, `committee`, `recruitment`, `membership`, `config`; ยังไม่มี application/notification/dashboard services ส่วน `user` provision บัญชีและ Sync student profile ใน Transaction แล้วตาม UserAccountService โดยไม่ให้ membership/Assignment/global role อัตโนมัติ การยืนยัน mapping กับ TU จริงยัง Pending
+ตาราง Module ด้านบนถูกใช้งานจริงครบใน Backend (`auth`, `user`, `club`, `committee`, `recruitment`, `application`, `membership`, `dashboard`, `config`, `common`, `dev`) รวมถึง notification persistence ใน transaction ประกาศผล; ส่วนที่ยังรอคือ external notification delivery และงานยืนยัน mapping กับ TU จริงในสภาพแวดล้อมส่งมอบ
 
 ### 6.2 Allowed dependency direction
 
