@@ -1,5 +1,5 @@
+import { Info } from 'lucide-react';
 import { Button } from './Button';
-import { InfoIcon } from './icons';
 
 interface StickySaveBarProps {
   /** True when the form has changes that are not saved yet. */
@@ -17,7 +17,7 @@ export function StickySaveBar({ dirty, saving = false, onCancel, saveLabel = '�
         <p aria-live="polite" className="flex min-h-5 items-center gap-2 text-sm text-slate-700">
           {dirty && (
             <>
-              <InfoIcon className="size-4 text-amber-700" />
+              <Info aria-hidden="true" strokeWidth={1.75} className="size-4 text-amber-700" />
               มีสิ่งที่ยังไม่ได้บันทึก
             </>
           )}

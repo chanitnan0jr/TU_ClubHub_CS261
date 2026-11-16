@@ -2,15 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CircleAlertIcon,
-  CircleCheckIcon,
-  InfoIcon,
-  PencilIcon,
-  TrashIcon,
-  XIcon,
-} from '../../../components/ui/icons';
+  ArrowDown,
+  ArrowUp,
+  CircleAlert,
+  CircleCheck,
+  Info,
+  Pencil,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { AddQuestionModal } from './AddQuestionModal';
 import { EditQuestionModal } from './EditQuestionModal';
 import { DeleteQuestionModal } from './DeleteQuestionModal';
@@ -184,7 +184,7 @@ export const QuestionManagementPage = ({ roundId }: QuestionManagementPageProps)
           role="status"
           className="fixed left-4 right-4 top-5 z-50 flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800 shadow-lg sm:left-auto sm:right-5 sm:max-w-md"
         >
-          <CircleCheckIcon className="size-5" />
+          <CircleCheck aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -196,7 +196,7 @@ export const QuestionManagementPage = ({ roundId }: QuestionManagementPageProps)
           className="fixed left-4 right-4 top-5 z-[60] flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 py-2 pl-5 pr-2 text-sm font-semibold text-red-800 shadow-lg sm:left-auto sm:right-5 sm:max-w-md"
         >
           <div className="flex items-center gap-2">
-            <CircleAlertIcon className="size-5" />
+            <CircleAlert aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
             <span>{errorMessage}</span>
           </div>
           <Button
@@ -205,13 +205,13 @@ export const QuestionManagementPage = ({ roundId }: QuestionManagementPageProps)
             onClick={() => setErrorMessage(null)}
             aria-label="ปิดข้อความแจ้งข้อผิดพลาด"
           >
-            <XIcon />
+            <X aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
           </Button>
         </div>
       )}
 
       <p className="flex items-start gap-2 rounded-lg bg-slate-100 px-3 py-2.5 text-sm text-slate-700">
-        <InfoIcon className="mt-0.5 size-4 text-slate-600" />
+        <Info aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-4 shrink-0 text-slate-600" />
         <span>
           แก้ไขและลบได้เฉพาะคำถามที่ยังไม่มีคำตอบ ในรอบฉบับร่างที่ยังไม่ปิด การจัดลำดับต้องคงตำแหน่งข้อที่มีคำตอบ และเพิ่มคำถามได้เมื่อยังไม่มีใบสมัคร
         </span>
@@ -262,7 +262,7 @@ export const QuestionManagementPage = ({ roundId }: QuestionManagementPageProps)
                     title="เลื่อนขึ้น"
                     aria-label={`เลื่อนคำถามที่ ${index + 1} ขึ้น`}
                   >
-                    <ArrowUpIcon />
+                    <ArrowUp aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
                   </Button>
                   <Button
                     variant="ghost"
@@ -272,7 +272,7 @@ export const QuestionManagementPage = ({ roundId }: QuestionManagementPageProps)
                     title="เลื่อนลง"
                     aria-label={`เลื่อนคำถามที่ ${index + 1} ลง`}
                   >
-                    <ArrowDownIcon />
+                    <ArrowDown aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
                   </Button>
                   <Button
                     variant="ghost"
@@ -282,7 +282,7 @@ export const QuestionManagementPage = ({ roundId }: QuestionManagementPageProps)
                     title="แก้ไขคำถาม"
                     aria-label={`แก้ไขคำถามที่ ${index + 1}`}
                   >
-                    <PencilIcon />
+                    <Pencil aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
                   </Button>
                   <Button
                     variant="ghost"
@@ -292,7 +292,7 @@ export const QuestionManagementPage = ({ roundId }: QuestionManagementPageProps)
                     title="ลบคำถาม"
                     aria-label={`ลบคำถามที่ ${index + 1}`}
                   >
-                    <TrashIcon />
+                    <Trash2 aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
                   </Button>
                 </div>
               </div>
