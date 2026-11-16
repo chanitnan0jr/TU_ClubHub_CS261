@@ -32,7 +32,7 @@ See the [permission matrix implementation gaps](docs/security/permission-matrix.
 | Database | PostgreSQL; JPA and JDBC repositories; Flyway V1 business schema, V3 session tables, V4 assignment integrity/audit, and V5 club name search trigram index |
 | Authentication | TU Authentication API with server-side Spring Session JDBC and CSRF protection |
 | API | REST JSON under `/api/v1`; Markdown and OpenAPI contracts include implementation status |
-| Local delivery | Compose runs a unified Spring Boot + React application with PostgreSQL 17 by default; an optional split profile serves React with Nginx |
+| Local delivery | Compose runs 3 separate containers by default: Nginx + React (`frontend`), Spring Boot (`backend`), and PostgreSQL 17 (`database`); an optional `unified` profile runs a combined `backend-frontend` container |
 | Delivery verification | GitHub Actions runs Docker Compose and smoke tests in an isolated, temporary runner; no persistent staging server or public URL |
 
 Dependency versions are recorded in [frontend/package.json](frontend/package.json), its lockfile, and [backend/pom.xml](backend/pom.xml). Docker builds use Node 22.14 and Java 21. CI provisions PostgreSQL 18; local Compose uses 17.
@@ -71,7 +71,7 @@ Use Docker Engine/Desktop with Compose V2. Run from the repository root:
    ```sh
    docker compose up --build
    ```
-3. Open `http://localhost:8080` (or the configured `PORT`). The default application image serves the frontend and backend together. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` or `applicant-demo` (password `tu-clubhub-demo`). Check health at `http://localhost:8080/actuator/health`.
+3. Open `http://localhost:8080` (or the configured `FRONTEND_PORT` / `PORT`). Nginx serves the React frontend and proxies `/api/` requests to the `backend` container. In `dev` with `TU_AUTH_MODE=mock`, log in with `student-demo` or `applicant-demo` (password `tu-clubhub-demo`). Check backend health with `docker compose exec backend wget -qO- http://127.0.0.1:8080/actuator/health`.
 4. A fresh database has no clubs. Once the app has started (Flyway creates the tables), load the dev-only demo data in another terminal:
    ```sh
    scripts/seed-dev-data.sh
@@ -136,7 +136,7 @@ Open `http://localhost:5173`; Vite proxies `/api` to `http://localhost:8080`. Us
 | `DB_PASSWORD` | Password for direct JVM startup with the `dev` profile |
 | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Override the JDBC connection when database name, host port, or credentials differ; Compose supplies these to containers |
 | `SPRING_PROFILES_ACTIVE` | Compose defaults to `dev`; production must use real TU authentication |
-| `PORT` | Spring's HTTP port when run outside Compose; the unified Compose service listens on container port 8080 and publishes this host port (default 8080). The optional split frontend uses host port 80 |
+| `PORT` / `FRONTEND_PORT` | `PORT` sets Spring's HTTP port when run outside Compose and acts as the default host port for the Compose `frontend` container (8080); `FRONTEND_PORT` overrides the `frontend` host port |
 | `TU_AUTH_MODE` | `mock` for dev/test, `real` for TU integration |
 | `TU_AUTH_ENDPOINT_URL`, `TU_AUTH_APPLICATION_KEY` | Required in real mode; server environment only |
 | `TU_AUTH_CONNECT_TIMEOUT`, `TU_AUTH_READ_TIMEOUT` | Backend defaults: `3s` and `5s` |

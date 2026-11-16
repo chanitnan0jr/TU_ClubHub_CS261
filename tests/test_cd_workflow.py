@@ -72,7 +72,7 @@ class CdWorkflowTests(unittest.TestCase):
     def test_published_images_are_verified_artifact_with_immutable_digest(self):
         build = job('build-and-verify')
         publish = job('publish')
-        self.assertIn('docker save tu-clubhub-database:verify tu-clubhub-backend-frontend:verify', build)
+        self.assertIn('docker save tu-clubhub-database:verify tu-clubhub-backend:verify tu-clubhub-frontend:verify', build)
         self.assertIn('actions/upload-artifact@v4', build)
         self.assertIn('actions/download-artifact@v4', publish)
         self.assertIn('docker load', publish)
@@ -81,7 +81,8 @@ class CdWorkflowTests(unittest.TestCase):
         self.assertIn('digest:', publish_step)
         self.assertNotIn(':staging', publish_step)
         self.assertIn('steps.publish.outputs.database_image', publish)
-        self.assertIn('steps.publish.outputs.app_image', publish)
+        self.assertIn('steps.publish.outputs.backend_image', publish)
+        self.assertIn('steps.publish.outputs.frontend_image', publish)
 
     def test_untrusted_ref_not_interpolated_into_shell(self):
         lines = WORKFLOW.splitlines()

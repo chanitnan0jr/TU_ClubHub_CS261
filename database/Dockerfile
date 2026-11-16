@@ -1,8 +1,9 @@
 # ==============================================================================
 # TU-ClubHub Database Container Image (PostgreSQL 17 Alpine)
-# Part of the 2-container architecture:
-#   1. backend-frontend (Spring Boot API + embedded React SPA)
-#   2. database         (PostgreSQL 17 relational database)
+# Part of the 3-container architecture:
+#   1. frontend (React SPA + Nginx reverse proxy)
+#   2. backend  (Spring Boot REST API)
+#   3. database (PostgreSQL 17 relational database)
 # ==============================================================================
 FROM postgres:17-alpine
 

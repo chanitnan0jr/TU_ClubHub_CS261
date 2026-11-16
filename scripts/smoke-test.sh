@@ -7,7 +7,8 @@ set -uo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
 DB_CONTAINER="${DB_CONTAINER:-tu-clubhub-db}"
-APP_CONTAINER="${APP_CONTAINER:-tu-clubhub-backend-frontend}"
+APP_CONTAINER="${APP_CONTAINER:-tu-clubhub-backend}"
+FRONTEND_CONTAINER="${FRONTEND_CONTAINER:-tu-clubhub-frontend}"
 SMOKE_USER="${SMOKE_USER-student-demo}"
 SMOKE_PASSWORD="${SMOKE_PASSWORD:-tu-clubhub-demo}"
 jar="$(mktemp)"
@@ -48,7 +49,11 @@ else
 fi
 
 if command -v docker >/dev/null && docker container inspect "$APP_CONTAINER" >/dev/null 2>&1; then
-  check "backend-frontend container is running" "$(docker inspect --format='{{.State.Running}}' "$APP_CONTAINER")" "true"
+  check "backend container is running ($APP_CONTAINER)" "$(docker inspect --format='{{.State.Running}}' "$APP_CONTAINER")" "true"
+fi
+
+if command -v docker >/dev/null && docker container inspect "$FRONTEND_CONTAINER" >/dev/null 2>&1; then
+  check "frontend container is running ($FRONTEND_CONTAINER)" "$(docker inspect --format='{{.State.Running}}' "$FRONTEND_CONTAINER")" "true"
 fi
 
 echo "$failures failure(s)"

@@ -364,9 +364,11 @@ API รายการประกาศต้องกรองสิทธิ�
 flowchart TB
   git["GitHub: commit + passing CI"] --> build["Build images"]
   subgraph runner["Temporary GitHub Actions runner"]
-    build --> app["Spring Boot + React container"]
-    app -->|"Internal JDBC"| db[("Disposable PostgreSQL container")]
-    smoke["Health and smoke tests"] --> app
+    build --> web["Frontend container (Nginx + React)"]
+    web -->|"/api/* reverse proxy"| api["Backend container (Spring Boot)"]
+    api -->|"Internal JDBC"| db[("Disposable PostgreSQL container")]
+    smoke["Health and smoke tests"] --> web
+    smoke --> api
   end
   build -.->|"Eligible main/tag runs"| registry["GHCR: tested images"]
 ```
@@ -375,7 +377,7 @@ flowchart TB
 
 ### 10.1 Build and run
 
-Root Dockerfile สร้าง React dist ด้วย Node → นำเข้า Static Resources ของ Backend → Maven package JAR → Java runtime image รันแอปเดียว Local Compose ใช้ unified app และ database เป็นค่าเริ่มต้น มี split profile สำหรับ Nginx + Backend แยก ดู [Local demo](../deployment/local-demo.md)
+Local Compose ใช้สถาปัตยกรรม 3 คอนเทนเนอร์เป็นค่าเริ่มต้น: [frontend/Dockerfile](../../frontend/Dockerfile) (Node build → Nginx serving React SPA และ proxy `/api/` ไปที่ `backend:8080`), [backend/Dockerfile](../../backend/Dockerfile) (Maven package JAR → Java 21 JRE), และ [database/Dockerfile](../../database/Dockerfile) (PostgreSQL 17 Alpine) โดยยังมี Root Dockerfile และ `unified` profile สำหรับรวมแอปเดียว ดู [Local demo](../deployment/local-demo.md)
 
 Task84 ใช้ Docker Compose และ disposable PostgreSQL บน GitHub runner เพื่อตรวจสุขภาพและ smoke test; run จบแล้ว stack ถูกลบ และไม่มี Staging URL ถาวร ดู [Temporary verification guide](../deployment/staging.md)
 
@@ -385,7 +387,7 @@ Task84 ใช้ Docker Compose และ disposable PostgreSQL บน GitHub ru
 |---|---|---|
 | Development | Vite proxy ไป Spring Boot + PostgreSQL | Mock TU; migrations สร้าง Schema แต่ไม่มี Seed ชมรม/กรรมการ |
 | CI/Test | Build/tests ใช้ H2 และ isolated PostgreSQL สำหรับ seedtest/recruitment integration | Mock TU API เท่านั้น |
-| Local demo | Compose: backend-frontend + database | ระบุชัดว่า Mock หรือ Real TU API |
+| Local demo | Compose: frontend (Nginx) + backend + database (ค่าเริ่มต้น 3 คอนเทนเนอร์) | ระบุชัดว่า Mock หรือ Real TU API |
 | Temporary stack verification | Docker Compose ใน GitHub-hosted runner; ลบ stack และ volume หลัง job | ใช้ mock auth และข้อมูลทดสอบ ไม่ใช่ Staging ถาวร |
 
 ไม่มี Credential จริงใน Git และ Vite variables Session tables จัดการผ่าน Flyway ด้วย Schema ที่ตรงกับ Spring Session JDBC รุ่นที่ใช้ ปิด Auto Schema Initialization อีกทางเพื่อไม่ให้มีสองระบบสร้างตารางแข่งกัน [Spring Session JDBC](https://docs.spring.io/spring-session/reference/configuration/jdbc.html)

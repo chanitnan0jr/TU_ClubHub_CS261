@@ -51,22 +51,31 @@ jobs:
           tags: tu-clubhub-database:verify
           cache-from: type=gha,scope=database
           cache-to: type=gha,mode=max,scope=database
-      - name: Build application image for verification
+      - name: Build backend image for verification
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./backend
           load: true
-          tags: tu-clubhub-backend-frontend:verify
-          cache-from: type=gha,scope=backend-frontend
-          cache-to: type=gha,mode=max,scope=backend-frontend
+          tags: tu-clubhub-backend:verify
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - name: Build frontend image for verification
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          load: true
+          tags: tu-clubhub-frontend:verify
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
       - name: Verify isolated Compose stack
         env:
           DATABASE_IMAGE: tu-clubhub-database:verify
-          BACKEND_FRONTEND_IMAGE: tu-clubhub-backend-frontend:verify
+          BACKEND_IMAGE: tu-clubhub-backend:verify
+          FRONTEND_IMAGE: tu-clubhub-frontend:verify
         run: |
           cp .example.env .env
           docker compose config --services
-          docker compose up -d --no-build --wait --wait-timeout 240 database backend-frontend
+          docker compose up -d --no-build --wait --wait-timeout 240 database backend frontend
           ./scripts/seed-dev-data.sh
           ./scripts/smoke-test.sh
       - name: Capture verification diagnostics
@@ -77,7 +86,7 @@ jobs:
         run: docker compose down -v --remove-orphans
       - name: Save verified images for release
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-        run: docker save tu-clubhub-database:verify tu-clubhub-backend-frontend:verify -o "$RUNNER_TEMP/verified-images.tar"
+        run: docker save tu-clubhub-database:verify tu-clubhub-backend:verify tu-clubhub-frontend:verify -o "$RUNNER_TEMP/verified-images.tar"
       - name: Upload verified images for release
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/upload-artifact@v4
@@ -110,7 +119,8 @@ jobs:
       packages: write
     outputs:
       database_image: ${{ steps.publish.outputs.database_image }}
-      app_image: ${{ steps.publish.outputs.app_image }}
+      backend_image: ${{ steps.publish.outputs.backend_image }}
+      frontend_image: ${{ steps.publish.outputs.frontend_image }}
     steps:
       - name: Download verified images
         uses: actions/download-artifact@v4
@@ -136,7 +146,7 @@ jobs:
           set -euo pipefail
           registry_owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
           [[ "$registry_owner" =~ ^[a-z0-9-]+$ && "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]]
-          for component in database backend-frontend; do
+          for component in database backend frontend; do
             image="ghcr.io/$registry_owner/tu-clubhub-$component"
             docker tag "tu-clubhub-$component:verify" "$image:sha-$COMMIT_SHA"
             log=$(mktemp)
@@ -144,19 +154,20 @@ jobs:
             digest=$(sed -nE 's/.*digest: (sha256:[0-9a-f]{64}).*/\1/p' "$log" | tail -n 1)
             rm -f "$log"
             [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
-            if [[ "$component" == database ]]; then key=database_image; else key=app_image; fi
-            printf '%s=%s@%s\n' "$key" "$image" "$digest" >> "$GITHUB_OUTPUT"
+            printf '%s_image=%s@%s\n' "$component" "$image" "$digest" >> "$GITHUB_OUTPUT"
           done
 
       - name: Summarize published image digests
         env:
           COMMIT_SHA: ${{ github.sha }}
           DATABASE_IMAGE: ${{ steps.publish.outputs.database_image }}
-          APP_IMAGE: ${{ steps.publish.outputs.app_image }}
+          BACKEND_IMAGE: ${{ steps.publish.outputs.backend_image }}
+          FRONTEND_IMAGE: ${{ steps.publish.outputs.frontend_image }}
         run: |
           {
             echo "## Verified images published"
             echo "- Commit: $COMMIT_SHA"
             echo "- Database: $DATABASE_IMAGE"
-            echo "- Application: $APP_IMAGE"
+            echo "- Backend: $BACKEND_IMAGE"
+            echo "- Frontend: $FRONTEND_IMAGE"
           } >> "$GITHUB_STEP_SUMMARY"

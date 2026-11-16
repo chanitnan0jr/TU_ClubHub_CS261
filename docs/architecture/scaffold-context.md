@@ -48,8 +48,8 @@ TU_ClubHub_CS261/
 │       └── V3__create_spring_session_tables.sql
 ├── docs/                             # Contracts, architecture, stories, diagrams, reports
 ├── .github/workflows/                # App CI และ OpenAPI contract lint
-├── Dockerfile                        # React build → Spring Boot JAR → Java runtime
-└── compose.yaml                      # app + db; มี split profile เพิ่ม
+├── Dockerfile                        # (optional unified profile) React build → Spring Boot JAR → Java runtime
+└── compose.yaml                      # frontend + backend + database (ค่าเริ่มต้น 3 คอนเทนเนอร์); มี unified profile เพิ่ม
 ```
 
 Backend มี handler ส่งใบสมัคร แต่ยังไม่มี handlers สำหรับอ่าน/พิจารณาใบสมัคร ประกาศผล ตอบรับ/สละสิทธิ์ notification หรือ dashboard การมีตารางในฐานข้อมูลไม่ได้แปลว่ามี API ของตารางนั้นแล้ว Frontend มี Router (`src/app/AppRoutes.tsx`) และ HTTP client กลาง (`src/lib/api.ts`) แล้ว
