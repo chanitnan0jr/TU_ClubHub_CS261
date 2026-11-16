@@ -21,7 +21,7 @@ Object.defineProperty(globalThis, 'navigator', { configurable: true, value: dom.
 const { cleanup, render, screen, waitFor, fireEvent } = await import('@testing-library/react')
 const { MemoryRouter, useLocation } = await import('react-router')
 const { AuthProvider } = await import('../src/features/auth/AuthContext.tsx')
-const { default: DevRoleSwitcherPill } = await import('../src/features/auth/DevRoleSwitcherPill.tsx')
+const { default: DevRoleSwitcherPill } = await import('../src/features/dev/DevRoleSwitcherPill.tsx')
 
 const DEV_ACCOUNTS = [
   { role: 'USER', username: 'applicant-demo', displayName: 'Demo Applicant', label: 'นักศึกษาทั่วไป' },
@@ -42,9 +42,9 @@ function renderPill(initialEntry = '/login') {
       { initialEntries: [initialEntry] },
       createElement(
         AuthProvider,
-        { devSwitcherProbe: true },
+        null,
         createElement(LocationProbe),
-        createElement(DevRoleSwitcherPill),
+        createElement(DevRoleSwitcherPill, { probeEnabled: true }),
       ),
     ),
   )
