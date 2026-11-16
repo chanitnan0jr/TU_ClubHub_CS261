@@ -96,15 +96,18 @@ function ApplicationDetail({ clubId, applicationId }: { clubId: string; applicat
 
   const assignment = user?.activeCommitteeAssignments?.find((item) => item.clubId === clubId);
   const isPresident = assignment?.permissionRole === 'PRESIDENT';
+  const loadedApplicationId = data?.id;
+  const loadedRoundId = data?.roundId;
+  const loadedStatus = data?.status;
 
   useEffect(() => {
-    if (!data) return;
+    if (!loadedApplicationId || !loadedRoundId) return;
     let cancelled = false;
 
     const loadDecisionContext = async () => {
       const [decisionResult, roundResult] = await Promise.allSettled([
-        fetchApplicationDecisionSnapshot(data.roundId, data.id),
-        getRound(clubId, data.roundId),
+        fetchApplicationDecisionSnapshot(loadedRoundId, loadedApplicationId),
+        getRound(clubId, loadedRoundId),
       ]);
       if (cancelled) return;
 
@@ -115,12 +118,10 @@ function ApplicationDetail({ clubId, applicationId }: { clubId: string; applicat
           setDecision(evalData.status);
         }
         setResultMessage(evalData.resultMessage ?? '');
-        const myReview = evalData.reviews.find((review) => review.reviewerId === user?.id) ?? evalData.reviews[0];
-        if (myReview?.internalComment) {
-          setInternalNote(myReview.internalComment);
-        }
-      } else if (data.status === 'ACCEPTED' || data.status === 'REJECTED') {
-        setDecision(data.status);
+        const myReview = evalData.reviews.find((review) => review.reviewerId === user?.id);
+        setInternalNote(myReview?.internalComment ?? '');
+      } else if (loadedStatus === 'ACCEPTED' || loadedStatus === 'REJECTED') {
+        setDecision(loadedStatus);
       }
 
       if (roundResult.status === 'fulfilled') {
@@ -132,7 +133,7 @@ function ApplicationDetail({ clubId, applicationId }: { clubId: string; applicat
     return () => {
       cancelled = true;
     };
-  }, [clubId, data, user?.id]);
+  }, [clubId, loadedApplicationId, loadedRoundId, loadedStatus, user?.id]);
 
   const currentStatus = snapshot?.status ?? data?.status ?? 'SUBMITTED';
   const isResultsPublished = Boolean(round?.resultsPublishedAt || publishSuccessMessage);
@@ -162,7 +163,6 @@ function ApplicationDetail({ clubId, applicationId }: { clubId: string; applicat
       });
       setSnapshot(updated);
       setSaveSuccess('บันทึกผลการประเมินและหมายเหตุเรียบร้อยแล้ว (สถานะฉบับร่าง จนกว่าจะกดประกาศผล)');
-      reload();
     } catch (err) {
       setSaveError(
         describeApiError(

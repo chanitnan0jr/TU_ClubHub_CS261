@@ -99,10 +99,16 @@ function ApplicationsList({ clubId }: { clubId: string }) {
   };
 
   const draftEntries = Object.entries(draftDecisions);
-  const acceptedCount = data?.items.filter((item) => item.status === 'ACCEPTED').length ?? 0;
-  const rejectedCount = data?.items.filter((item) => item.status === 'REJECTED').length ?? 0;
-  const undecidedCount =
-    data?.items.filter((item) => item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW').length ?? 0;
+  const exactItems = data && !status && data.page.totalPages <= 1 ? data.items : null;
+  const acceptedCount = exactItems
+    ? exactItems.filter((item) => item.status === 'ACCEPTED').length
+    : undefined;
+  const rejectedCount = exactItems
+    ? exactItems.filter((item) => item.status === 'REJECTED').length
+    : undefined;
+  const undecidedCount = exactItems
+    ? exactItems.filter((item) => item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW').length
+    : undefined;
 
   const handleSaveBatchDecisions = async () => {
     if (!selectedRoundId || draftEntries.length === 0) return;
@@ -113,16 +119,20 @@ function ApplicationsList({ clubId }: { clubId: string }) {
       const snapshots = await Promise.all(
         draftEntries.map(([appId]) => fetchApplicationDecisionSnapshot(selectedRoundId, appId)),
       );
-      const versionMap = new Map(snapshots.map((item) => [item.id, item.version]));
+      const snapshotMap = new Map(snapshots.map((item) => [item.id, item]));
 
       await recordBatchApplicationDecisions(
         selectedRoundId,
-        draftEntries.map(([applicationId, decision]) => ({
-          applicationId,
-          decision,
-          internalNote: batchNote.trim() ? batchNote.trim() : null,
-          version: versionMap.get(applicationId) ?? 0,
-        })),
+        draftEntries.map(([applicationId, decision]) => {
+          const snapshotItem = snapshotMap.get(applicationId);
+          return {
+            applicationId,
+            decision,
+            resultMessage: snapshotItem?.resultMessage ?? null,
+            internalNote: batchNote.trim() ? batchNote.trim() : null,
+            version: snapshotItem?.version ?? 0,
+          };
+        }),
       );
 
       setDraftDecisions({});

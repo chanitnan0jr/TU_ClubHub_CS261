@@ -244,6 +244,70 @@ test('evaluation form saves decision with notes and shows draft/published status
   }
 })
 
+test('committee list batch quick-evaluation preserves existing resultMessage and snapshot version', async () => {
+  let batchRequestBody: unknown = null
+
+  const stub = renderApp((request) => {
+    if (request.url.startsWith('/api/v1/clubs/20001/rounds?')) {
+      return json({ items: [draftRound], page: 0, size: 100, totalElements: 1, totalPages: 1 })
+    }
+    if (request.url.startsWith('/api/v1/clubs/20001/applications?')) {
+      return json(page([application]))
+    }
+    if (request.url === '/api/v1/rounds/70001/applications/90001/decision' && request.method === 'GET') {
+      return json({
+        ...evaluationSnapshot,
+        resultMessage: 'ข้อความแจ้งผู้สมัครเดิม',
+        version: 3,
+      })
+    }
+    if (request.url === '/api/v1/rounds/70001/application-decisions' && request.method === 'PUT') {
+      batchRequestBody = request.body ?? null
+      return json({
+        items: [
+          {
+            ...evaluationSnapshot,
+            status: 'ACCEPTED',
+            resultMessage: 'ข้อความแจ้งผู้สมัครเดิม',
+            version: 4,
+          },
+        ],
+      })
+    }
+    return json({ message: 'not found' }, 404)
+  })
+
+  try {
+    await screen.findByText('ผู้สมัครทดสอบ')
+    fireEvent.change(screen.getByLabelText('รอบรับสมัคร'), { target: { value: '70001' } })
+
+    const quickSelect = await screen.findByLabelText('เลือกผลการคัดเลือกของ ผู้สมัครทดสอบ')
+    fireEvent.change(quickSelect, { target: { value: 'ACCEPTED' } })
+
+    fireEvent.change(screen.getByLabelText('หมายเหตุภายในกรรมการสำหรับรายการที่เลือก (ถ้ามี)'), {
+      target: { value: 'ผ่านเกณฑ์สัมภาษณ์' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'บันทึกผลที่เลือก' }))
+    await screen.findByText('บันทึกผลการคัดเลือกฉบับร่างจำนวน 1 รายการเรียบร้อยแล้ว')
+
+    assert.deepEqual(batchRequestBody, {
+      decisions: [
+        {
+          applicationId: '90001',
+          decision: 'ACCEPTED',
+          resultMessage: 'ข้อความแจ้งผู้สมัครเดิม',
+          internalNote: 'ผ่านเกณฑ์สัมภาษณ์',
+          version: 3,
+        },
+      ],
+    })
+  } finally {
+    cleanup()
+    stub.restore()
+  }
+})
+
 test('empty and failed application lists have clear Thai states and retry controls', async () => {
   const stub = renderApp((request) => {
     if (request.url.startsWith('/api/v1/clubs/20001/rounds?')) {
