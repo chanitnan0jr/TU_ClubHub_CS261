@@ -64,11 +64,11 @@ test('search controls update the selected criteria and can be cleared', async ()
     const recruitment = screen.getByRole('checkbox', { name: 'เปิดรับสมัครอยู่' })
 
     fireEvent.change(search, { target: { value: 'ดนตรี' } })
-    fireEvent.change(category, { target: { value: 'ศิลปะและวัฒนธรรม' } })
+    fireEvent.change(category, { target: { value: '30003' } })
     fireEvent.click(recruitment)
 
     assert.equal((search as HTMLInputElement).value, 'ดนตรี')
-    assert.equal((category as HTMLSelectElement).value, 'ศิลปะและวัฒนธรรม')
+    assert.equal((category as HTMLSelectElement).value, '30003')
     assert.equal((recruitment as HTMLInputElement).checked, true)
     assert.ok(await screen.findByRole('heading', { name: 'ไม่พบชมรม' }))
     assert.equal(screen.queryByRole('group', { name: 'ตัวกรองที่เลือก' }), null)
@@ -127,6 +127,25 @@ test('renders clubs returned by the public search endpoint and updates filtered 
     cleanup()
     stub.restore()
   }
+})
+
+test('shows server search results even when the query matches neither name nor description', async () => {
+  const stub = stubFetch((request) => {
+    if (request.url === '/api/v1/public/club-categories') return json(categories)
+    if (request.url.startsWith('/api/v1/public/clubs?')) return json(page([club]))
+    return problem(401, 'AUTHENTICATION_REQUIRED', 'No active session')
+  })
+  try {
+    render(createElement(MemoryRouter, null,
+      createElement(AuthProvider, null, createElement(ClubSearchPage))))
+    await screen.findByRole('link', { name: /ชมรมดนตรีสากล/ })
+    fireEvent.change(screen.getByRole('searchbox', { name: 'ค้นหาชมรม' }), {
+      target: { value: 'คำที่เซิร์ฟเวอร์จับคู่' },
+    })
+    await waitFor(() => assert.ok(stub.requests.some((request) =>
+      new URL(request.url, 'http://localhost').searchParams.get('q') === 'คำที่เซิร์ฟเวอร์จับคู่')))
+    assert.ok(await screen.findByRole('link', { name: /ชมรมดนตรีสากล/ }))
+  } finally { cleanup(); stub.restore() }
 })
 
 test('renders matching club cards and filters them using the selected controls', async () => {

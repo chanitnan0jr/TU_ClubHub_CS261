@@ -2,6 +2,7 @@ export type Semester = 'SEMESTER_1' | 'SEMESTER_2' | 'SUMMER';
 
 export interface ScreeningQuestionInput {
   id?: string;
+  maxLength?: number;
   questionText: string;
   isRequired: boolean;
   orderIndex: number;

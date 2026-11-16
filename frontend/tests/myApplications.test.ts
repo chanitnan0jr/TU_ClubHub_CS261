@@ -197,6 +197,7 @@ test('my applications list paginates using ?page= query parameter', async () => 
 
   try {
     await screen.findByRole('article', { name: 'ชมรมทดสอบ 90002' })
+    assert.ok(screen.getByText('จำนวนตามสถานะและตัวกรองแสดงเฉพาะใบสมัครในหน้านี้'))
     const nav = screen.getByRole('navigation', { name: 'เปลี่ยนหน้ารายการใบสมัคร' })
     assert.ok(within(nav).getByText('หน้า 2 จาก 2'))
     assert.equal(within(nav).getByRole('button', { name: 'ถัดไป' }).hasAttribute('disabled'), true)
@@ -209,6 +210,16 @@ test('my applications list paginates using ?page= query parameter', async () => 
     cleanup()
     stub.restore()
   }
+})
+
+test('a status filter reports an empty current page without implying other pages are empty', async () => {
+  const stub = renderApp(() => json(pageOf([summaryItem('90001')], 0, 2, 21)))
+  try {
+    await screen.findByRole('article', { name: 'ชมรมทดสอบ 90001' })
+    fireEvent.click(within(screen.getByRole('group', { name: 'กรองตามสถานะใบสมัคร' })).getByRole('button', { name: 'ไม่ผ่านการคัดเลือก' }))
+    assert.ok(screen.getByRole('heading', { name: 'ไม่พบใบสมัครในสถานะที่เลือกในหน้านี้' }))
+    assert.ok(screen.getByText('ลองเปลี่ยนตัวกรองหรือไปหน้าอื่นเพื่อดูใบสมัครเพิ่มเติม'))
+  } finally { cleanup(); stub.restore() }
 })
 
 test('my application detail page renders status history timeline, answers, and external links', async () => {
