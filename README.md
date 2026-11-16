@@ -100,6 +100,8 @@ scripts/dev-role.sh committee applicant-demo 1 PRESIDENT  # committee member of 
 
 After `admin` or `user`, log out and in again: the session keeps the role it had at login. Committee roles apply on the next page load. Like the seed script, it uses `DB_CONTAINER`, `POSTGRES_USER` and `POSTGRES_DB` when set.
 
+For quick UI switching in local development, you can also set `DEV=true` in `.env` (requires `TU_AUTH_MODE=mock` and `SPRING_PROFILES_ACTIVE=dev`; forbidden in `prod`). This enables the self-contained dev role switcher (`frontend/src/features/dev/` + backend `com.tu.clubhub.dev`, `/api/v1/auth/dev/accounts` and `/api/v1/auth/dev/switch`) and shows a floating bottom-right pill to switch among `USER`, `ADMIN`, `COMMITTEE`, and `PRESIDENT` with a real server session. To remove this feature later, delete `frontend/src/features/dev/`, `frontend/tests/devRoleSwitcher.test.ts`, the `<DevRoleSwitcherPill />` usage in `frontend/src/App.tsx`, `backend/src/{main,test}/java/com/tu/clubhub/dev/`, and the two `/api/v1/auth/dev/*` lines in `PublicRoutes.java`.
+
 ### Standalone Local Development
 
 Use Java 21 and Node 22.14+ on the Node 22 line. Start PostgreSQL from the root:
@@ -138,6 +140,7 @@ Open `http://localhost:5173`; Vite proxies `/api` to `http://localhost:8080`. Us
 | `SPRING_PROFILES_ACTIVE` | Compose defaults to `dev`; production must use real TU authentication |
 | `PORT` / `FRONTEND_PORT` | `PORT` sets Spring's HTTP port when run outside Compose and acts as the default host port for the Compose `frontend` container (8080); `FRONTEND_PORT` overrides the `frontend` host port |
 | `TU_AUTH_MODE` | `mock` for dev/test, `real` for TU integration |
+| `DEV` | `false` by default; `true` enables the local dev mock role switcher (`/api/v1/auth/dev/*` and floating UI pill) only when `TU_AUTH_MODE=mock` and `dev`/`test` profile is active (forbidden in `prod`) |
 | `TU_AUTH_ENDPOINT_URL`, `TU_AUTH_APPLICATION_KEY` | Required in real mode; server environment only |
 | `TU_AUTH_CONNECT_TIMEOUT`, `TU_AUTH_READ_TIMEOUT` | Backend defaults: `3s` and `5s` |
 | `SPRING_SESSION_TIMEOUT` | Idle session timeout; default `30m`. Absolute expiry is fixed at 8 hours in code |

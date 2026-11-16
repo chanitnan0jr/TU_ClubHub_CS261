@@ -23,6 +23,7 @@ This guide runs the current TU-ClubHub application and PostgreSQL locally using 
    - `PORT=8080`: Default host port for the `frontend` Nginx container (`FRONTEND_PORT` overrides it if set).
    - `SPRING_PROFILES_ACTIVE=dev`: Enables Flyway schema migration and local development defaults.
    - `TU_AUTH_MODE=mock`: Uses the internal mock TU Authentication provider (no external university API credentials required).
+   - `DEV=false`: Keeps the floating Dev Role Switcher disabled by default. Set `DEV=true` (requires `SPRING_PROFILES_ACTIVE=dev` and `TU_AUTH_MODE=mock`) to enable the `/api/v1/auth/dev/*` endpoints and floating role switcher pill (`USER`, `ADMIN`, `COMMITTEE`, `PRESIDENT`) in the UI.
    - `POSTGRES_DB=tu_clubhub`
    - `POSTGRES_USER=postgres`
    - `POSTGRES_PASSWORD=tu_clubhub_dev_secret`
@@ -101,9 +102,9 @@ After seeding, all of this works in the browser (`dev`, `TU_AUTH_MODE=mock`, pas
 1. Log in as `student-demo`. The home page lists **ชมรมที่ฉันดูแล**: ชมรมเขียนโปรแกรม (`/clubs/3` on a fresh seed). Open it to reach the committee overview at `/clubs/3/manage`.
 2. **โปรไฟล์ชมรม** (`/clubs/3/edit`): change the description, the category, the tags and the image URLs (HTTPS, previewed live), then save. **ดูหน้าโปรไฟล์สาธารณะ** shows the change straight away.
 3. **จัดการรอบรับสมัคร** (`/clubs/3/rounds`) → **สร้างรอบรับสมัคร**: opening time in the past, closing time in the future, a confirmation deadline after closing, and the questions. Save it as a draft, use **แก้ไข** to change it, then **เผยแพร่**.
-4. Open **รอบที่เปิดรับ** (`/open-calls`): the round is listed with its club, details and deadline. `/clubs/3` shows the same round with its details and results date.
-5. Log out, log in as `applicant-demo`, click **สมัคร** on the board, fill in the form, review and submit. The result page shows the application number and `SUBMITTED`.
-6. Log back in as `student-demo`, open `/clubs/3/rounds` and click **ปิดรับสมัคร** on the round. It disappears from `/open-calls`, and opening its application form now answers `ROUND_CLOSED`.
+4. Open **สำรวจชมรม** (`/clubs`) and select **เปิดรับสมัครอยู่** to find clubs with open rounds. `/clubs/3` shows the club's round details and results date. The old `/open-calls` URL redirects to the club directory.
+5. Log out, log in as `applicant-demo`, click **สมัครเข้าชมรม** on the club card, fill in the form, review and submit. The result page shows the application number and `SUBMITTED`.
+6. Log back in as `student-demo`, open `/clubs/3/rounds` and click **ปิดรับสมัคร** on the round. The card no longer offers an application link for that round, and opening its application form now answers `ROUND_CLOSED`.
 
 `student-demo` cannot apply to its own club (it is already a member). The application history page (US-04) and application review (US-09) are Sprint 2 work.
 

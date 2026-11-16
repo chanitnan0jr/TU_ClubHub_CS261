@@ -733,7 +733,7 @@ and does not record formal PO/reviewer approval.
 | Route Path | ชื่อหน้าจอ (Screen) | สิทธิ์การเข้าถึง (Route Guard) | API ที่เรียกใช้ | งาน Frontend ที่รับผิดชอบ |
 |---|---|---|---|---|
 | `/` หรือ `/clubs` | หน้าค้นหาและกรองชมรมสาธารณะ (`ClubSearchPage`) | Public (ไม่ต้อง Login) | `GET /api/v1/public/clubs`<br/>`GET /api/v1/public/club-categories`<br/>`GET /api/v1/public/interest-tags` | `Task63` (`US-01`) |
-| `/open-calls` | กระดานรอบที่เปิดรับสมัครของทุกชมรม (Open Call Board) | Public (ไม่ต้อง Login) | `GET /api/v1/public/recruitment-rounds` | `US-07` AC-03 |
+| `/open-calls` | ส่งต่อไป `/clubs`; หน้ากระดานเดิมถูกนำออก | Public (ไม่ต้อง Login) | — | ค้นหาชมรมที่เปิดรับผ่านตัวกรองในหน้ารายชื่อชมรม |
 | `/clubs/:clubId` | หน้ารายละเอียดชมรมและรอบรับสมัคร (`ClubDetailPage`) | Public (แสดงปุ่ม "แก้ไขข้อมูลชมรม" เฉพาะเมื่อ `canEditProfile === true`) | `GET /api/v1/public/clubs/{id}`<br/>`GET /api/v1/public/clubs/{id}/recruitment-rounds` | `US-02`, `Task81` |
 | `/clubs/:clubId/edit` | หน้าแก้ไขโปรไฟล์ชมรม (`ClubEditPage`) | Protected: ต้อง Login และมีสิทธิ์กรรมการที่มีผลของชมรมนั้น (`canEditProfile === true` / `activeCommitteeAssignments`) | `GET /api/v1/clubs/{clubId}`<br/>`PUT /api/v1/clubs/{clubId}` | `US-06`, `Task81` |
 | `/clubs/:clubId/manage` | ภาพรวมชมรมสำหรับกรรมการ (`ClubManageRoutePage`) | Protected: กรรมการชมรมนั้น (`activeCommitteeAssignments`) | `GET /api/v1/clubs/{clubId}/rounds` | `US-07` (Sprint 1 UI) |

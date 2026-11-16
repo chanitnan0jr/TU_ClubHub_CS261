@@ -3,8 +3,8 @@
 | Property | Value |
 |---|---|
 | Version | `v1` |
-| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.4.0), `rounds.openapi.yaml` (v1.2.0), and `task75-sprint2-design.md` |
-| Last updated | 2026-11-06 |
+| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.5.0), `rounds.openapi.yaml` (v1.2.0), and `task75-sprint2-design.md` |
+| Last updated | 2026-11-17 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
@@ -21,7 +21,7 @@ Initial source review on 2026-10-19; application POST status updated on 2026-10-
 
 | API | Backend status | Frontend status |
 |---|---|---|
-| Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout; `me` returns `studentStatus` and `activeCommitteeAssignments` read on every call | Login/account/logout connected; committee pages do not read assignments yet |
+| Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` (+ optional dev endpoints `dev/accounts`, `dev/switch`) | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout; `me` returns `studentStatus` and `activeCommitteeAssignments` read on every call; `/api/v1/auth/dev/*` (in `com.tu.clubhub.dev`) is gated behind `clubhub.dev=true`, `tu.auth.mode=mock`, and `dev`/`test` profile (`404` otherwise) | Login/account/logout connected; optional floating switcher (`frontend/src/features/dev/DevRoleSwitcherPill.tsx`) handles `/api/v1/auth/dev/*` independently of `AuthContext` |
 | `GET /api/v1/public/clubs` | Task62 public directory: active clubs, name/category/tag/recruitment filters and pagination | Club search page calls the public directory API |
 | `GET /api/v1/public/clubs/{id}` and `.../{id}/recruitment-rounds` | Implemented; active clubs and currently open rounds from DB | Club detail still uses mock data and is not mounted |
 | `GET /api/v1/public/recruitment-rounds` (Open Call Board) | Implemented; open rounds across all active clubs | `/open-calls` page pending |
@@ -199,6 +199,13 @@ Returns the authenticated account as it is stored now. `role`, `studentStatus`, 
 ### `POST /api/v1/auth/logout`
 
 Invalidates the current server-side session and clears the session cookie. Requires the current CSRF token. Returns `204 No Content` with `Cache-Control: no-store` after successful invalidation; the response has no JSON body.
+
+### Local-dev mock role switcher (optional, gated)
+
+Implemented in the isolated `com.tu.clubhub.dev` package so it can be removed without modifying core `auth`. Both endpoints are enabled **only** when `clubhub.dev=true` (`DEV=true`), `tu.auth.mode=mock`, and a `dev` or `test` Spring profile is active (enabling `clubhub.dev=true` with `prod` prevents startup). Otherwise both return `404 RESOURCE_NOT_FOUND` with `Cache-Control: no-store`.
+
+- **`GET /api/v1/auth/dev/accounts`**: Public when enabled; returns `{ "accounts": [{ role, username, displayName, label }] }` for the four fixed mock accounts (`USER`, `ADMIN`, `COMMITTEE`, `PRESIDENT`) with `Cache-Control: no-store`.
+- **`POST /api/v1/auth/dev/switch`**: Public bootstrap route requiring a valid `X-CSRF-TOKEN` header and `{ "role": "USER" | "ADMIN" | "COMMITTEE" | "PRESIDENT" }` JSON body. Auto-provisions the mock account (and default demo club/assignment when switching to `COMMITTEE` or `PRESIDENT`), rotates the `SESSION` cookie, and returns `CurrentUserResponse` (`{ "user": ... }`) with `Cache-Control: no-store`. See [`openapi.yaml`](openapi.yaml) for exact schemas (`DevAccountsResponse`, `DevSwitchRequest`, `DevMockRole`).
 
 ### Authentication errors
 

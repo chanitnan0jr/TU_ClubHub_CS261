@@ -32,6 +32,7 @@ TU_ClubHub_CS261/
 │   ├── src/ClubProfileForm.tsx        # ฟอร์มและหน้า preview แยก
 │   ├── src/features/
 │   │   ├── auth/                     # Login / AuthContext
+│   │   ├── dev/                      # Optional local-dev role switcher UI (DevRoleSwitcherPill)
 │   │   ├── clubs/                    # Components, hooks และ API client ข้อมูลชมรม
 │   │   ├── recruitment/              # ฟอร์มรอบและคำถาม
 │   │   └── applications/             # ฟอร์มใบสมัครต้นแบบ
@@ -39,6 +40,7 @@ TU_ClubHub_CS261/
 ├── backend/
 │   ├── src/main/java/com/tu/clubhub/
 │   │   ├── auth/, user/              # TU adapters, session, บัญชีผู้ใช้
+│   │   ├── dev/                      # Optional local-dev role switcher (แยกเฉพาะ dev, ลบออกได้อิสระ)
 │   │   ├── club/, recruitment/       # REST APIs, services, repositories
 │   │   ├── application/              # Submission controller/service/repository
 │   │   ├── committee/, membership/   # สิทธิ์กรรมการและข้อมูลสมาชิกภาพ
