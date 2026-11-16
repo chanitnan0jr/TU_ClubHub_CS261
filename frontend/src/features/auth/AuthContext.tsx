@@ -24,24 +24,49 @@ export type User = {
   activeCommitteeAssignments?: ActiveCommitteeAssignment[];
 };
 
+export type DevMockRole = "USER" | "ADMIN" | "COMMITTEE" | "PRESIDENT";
+
+export type DevAccount = {
+  role: DevMockRole;
+  username: string;
+  displayName: string;
+  label: string;
+};
+
 type AuthContextType = {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   notice: string | null;
   loginSuccess: boolean;
+  devAccounts: DevAccount[];
   dismissLoginSuccess: () => void;
   login: (username: string, password: string) => Promise<void>;
+  switchDevAccount: (role: DevMockRole) => Promise<User>;
   logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const isMockAuth = import.meta.env?.VITE_MOCK_AUTH === "true" || import.meta.env?.VITE_ENABLE_MOCK_AUTH === "true";
+const defaultDevProbe = import.meta.env?.MODE !== undefined;
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+function assertValidUser(user: User | undefined | null): User {
+  if (!user || typeof user.id !== "string" || !user.id.trim() || typeof user.role !== "string" || !user.role.trim()) {
+    throw new Error("Authenticated session could not be loaded");
+  }
+  return user;
+}
+
+export const AuthProvider = ({
+  children,
+  devSwitcherProbe = defaultDevProbe,
+}: {
+  children: ReactNode;
+  devSwitcherProbe?: boolean;
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+  const [devAccounts, setDevAccounts] = useState<DevAccount[]>([]);
   // An explicit login event only; never persisted or set by session restoration.
   const [loginSuccess, setLoginSuccess] = useState(false);
   const authVersion = useRef(0);
@@ -60,11 +85,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const version = authVersion.current;
     const checkSession = async () => {
       try {
-        if (isMockAuth) {
-          const saved = sessionStorage.getItem("tu_test_user");
-          if (saved && !cancelled) setUser(JSON.parse(saved));
-          return;
-        }
         const data = await apiRequest<{ user: User }>("/api/v1/auth/me", { notifyAuthFailure: false });
         if (!cancelled && version === authVersion.current) { resetAuthFailureNotification(); setUser(data.user); }
       } catch { if (!cancelled && version === authVersion.current) setUser(null); }
@@ -74,34 +94,64 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!devSwitcherProbe) return;
+    let cancelled = false;
+    const loadDevAccounts = async () => {
+      try {
+        const res = await fetch("/api/v1/auth/dev/accounts", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { accounts?: DevAccount[] };
+        if (!cancelled && Array.isArray(data.accounts)) {
+          setDevAccounts(data.accounts);
+        }
+      } catch {
+        // Keep the dev switcher hidden when the endpoint is unavailable.
+      }
+    };
+    void loadDevAccounts();
+    return () => { cancelled = true; };
+  }, [devSwitcherProbe]);
+
   const login = async (username: string, password: string) => {
     const version = ++authVersion.current;
     setNotice(null);
     setLoginSuccess(false);
     try {
-      if (isMockAuth) {
-        const mockUser: User = { id: "mock-id-1", role: "STUDENT" };
-        sessionStorage.setItem("tu_test_user", JSON.stringify(mockUser));
-        resetAuthFailureNotification();
-        setUser(mockUser);
-        setLoginSuccess(true);
-        return;
-      }
       await apiRequest("/api/v1/auth/login", { method: "POST", body: { username, password } });
       if (version !== authVersion.current) throw new Error("Login superseded");
       // Subsequent writes fetch the fresh token from the current session through apiRequest.
       const data = await apiRequest<{ user: User }>("/api/v1/auth/me");
-      if (version !== authVersion.current || !data?.user
-          || typeof data.user.id !== "string" || !data.user.id.trim()
-          || typeof data.user.role !== "string" || !data.user.role.trim()) {
-        throw new Error("Authenticated session could not be loaded");
-      }
+      if (version !== authVersion.current) throw new Error("Login superseded");
+      const validUser = assertValidUser(data?.user);
       resetAuthFailureNotification();
-      setUser(data.user);
+      setUser(validUser);
       setLoginSuccess(true);
     } catch (error) {
       if (version === authVersion.current) { setUser(null); setLoginSuccess(false); }
       throw new Error(describeApiError(error, "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"));
+    }
+  };
+
+  const switchDevAccount = async (role: DevMockRole): Promise<User> => {
+    const version = ++authVersion.current;
+    setNotice(null);
+    setLoginSuccess(false);
+    try {
+      const data = await apiRequest<{ user: User }>("/api/v1/auth/dev/switch", {
+        method: "POST",
+        body: { role },
+      });
+      if (version !== authVersion.current) throw new Error("Login superseded");
+      const validUser = assertValidUser(data?.user);
+      resetAuthFailureNotification();
+      setUser(validUser);
+      return validUser;
+    } catch (error) {
+      throw new Error(describeApiError(error, "สลับบัญชีไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"));
     }
   };
 
@@ -110,15 +160,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setNotice(null);
     setLoginSuccess(false);
     try {
-      if (isMockAuth) sessionStorage.removeItem("tu_test_user");
-      else await apiRequest<void>("/api/v1/auth/logout", { method: "POST" });
+      await apiRequest<void>("/api/v1/auth/logout", { method: "POST" });
     } catch (error) {
       setNotice(describeApiError(error, "ไม่สามารถติดต่อระบบเพื่อออกจากระบบได้ กรุณาลองใหม่"));
     } finally { setUser(null); }
   };
 
   return <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, notice,
-    loginSuccess, dismissLoginSuccess: () => setLoginSuccess(false), login, logout }}>{children}</AuthContext.Provider>;
+    loginSuccess, devAccounts, dismissLoginSuccess: () => setLoginSuccess(false), login, switchDevAccount, logout }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
