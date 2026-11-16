@@ -1,4 +1,4 @@
-package com.tu.clubhub.auth;
+package com.tu.clubhub.dev;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;

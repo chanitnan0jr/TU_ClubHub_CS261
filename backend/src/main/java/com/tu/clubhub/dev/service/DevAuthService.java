@@ -1,4 +1,4 @@
-package com.tu.clubhub.auth.service;
+package com.tu.clubhub.dev.service;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -7,7 +7,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
-import com.tu.clubhub.auth.config.DevAuthAvailability;
+import com.tu.clubhub.auth.service.AccountNotAllowedException;
+import com.tu.clubhub.dev.config.DevAuthAvailability;
 import com.tu.clubhub.club.domain.Club;
 import com.tu.clubhub.club.repository.ClubRepository;
 import com.tu.clubhub.committee.domain.ClubCommitteeAssignment;

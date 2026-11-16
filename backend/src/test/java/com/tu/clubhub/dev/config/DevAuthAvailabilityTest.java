@@ -1,4 +1,4 @@
-package com.tu.clubhub.auth.config;
+package com.tu.clubhub.dev.config;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

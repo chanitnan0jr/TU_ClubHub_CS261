@@ -1,6 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { useAuth, type DevMockRole, type User } from "./AuthContext";
+import { apiRequest, describeApiError } from "../../lib/api";
+import { useAuth, type User } from "../auth/AuthContext";
+
+export type DevMockRole = "USER" | "ADMIN" | "COMMITTEE" | "PRESIDENT";
+
+export type DevAccount = {
+  role: DevMockRole;
+  username: string;
+  displayName: string;
+  label: string;
+};
+
+const defaultDevProbe = import.meta.env?.MODE !== undefined;
 
 function resolveCurrentRole(user: User | null): DevMockRole | null {
   if (!user) return null;
@@ -22,12 +34,37 @@ function landingPathFor(role: DevMockRole, switchedUser: User): string {
 }
 
 /** Floating pill for switching between the 4 mock accounts when DEV=true & TU_AUTH_MODE=mock. */
-export default function DevRoleSwitcherPill() {
-  const { user, devAccounts, switchDevAccount } = useAuth();
+export default function DevRoleSwitcherPill({ probeEnabled = defaultDevProbe }: { probeEnabled?: boolean }) {
+  const { user, establishSession } = useAuth();
   const navigate = useNavigate();
+  const [devAccounts, setDevAccounts] = useState<DevAccount[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [switchingRole, setSwitchingRole] = useState<DevMockRole | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!probeEnabled) return;
+    let cancelled = false;
+    const loadDevAccounts = async () => {
+      try {
+        const res = await fetch("/api/v1/auth/dev/accounts", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { accounts?: DevAccount[] };
+        if (!cancelled && Array.isArray(data.accounts)) {
+          setDevAccounts(data.accounts);
+        }
+      } catch {
+        // Keep the dev switcher hidden when the endpoint is unavailable.
+      }
+    };
+    void loadDevAccounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [probeEnabled]);
 
   if (devAccounts.length === 0) return null;
 
@@ -38,10 +75,14 @@ export default function DevRoleSwitcherPill() {
     setError(null);
     setSwitchingRole(role);
     try {
-      const switchedUser = await switchDevAccount(role);
+      const data = await apiRequest<{ user: User }>("/api/v1/auth/dev/switch", {
+        method: "POST",
+        body: { role },
+      });
+      const switchedUser = establishSession(data?.user);
       navigate(landingPathFor(role, switchedUser));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "สลับบัญชีไม่สำเร็จ");
+      setError(describeApiError(err, "สลับบัญชีไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"));
     } finally {
       setSwitchingRole(null);
     }

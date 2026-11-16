@@ -1,4 +1,4 @@
-package com.tu.clubhub.auth;
+package com.tu.clubhub.dev;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
