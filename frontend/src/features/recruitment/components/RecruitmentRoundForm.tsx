@@ -39,7 +39,7 @@ const defaultFormInput: RecruitmentRoundFormInput = {
   announcementDate: '',
   confirmationDeadline: '',
   questions: [
-    { questionText: 'เพราะเหตุใดคุณจึงสนใจเข้าร่วมชมรมอาสาพัฒนา?', isRequired: true, orderIndex: 0 },
+    { questionText: 'เพราะเหตุใดคุณจึงสนใจเข้าร่วมชมรมนี้?', isRequired: true, orderIndex: 0 },
     { questionText: 'คุณมีทักษะหรือประสบการณ์ใดที่อยากนำมาช่วยชมรม?', isRequired: true, orderIndex: 1 },
   ],
 };
@@ -160,7 +160,7 @@ export const RecruitmentRoundForm = ({
                 type="text"
                 value={formData.title}
                 onChange={(e) => updateField('title', e.target.value)}
-                placeholder="เช่น รอบรับสมัครสมาชิกใหม่ ประจำภาคเรียนที่ 1/2567"
+                placeholder={`เช่น รอบรับสมัครสมาชิกใหม่ ประจำภาคเรียนที่ 1/${currentAcademicYear}`}
                 className={inputClass(Boolean(errors.title))}
               />
             )}
