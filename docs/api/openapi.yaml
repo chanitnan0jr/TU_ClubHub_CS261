@@ -3528,7 +3528,7 @@ paths:
     post:
       tags: [Applications]
       operationId: confirmMembershipOffer
-      x-implementation-status: pending
+      x-implementation-status: implemented
       x-contract-status: specified-in-task75
       summary: Confirm an accepted club membership offer (US-05 / Task69)
       description: >-
@@ -3601,7 +3601,7 @@ paths:
     post:
       tags: [Applications]
       operationId: declineMembershipOffer
-      x-implementation-status: pending
+      x-implementation-status: implemented
       x-contract-status: specified-in-task75
       summary: Decline an accepted club membership offer (US-05 / Task69)
       description: >-
