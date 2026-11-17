@@ -54,17 +54,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:postgresql://localhost:5432/tu_clubhub_task69_test",
-        "spring.datasource.username=postgres",
-        "spring.datasource.password=${DB_PASSWORD}",
-        "spring.flyway.enabled=true",
-        "spring.flyway.locations=classpath:db/migration",
-        "spring.jpa.hibernate.ddl-auto=validate",
-        "spring.session.jdbc.initialize-schema=never",
-        "tu.auth.mode=mock"
+        "logging.level.org.springframework.jdbc=WARN",
+        "clubhub.application.submission.lock-timeout=15s"
 })
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
+@ActiveProfiles({"test", "seedtest"})
 @Transactional
 @Execution(ExecutionMode.SAME_THREAD)
 class ApplicationConfirmationHttpIntegrationTest {

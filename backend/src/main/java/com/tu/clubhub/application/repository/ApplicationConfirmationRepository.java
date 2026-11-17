@@ -35,6 +35,11 @@ public class ApplicationConfirmationRepository {
         this.jdbc = jdbc;
     }
 
+    public void lockTimeout(String value) {
+        jdbc.queryForObject("SELECT set_config('lock_timeout', :timeout, true)",
+                new MapSqlParameterSource("timeout", value), String.class);
+    }
+
     public Optional<ApplicationScope> findScope(long applicationId) {
         return jdbc.query("""
                 SELECT id, round_id, club_id, applicant_id
