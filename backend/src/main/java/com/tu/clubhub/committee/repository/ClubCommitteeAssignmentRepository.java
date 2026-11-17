@@ -2,6 +2,7 @@ package com.tu.clubhub.committee.repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import com.tu.clubhub.committee.domain.ClubCommitteeAssignment;
 import jakarta.persistence.LockModeType;
@@ -107,4 +108,18 @@ public interface ClubCommitteeAssignmentRepository extends JpaRepository<ClubCom
 	List<EffectiveAssignmentSummary> findEffectiveAssignmentSummaries(
 			@Param("userId") Long userId,
 			@Param("at") Instant at);
+
+	@Query("""
+			SELECT MIN(assignment.startsAt)
+			FROM ClubCommitteeAssignment assignment
+			WHERE assignment.membershipId = :membershipId
+			  AND assignment.permissionRole = :permissionRole
+			  AND assignment.status = 'ACTIVE'
+			  AND assignment.revokedAt IS NULL
+			  AND assignment.startsAt > :after
+			""")
+	Optional<Instant> findNextScheduledStart(
+			@Param("membershipId") Long membershipId,
+			@Param("permissionRole") String permissionRole,
+			@Param("after") Instant after);
 }

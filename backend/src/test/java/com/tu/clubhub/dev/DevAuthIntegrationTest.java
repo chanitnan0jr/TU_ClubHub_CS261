@@ -1,6 +1,7 @@
 package com.tu.clubhub.dev;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -9,16 +10,29 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import com.tu.clubhub.auth.dto.CsrfTokenResponse;
 import com.tu.clubhub.club.repository.ClubRepository;
+import com.tu.clubhub.committee.domain.ClubCommitteeAssignment;
 import com.tu.clubhub.committee.repository.ClubCommitteeAssignmentRepository;
 import com.tu.clubhub.committee.security.RequireClubCommittee;
 import com.tu.clubhub.dashboard.security.AdminAccessService;
+import com.tu.clubhub.dev.service.DevAuthService;
+import com.tu.clubhub.dev.service.DevMockRole;
+import com.tu.clubhub.membership.domain.ClubMembership;
 import com.tu.clubhub.membership.repository.ClubMembershipRepository;
+import com.tu.clubhub.user.domain.UserAccount;
 import com.tu.clubhub.user.repository.StudentProfileRepository;
 import com.tu.clubhub.user.repository.UserAccountRepository;
+import com.tu.clubhub.user.service.UserAccountService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +66,8 @@ class DevAuthIntegrationTest {
 	@Autowired private ClubRepository clubRepository;
 	@Autowired private StudentProfileRepository studentProfileRepository;
 	@Autowired private UserAccountRepository userAccountRepository;
+	@Autowired private UserAccountService userAccountService;
+	@Autowired private DevAuthService devAuthService;
 	@Autowired private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
@@ -158,6 +174,70 @@ class DevAuthIntegrationTest {
 				.content("{\"role\":\"SUPERUSER\"}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+	}
+
+	@Test
+	void clampsDevAssignmentBeforeScheduledFutureTerm() throws Exception {
+		// Seed the club first by switching to PRESIDENT, then add a future COMMITTEE term for committee-demo.
+		CsrfSession session = getCsrfSession(null);
+		MvcResult presidentSwitch = switchRole(session, "PRESIDENT");
+		JsonNode presidentBody = objectMapper.readTree(presidentSwitch.getResponse().getContentAsString());
+		long clubId = Long.parseLong(
+				presidentBody.path("user").path("activeCommitteeAssignments").get(0).path("clubId").asText());
+
+		UserAccount committeeAccount = userAccountService.provisionAfterVerifiedLogin(
+				DevMockRole.COMMITTEE.username(),
+				DevMockRole.COMMITTEE.displayName(),
+				DevMockRole.COMMITTEE.email(),
+				DevMockRole.COMMITTEE.studentIdentity());
+		Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		ClubMembership membership = membershipRepository.saveAndFlush(
+				new ClubMembership(clubId, committeeAccount.getId(), "ACTIVE", now.minusSeconds(60)));
+		Instant futureStart = now.plus(10, ChronoUnit.DAYS);
+		Instant futureEnd = now.plus(100, ChronoUnit.DAYS);
+		assignmentRepository.saveAndFlush(new ClubCommitteeAssignment(
+				membership.getId(), "Future Member", "COMMITTEE", futureStart, futureEnd, committeeAccount.getId()));
+
+		CsrfSession committeeCsrf = getCsrfSession(presidentSwitch.getResponse().getCookie(SESSION_COOKIE));
+		MvcResult committeeSwitch = switchRole(committeeCsrf, "COMMITTEE");
+		Cookie committeeCookie = committeeSwitch.getResponse().getCookie(SESSION_COOKIE);
+		assertNotNull(committeeCookie);
+
+		mockMvc.perform(get("/api/v1/test-dev-auth/clubs/" + clubId + "/committee").cookie(committeeCookie))
+				.andExpect(status().isOk());
+
+		Timestamp currentEnd = jdbcTemplate.queryForObject("""
+				SELECT ends_at FROM club_committee_assignments
+				WHERE membership_id = ? AND permission_role = 'COMMITTEE' AND starts_at < ?
+				""", Timestamp.class, membership.getId(), Timestamp.from(futureStart));
+		assertNotNull(currentEnd);
+		assertEquals(futureStart, currentEnd.toInstant());
+	}
+
+	@Test
+	void concurrentSwitchesProvisionFallbackClubSafely() throws Exception {
+		CountDownLatch ready = new CountDownLatch(2);
+		CountDownLatch go = new CountDownLatch(1);
+		ExecutorService pool = Executors.newFixedThreadPool(2);
+		try {
+			Future<UserAccount> f1 = pool.submit(() -> {
+				ready.countDown();
+				go.await();
+				return devAuthService.switchTo(DevMockRole.COMMITTEE);
+			});
+			Future<UserAccount> f2 = pool.submit(() -> {
+				ready.countDown();
+				go.await();
+				return devAuthService.switchTo(DevMockRole.PRESIDENT);
+			});
+			ready.await();
+			go.countDown();
+			assertNotNull(f1.get());
+			assertNotNull(f2.get());
+			assertEquals(1, clubRepository.count());
+		} finally {
+			pool.shutdownNow();
+		}
 	}
 
 	private MvcResult switchRole(CsrfSession session, String role) throws Exception {
