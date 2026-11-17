@@ -112,6 +112,69 @@ class ClubServiceTest {
     }
 
     @Test
+    void localClubImagesShouldPassValidationAndSaveOnUpdate() {
+        var data = new ClubUpdateRequestDto(
+                "Programming Club",
+                "Competitive programming and algorithms",
+                null,
+                null,
+                null,
+                null,
+                "club@tu.ac.th",
+                "/images/tu-clubhub-extra-clubs/club-programming.webp",
+                "/images/tu-clubhub-extra-clubs/club-programming.webp",
+                "1",
+                List.of("2")
+        );
+
+        Club club = mock(Club.class);
+        when(clubRepository.findByIdForUpdate(41L)).thenReturn(Optional.of(club));
+        when(clubRepository.save(club)).thenReturn(club);
+        when(profileQueryRepository.categoryExists(1L)).thenReturn(true);
+        when(profileQueryRepository.findExistingTagIds(List.of(2L))).thenReturn(Set.of(2L));
+        when(club.getId()).thenReturn(41L);
+        when(club.getCategoryId()).thenReturn(1L);
+        when(club.getName()).thenReturn(data.name());
+        when(club.getDescription()).thenReturn(data.description());
+        when(club.getContactEmail()).thenReturn(data.contactEmail());
+        when(club.getImageUrl()).thenReturn(data.imageUrl());
+        when(club.getBannerUrl()).thenReturn(data.bannerUrl());
+        when(club.getStatus()).thenReturn("ACTIVE");
+        when(profileQueryRepository.findCategory(1L)).thenReturn(new ClubCategoryDto("1", "Tech"));
+        when(profileQueryRepository.findTags(41L)).thenReturn(List.of(new ClubTagDto("2", "Coding")));
+        when(profileQueryRepository.findPublishedRounds(41L)).thenReturn(List.of());
+
+        var response = service.updateClub(41L, data);
+
+        verify(club).setImageUrl(data.imageUrl());
+        verify(club).setBannerUrl(data.bannerUrl());
+        assertEquals(data.imageUrl(), response.imageUrl());
+        assertEquals(data.bannerUrl(), response.bannerUrl());
+    }
+
+    @Test
+    void invalidLocalImagePathsShouldFail() {
+        var traversal = new ClubUpdateRequestDto(
+                "Music Club", "A club for music lovers", null, null, null, null, null,
+                "/images/../secret.png", "/images/club-banner.webp", "1", List.of("2"));
+        var traversalError = assertThrows(
+                ClubValidationException.class,
+                () -> service.validateUpdateRequest(traversal)
+        );
+        assertEquals("Must be a valid HTTPS URL or /images/ path",
+                traversalError.getFieldErrors().get("imageUrl"));
+
+        var wrongPrefix = new ClubUpdateRequestDto(
+                "Music Club", "A club for music lovers", null, null, null, null, null,
+                null, "/assets/club-banner.webp", "1", List.of("2"));
+        var prefixError = assertThrows(
+                ClubValidationException.class,
+                () -> service.validateUpdateRequest(wrongPrefix)
+        );
+        assertTrue(prefixError.getFieldErrors().containsKey("bannerUrl"));
+    }
+
+    @Test
     void invalidEmailShouldFail() {
         var data = request(null, "club@", null);
 

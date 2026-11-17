@@ -69,7 +69,8 @@ function ClubEmblemIcon({ club }: { club: ClubDetailData }) {
 }
 
 function BenefitIcon({ index }: { index: number }) {
-  const Icon = index === 0 ? Code2 : index === 1 ? Users : Layers;
+  const slot = index % 3;
+  const Icon = slot === 0 ? Code2 : slot === 1 ? Users : Layers;
   return <Icon aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0 text-[#861638]" />;
 }
 
@@ -115,6 +116,7 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
   const [fallbackMapClubId, setFallbackMapClubId] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
   const [pendingRound, setPendingRound] = useState<RecruitmentRoundData | null>(null);
+  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
 
   const requestKey = `${clubId}:${reloadKey}`;
   const result = loaded?.key === requestKey ? loaded.result : null;
@@ -193,7 +195,7 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
   const galleryImages = demoImages.length ? demoImages : coverSrc?.startsWith('/images/') ? [coverSrc] : [];
   const objectiveLines = (club.objectives ?? '').split(/\r?\n|·|•/).map((item) => item.trim()).filter(Boolean);
   const emailUrl = club.contacts.email ? `mailto:${club.contacts.email}` : '';
-  const firstRound = club.rounds[0];
+  const selectedRound = club.rounds.find((round) => round.id === selectedRoundId) ?? club.rounds[0];
   const mapLocation = club.affiliationName?.trim();
   const locationQuery = mapLocation ? `${mapLocation} มหาวิทยาลัยธรรมศาสตร์` : '';
   const showUniversityMap = !mapLocation || fallbackMapClubId === clubId;
@@ -312,7 +314,7 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
               <section aria-labelledby="club-benefits-heading">
                 <h2 id="club-benefits-heading" className="text-base font-bold text-[#25202A]">สิ่งที่คุณจะได้</h2>
                 <div className={`mt-4 grid gap-3 ${objectiveLines.length >= 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-                  {objectiveLines.slice(0, 3).map((item, index) => (
+                  {objectiveLines.map((item, index) => (
                     <div key={index} className="flex items-start gap-3 rounded-xl border border-[#EDE3DC] bg-white/70 p-4 motion-safe:transition-colors motion-safe:duration-200 hover:border-[#DDBFC7] hover:bg-white">
                       <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#F6E9E9]"><BenefitIcon index={index} /></span>
                       <p className="pt-0.5 text-sm leading-6 text-[#3B3540]">{item}</p>
@@ -351,19 +353,59 @@ export const ClubDetailPage: React.FC<ClubDetailPageProps> = ({
                   </div>
                 </div>
                 <div className="space-y-3 p-4">
-                  <div className="space-y-2 p-4">
+                  <div className="space-y-3 p-2 sm:p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="flex items-center gap-2 text-sm font-bold text-[#25202A]"><CalendarDays aria-hidden="true" strokeWidth={1.75} className="size-5 text-[#861638]" />รอบรับสมัครปัจจุบัน</p>
-                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${firstRound ? 'bg-[#E4F4E2] text-[#247447]' : 'bg-[#F0EDEA] text-[#706B70]'}`}>{firstRound ? 'เปิดรับสมัคร' : club.roundsUnavailable ? 'โหลดข้อมูลไม่สำเร็จ' : 'ปิดรับสมัคร'}</span>
+                      <p className="flex items-center gap-2 text-sm font-bold text-[#25202A]">
+                        <CalendarDays aria-hidden="true" strokeWidth={1.75} className="size-5 text-[#861638]" />
+                        รอบรับสมัครปัจจุบัน
+                      </p>
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${selectedRound ? 'bg-[#E4F4E2] text-[#247447]' : 'bg-[#F0EDEA] text-[#706B70]'}`}>
+                        {selectedRound ? 'เปิดรับสมัคร' : club.roundsUnavailable ? 'โหลดข้อมูลไม่สำเร็จ' : 'ปิดรับสมัคร'}
+                      </span>
                     </div>
-                    {firstRound ? (
+                    {club.rounds.length > 1 ? (
+                      <div role="radiogroup" aria-label="เลือกรอบรับสมัคร" className="space-y-2">
+                        {club.rounds.map((round) => {
+                          const isSelected = selectedRound?.id === round.id;
+                          return (
+                            <button
+                              key={round.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={isSelected}
+                              onClick={() => setSelectedRoundId(round.id)}
+                              className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                                isSelected
+                                  ? 'border-[#861638] bg-[#FAF0F2]'
+                                  : 'border-[#E8D7D4] bg-white hover:border-[#DDBFC7] hover:bg-[#FAF7F2]'
+                              }`}
+                            >
+                              <p className="text-sm font-semibold text-[#25202A]">{round.title}</p>
+                              <p className="mt-0.5 text-xs text-[#59545B]">เปิดรับ {formatShortDateRange(round)}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : selectedRound ? (
                       <>
-                        <p className="text-sm font-semibold text-[#25202A]">{firstRound.title}</p>
-                        <p className="text-sm text-[#59545B]">เปิดรับ {formatShortDateRange(firstRound)}</p>
+                        <p className="text-sm font-semibold text-[#25202A]">{selectedRound.title}</p>
+                        <p className="text-sm text-[#59545B]">เปิดรับ {formatShortDateRange(selectedRound)}</p>
                       </>
-                    ) : <p className="text-sm text-[#59545B]">{club.roundsUnavailable ? 'ไม่สามารถโหลดข้อมูลรอบรับสมัครได้ในขณะนี้' : 'ยังไม่มีรอบที่เปิดรับสมัครในขณะนี้'}</p>}
+                    ) : (
+                      <p className="text-sm text-[#59545B]">
+                        {club.roundsUnavailable ? 'ไม่สามารถโหลดข้อมูลรอบรับสมัครได้ในขณะนี้' : 'ยังไม่มีรอบที่เปิดรับสมัครในขณะนี้'}
+                      </p>
+                    )}
                   </div>
-                  <button type="button" disabled={!firstRound || !applicationAvailable} onClick={() => { if (firstRound) handleApplyClick(firstRound); }} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#861638] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#68112B] disabled:cursor-not-allowed disabled:bg-[#E5E2E0] disabled:text-[#77716F]"><Pencil aria-hidden="true" className="size-4" />สมัครเข้าชมรม</button>
+                  <button
+                    type="button"
+                    disabled={!selectedRound || !applicationAvailable}
+                    onClick={() => { if (selectedRound) handleApplyClick(selectedRound); }}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#861638] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#68112B] disabled:cursor-not-allowed disabled:bg-[#E5E2E0] disabled:text-[#77716F]"
+                  >
+                    <Pencil aria-hidden="true" className="size-4" />
+                    สมัครเข้าชมรม
+                  </button>
                   {club.roundsUnavailable && <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="min-h-10 w-full text-sm font-semibold text-[#861638] hover:underline">ลองโหลดอีกครั้ง</button>}
                 </div>
               </section>
