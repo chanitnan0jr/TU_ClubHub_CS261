@@ -46,7 +46,7 @@ class ApplicationPage {
     await this.page.getByLabel('เหตุผลที่สนใจเข้าร่วมชมรมนี้').fill(motivation)
     await this.page.getByLabel(/คำถามทดสอบ Task54/).fill(answer)
     if (withLink) {
-      await this.page.getByRole('button', { name: /เพิ่มลิงก์เอกสาร/ }).click()
+      await this.page.getByRole('button', { name: /เพิ่มลิงก์\s*เอกสาร/ }).click()
       await this.page.getByLabel('ชื่อ/คำอธิบายเอกสาร').fill(' Portfolio ')
       await this.page.getByLabel('URL ลิงก์เอกสาร').fill(' https://example.edu/portfolio ')
     }

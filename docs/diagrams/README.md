@@ -52,3 +52,9 @@
 | [SD-04 รายละเอียดสาธารณะ](sequence/SD-04-public-club-data.md) | US-02; แสดงชมรมและรอบที่เปิดรับตาม Contract ปัจจุบัน |
 
 ดู [Architecture diagram แบบแก้ไขได้](../architecture/TU-ClubHub-Architecture.drawio) สำหรับภาพโครงสร้างระบบ ไม่ใช้แทน Sequence Diagram ของแต่ละ Workflow
+
+## Data Flow Diagram
+
+| Diagram | ขอบเขต |
+|---|---|
+| [DFD-01 ดูรายละเอียดชมรมและประกาศรับสมัคร](dataflow/DFD-01-us-02-public-club.md) | US-02; ภาพรวมการไหลของข้อมูลระหว่างผู้ใช้ กระบวนการ และฐานข้อมูล |

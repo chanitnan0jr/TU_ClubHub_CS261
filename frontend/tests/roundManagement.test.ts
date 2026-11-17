@@ -187,7 +187,7 @@ function renderEdit(round: Record<string, unknown>, onWrite: (request: RecordedR
 test('the edit page fills the form from the draft and saves it with its version', async () => {
   const draft = makeRound('1', 'รอบร่างเดิม', {
     publicationStatus: 'DRAFT', version: 3, eligibilityText: 'ปี 1-2',
-    questions: [{ id: '81', prompt: 'ทำไมจึงสนใจ', required: true, displayOrder: 1, maxLength: 2000 }],
+    questions: [{ id: '81', prompt: 'ทำไมจึงสนใจ', required: true, displayOrder: 1, maxLength: 500 }],
   })
   const stub = renderEdit(draft, request => json({ ...draft, ...(request.body as object), version: 4 }))
   try {
@@ -208,7 +208,7 @@ test('the edit page fills the form from the draft and saves it with its version'
     assert.equal(body.eligibilityText, 'ปี 1-2')
     // An untouched date keeps its seconds; only milliseconds are dropped.
     assert.equal(body.opensAt, draft.opensAt.replace(/\.\d{3}Z$/, '.000Z'))
-    assert.deepEqual(body.questions, [{ prompt: 'ทำไมจึงสนใจ', required: true, displayOrder: 1, maxLength: 2000 }])
+    assert.deepEqual(body.questions, [{ prompt: 'ทำไมจึงสนใจ', required: true, displayOrder: 1, maxLength: 500 }])
   } finally { cleanup(); stub.restore() }
 })
 
@@ -235,7 +235,7 @@ test('home lists the clubs the user manages and links to the open-call board', a
     const card = within(section).getByRole('link', { name: /ชมรมอาสาพัฒนาชุมชน/ })
     assert.equal(card.getAttribute('href'), '/clubs/20001/manage')
     assert.match(card.textContent ?? '', /ประธานชมรม/)
-    assert.equal(screen.getByRole('link', { name: 'ดูรอบที่เปิดรับสมัคร' }).getAttribute('href'), '/open-calls')
+    assert.equal(screen.getByRole('link', { name: 'ดูรายชื่อชมรม' }).getAttribute('href'), '/clubs')
     assert.equal(screen.queryByRole('textbox'), null)
   } finally { cleanup(); stub.restore() }
 })
@@ -244,7 +244,7 @@ test('home shows the login form and the open-call link to visitors', async () =>
   const stub = renderHome(() => problem(401, 'AUTHENTICATION_REQUIRED', 'x'))
   try {
     assert.ok(await screen.findByRole('heading', { level: 1, name: 'เข้าสู่ระบบ' }))
-    assert.equal(screen.getByRole('link', { name: 'ดูรอบที่เปิดรับสมัคร' }).getAttribute('href'), '/open-calls')
+    assert.equal(screen.getByRole('link', { name: 'ดูรายชื่อชมรม' }).getAttribute('href'), '/clubs')
     assert.equal(screen.queryByRole('heading', { name: 'ชมรมที่ฉันดูแล' }), null)
   } finally { cleanup(); stub.restore() }
 })

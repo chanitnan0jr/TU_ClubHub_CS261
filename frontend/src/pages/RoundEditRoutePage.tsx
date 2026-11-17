@@ -4,7 +4,7 @@ import CommitteeLayout from "../components/layout/CommitteeLayout";
 import { Button } from "../components/ui/Button";
 import { buttonClass } from "../components/ui/classes";
 import { EmptyState } from "../components/ui/EmptyState";
-import { CircleAlertIcon } from "../components/ui/icons";
+import { CircleAlert } from "lucide-react";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { getRound, updateRound } from "../features/recruitment/api/roundApi";
 import { RecruitmentRoundForm } from "../features/recruitment/components/RecruitmentRoundForm";
@@ -86,7 +86,7 @@ function RoundEdit({ clubId, roundId }: { clubId: string; roundId: string }) {
       {round.error !== undefined && (
         <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-red-200 bg-white p-6">
           <p className="flex items-start gap-2 text-sm font-semibold text-red-800">
-            <CircleAlertIcon className="mt-0.5 size-5" />
+            <CircleAlert aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-5 shrink-0" />
             {describeApiError(round.error, "โหลดข้อมูลรอบรับสมัครไม่สำเร็จ กรุณาลองใหม่")}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -99,7 +99,7 @@ function RoundEdit({ clubId, roundId }: { clubId: string; roundId: string }) {
       {saved && !editable && round.loadedAt && (
         <EmptyState
           headingLevel={2}
-          icon={<CircleAlertIcon className="size-6" />}
+          icon={<CircleAlert aria-hidden="true" strokeWidth={1.75} className="size-6 shrink-0" />}
           title="แก้ไขรอบนี้ไม่ได้"
           description={
             <>
@@ -123,7 +123,7 @@ function RoundEdit({ clubId, roundId }: { clubId: string; roundId: string }) {
           {conflict && (
             <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">
               <p className="flex items-start gap-2 font-semibold">
-                <CircleAlertIcon className="mt-0.5 size-5" />
+                <CircleAlert aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-5 shrink-0" />
                 บันทึกการแก้ไขไม่ได้: {conflict}
               </p>
               <p className="text-red-800">{EDIT_RULE} โหลดข้อมูลล่าสุดแล้วลองอีกครั้ง หรือกลับไปดูสถานะรอบ</p>

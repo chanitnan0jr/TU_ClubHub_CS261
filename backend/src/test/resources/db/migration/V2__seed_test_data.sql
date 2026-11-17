@@ -53,20 +53,58 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- 04. Ten clubs: created_by is required and points to the seed admin user.
-INSERT INTO clubs (category_id, name, description, objectives, created_by, status)
-SELECT category.id, seed.name, seed.description, seed.objectives, admin_user.id, 'ACTIVE'
+INSERT INTO clubs (
+    category_id, name, description, objectives,
+    contact_url, facebook_url, instagram_url, contact_email,
+    affiliation_level, affiliation_name, image_url, banner_url,
+    created_by, status
+)
+SELECT category.id, seed.name, seed.description, seed.objectives,
+       seed.contact_url, seed.facebook_url, seed.instagram_url, seed.contact_email,
+       'UNIVERSITY', seed.affiliation_name, seed.image_url, seed.image_url,
+       admin_user.id, 'ACTIVE'
 FROM (VALUES
-    ('เทคโนโลยีและนวัตกรรม', 'ชมรมเขียนโปรแกรม', 'เรียนรู้การเขียนโปรแกรมและพัฒนาเว็บแอปพลิเคชันร่วมกัน', 'ฝึกทักษะการพัฒนาซอฟต์แวร์ผ่านโครงงานจริง'),
-    ('เทคโนโลยีและนวัตกรรม', 'ชมรมหุ่นยนต์และ IoT', 'ออกแบบหุ่นยนต์ เซนเซอร์ และระบบอัตโนมัติเบื้องต้น', 'ส่งเสริมการประดิษฐ์และการแก้ปัญหาด้วยเทคโนโลยี'),
-    ('เทคโนโลยีและนวัตกรรม', 'ชมรม AI และวิทยาการข้อมูล', 'ศึกษาปัญญาประดิษฐ์และการวิเคราะห์ข้อมูล', 'แลกเปลี่ยนองค์ความรู้และทดลองทำโครงงาน AI'),
-    ('กีฬาและสุขภาพ', 'ชมรมฟุตบอล', 'ฝึกซ้อมฟุตบอลและจัดกิจกรรมแข่งขันกระชับมิตร', 'ส่งเสริมสุขภาพและการทำงานเป็นทีม'),
-    ('กีฬาและสุขภาพ', 'ชมรมแบดมินตัน', 'กิจกรรมแบดมินตันสำหรับผู้เล่นทุกระดับ', 'พัฒนาทักษะกีฬาและสร้างสังคมการออกกำลังกาย'),
-    ('กีฬาและสุขภาพ', 'ชมรมวิ่งเพื่อสุขภาพ', 'นัดหมายวิ่งออกกำลังกายและแลกเปลี่ยนความรู้ด้านการวิ่ง', 'สร้างพฤติกรรมการดูแลสุขภาพอย่างสม่ำเสมอ'),
-    ('ศิลปะและวัฒนธรรม', 'ชมรมดนตรีสากล', 'ฝึกเล่นดนตรีและทำกิจกรรมการแสดง', 'เปิดพื้นที่สร้างสรรค์ให้ผู้สนใจดนตรี'),
-    ('ศิลปะและวัฒนธรรม', 'ชมรมถ่ายภาพสร้างสรรค์', 'ฝึกถ่ายภาพ องค์ประกอบภาพ และการแต่งภาพ', 'พัฒนาทักษะการเล่าเรื่องด้วยภาพ'),
-    ('จิตอาสาและสิ่งแวดล้อม', 'ชมรมอาสาพัฒนาชุมชน', 'จัดกิจกรรมช่วยเหลือสังคมและพัฒนาชุมชน', 'ส่งเสริมจิตสาธารณะและความรับผิดชอบต่อสังคม'),
-    ('จิตอาสาและสิ่งแวดล้อม', 'ชมรมอนุรักษ์สิ่งแวดล้อม', 'กิจกรรมคัดแยกขยะและรณรงค์รักษาสิ่งแวดล้อม', 'สนับสนุนการใช้ทรัพยากรอย่างยั่งยืน')
-) AS seed(category_name, name, description, objectives)
+    ('เทคโนโลยีและนวัตกรรม', 'ชมรมเขียนโปรแกรม', 'ทำโจทย์เรียนรู้การเขียนโปรแกรมเพื่อแข่งขัน',
+     E'ฝึกแก้โจทย์อัลกอริทึมและโครงสร้างข้อมูลอย่างเป็นระบบ\nเตรียมความพร้อมแข่งขัน ICPC และงาน Hackathon\nแลกเปลี่ยนความรู้กับเพื่อนร่วมสายพัฒนาซอฟต์แวร์',
+     'https://clubhub.tu.ac.th/clubs/programming', 'https://www.facebook.com/TUProgrammingClub', 'https://www.instagram.com/tu_programming', 'programming@club.tu.ac.th',
+     'อาคาร Learning Center (LC) ชั้น 4 ห้อง LC-401', NULL),
+    ('เทคโนโลยีและนวัตกรรม', 'ชมรมหุ่นยนต์และ IoT', 'ออกแบบหุ่นยนต์ เซนเซอร์ และระบบอัตโนมัติเบื้องต้น',
+     E'เรียนรู้การต่อวงจรและเขียนเฟิร์มแวร์ไมโครคอนโทรลเลอร์\nลงมือสร้างหุ่นยนต์และระบบ IoT ต้นแบบร่วมกัน\nส่งทีมเข้าร่วมประกวดนวัตกรรมระดับมหาวิทยาลัย',
+     'https://clubhub.tu.ac.th/clubs/robotics', 'https://www.facebook.com/TURoboticsIoT', 'https://www.instagram.com/tu_robotics_iot', 'robotics@club.tu.ac.th',
+     'อาคารเรียนรวมสังคมศาสตร์ (SC) ชั้น 2 ห้อง Workshop', NULL),
+    ('เทคโนโลยีและนวัตกรรม', 'ชมรม AI และวิทยาการข้อมูล', 'ศึกษาปัญญาประดิษฐ์และการวิเคราะห์ข้อมูล พร้อมลงมือทำโปรเจกต์จริงร่วมกัน',
+     E'เรียนรู้และลงมือทำโปรเจกต์ด้าน AI และ Data Science\nเตรียมตัวสำหรับการแข่งขัน Datathon และ Hackathon\nแลกเปลี่ยนความรู้กับเพื่อนที่สนใจสายเดียวกัน',
+     'https://clubhub.tu.ac.th/clubs/ai-ds', 'https://www.facebook.com/TUAIDataScience', 'https://www.instagram.com/tu_ai_ds', 'ai-ds@club.tu.ac.th',
+     'อาคาร Learning Center (LC) ชั้น 5 ห้อง LC-502', NULL),
+    ('กีฬาและสุขภาพ', 'ชมรมฟุตบอล', 'ฝึกซ้อมฟุตบอลและจัดกิจกรรมแข่งขันกระชับมิตร',
+     E'ฝึกทักษะพื้นฐาน แท็กติก และสมรรถภาพร่างกาย\nจัดแข่งขันฟุตบอลกระชับมิตรระหว่างคณะและสถาบัน\nสร้างมิตรภาพและความสามัคคีในทีม',
+     'https://clubhub.tu.ac.th/clubs/football', 'https://www.facebook.com/TUFootballClub', 'https://www.instagram.com/tu_football_club', 'football@club.tu.ac.th',
+     'สนามกีฬาเมนสเตเดียม มธ. ศูนย์รังสิต', NULL),
+    ('กีฬาและสุขภาพ', 'ชมรมแบดมินตัน', 'กิจกรรมแบดมินตันสำหรับผู้เล่นทุกระดับ',
+     E'ซ้อมตีและเรียนรู้กติกาพื้นฐานสำหรับมือใหม่และสายแข่ง\nเปิดคอร์ตเล่นร่วมกันทุกสัปดาห์หลังเลิกเรียน\nจัดทัวร์นาเมนต์ภายในและกระชับมิตรประจำภาค',
+     'https://clubhub.tu.ac.th/clubs/badminton', 'https://www.facebook.com/TUBadmintonClub', 'https://www.instagram.com/tu_badminton', 'badminton@club.tu.ac.th',
+     'โรงยิมเนเซียม 4 มธ. ศูนย์รังสิต', NULL),
+    ('กีฬาและสุขภาพ', 'ชมรมวิ่งเพื่อสุขภาพ', 'นัดหมายวิ่งออกกำลังกายและแลกเปลี่ยนความรู้ด้านการวิ่ง',
+     E'จัดกลุ่มวิ่งตอนเย็นรอบอุทยานเรียนรู้ป๋วยฯ\nแลกเปลี่ยนเทคนิคการฝึกซ้อม โภชนาการ และการป้องกันบาดเจ็บ\nชวนกันลงสนามวิ่งมาราธอนตลอดปี',
+     'https://clubhub.tu.ac.th/clubs/running', 'https://www.facebook.com/TURunningClub', 'https://www.instagram.com/tu_running_club', 'running@club.tu.ac.th',
+     'ลานหน้าอุทยานเรียนรู้ป๋วย 100 ปี', NULL),
+    ('ศิลปะและวัฒนธรรม', 'ชมรมดนตรีสากล', 'ฝึกเล่นดนตรีและทำกิจกรรมการแสดงสำหรับนักศึกษาผู้รักเสียงดนตรี',
+     E'รวมวงซ้อมดนตรีหลากหลายแนวในห้องซ้อมของชมรม\nจัดมินิคอนเสิร์ตและแสดงในงานกิจกรรมมหาวิทยาลัย\nแลกเปลี่ยนทักษะการเล่น การร้อง และมิกซ์เสียง',
+     'https://clubhub.tu.ac.th/clubs/music', 'https://www.facebook.com/TUInternationalMusic', 'https://www.instagram.com/tu_music_club', 'music@club.tu.ac.th',
+     'อาคารกิจกรรมนักศึกษา ชั้น 3 ห้องซ้อมดนตรี', NULL),
+    ('ศิลปะและวัฒนธรรม', 'ชมรมถ่ายภาพสร้างสรรค์', 'ฝึกถ่ายภาพ องค์ประกอบภาพ และการแต่งภาพผ่านเวิร์กชอปและกิจกรรมสร้างสรรค์',
+     E'เวิร์กชอปการจัดแสง องค์ประกอบภาพ และ Lightroom\nออกทริปถ่ายภาพและบันทึกบรรยากาศกิจกรรมในรั้วธรรมศาสตร์\nจัดนิทรรศการภาพถ่ายประจำปีของชมรม',
+     'https://clubhub.tu.ac.th/clubs/photography', 'https://www.facebook.com/TUPhotoClub', 'https://www.instagram.com/tu_photo_club', 'photo@club.tu.ac.th',
+     'อาคารกิจกรรมนักศึกษา ชั้น 2 ห้องสตูดิโอ', NULL),
+    ('จิตอาสาและสิ่งแวดล้อม', 'ชมรมอาสาพัฒนาชุมชน', 'จัดกิจกรรมช่วยเหลือสังคมและพัฒนาชุมชนร่วมกับเครือข่ายนักศึกษา',
+     E'ลงพื้นที่ค่ายอาสาพัฒนาโรงเรียนและชุมชนรอบนอก\nจัดโครงการบริจาคและแบ่งปันสิ่งของจำเป็น\nฝึกการวางแผนและทำงานจิตอาสาเป็นทีม',
+     'https://clubhub.tu.ac.th/clubs/volunteer', 'https://www.facebook.com/TUVolunteerClub', 'https://www.instagram.com/tu_volunteer', 'volunteer@club.tu.ac.th',
+     'อาคารกิจกรรมนักศึกษา ชั้น 1 ห้องอาสา 104', NULL),
+    ('จิตอาสาและสิ่งแวดล้อม', 'ชมรมอนุรักษ์สิ่งแวดล้อม', 'กิจกรรมคัดแยกขยะและรณรงค์รักษาสิ่งแวดล้อมอย่างยั่งยืน',
+     E'รณรงค์ลดขยะพลาสติกและคัดแยกขยะภายในมหาวิทยาลัย\nจัดกิจกรรมปลูกต้นไม้และเวิร์กชอป Upcycling\nร่วมขับเคลื่อน Green Campus กับเครือข่ายนักศึกษา',
+     'https://clubhub.tu.ac.th/clubs/environment', 'https://www.facebook.com/TUEnvironmentClub', 'https://www.instagram.com/tu_green_club', 'environment@club.tu.ac.th',
+     'อาคารกิจกรรมนักศึกษา ชั้น 1 ห้องกรีนคลับ 108', NULL)
+) AS seed(category_name, name, description, objectives, contact_url, facebook_url, instagram_url, contact_email, affiliation_name, image_url)
 JOIN club_categories AS category ON category.name = seed.category_name
 CROSS JOIN users AS admin_user
 WHERE admin_user.tu_username = 'seed_admin'
@@ -211,6 +249,48 @@ WHERE admin_user.tu_username = 'seed_admin'
   AND NOT EXISTS (
       SELECT 1 FROM recruitment_rounds AS r
       WHERE r.club_id = c.id AND r.title = demo.title
+  );
+
+-- Previously closed rounds for testing the public directory's last-close time.
+-- These are separate from the open demo rounds and can be seeded repeatedly.
+INSERT INTO recruitment_rounds
+    (club_id, title, academic_year, semester, description, opens_at, closes_at,
+     confirmation_deadline, publication_status, published_at, created_by)
+SELECT c.id, demo.title, 2569, 1, 'รอบรับสมัครที่ปิดแล้ว (ข้อมูลทดสอบ)',
+       now() - interval '30 days', now() - demo.days_ago * interval '1 day',
+       now() + interval '1 day', 'PUBLISHED', now() - interval '30 days', admin_user.id
+FROM (VALUES
+    ('ชมรมดนตรีสากล', 'DEMO: ชมรมดนตรีสากล รอบที่ปิดแล้ว', 3),
+    ('ชมรมวิ่งเพื่อสุขภาพ', 'DEMO: ชมรมวิ่งเพื่อสุขภาพ รอบที่ปิดแล้ว', 7)
+) AS demo(club_name, title, days_ago)
+JOIN clubs AS c ON c.name = demo.club_name
+CROSS JOIN users AS admin_user
+WHERE admin_user.tu_username = 'seed_admin'
+  AND NOT EXISTS (
+      SELECT 1 FROM recruitment_rounds AS r
+      WHERE r.club_id = c.id AND r.title = demo.title
+  );
+
+-- Closed-history fallback for demo clubs without an open or previously closed round.
+INSERT INTO recruitment_rounds
+    (club_id, title, academic_year, semester, description, opens_at, closes_at,
+     confirmation_deadline, publication_status, published_at, created_by)
+SELECT c.id, 'DEMO: รอบรับสมัครที่ปิดแล้ว', 2569, 1, 'รอบที่ปิดแล้ว (ข้อมูลทดสอบ)',
+       now() - interval '30 days', now() - interval '5 days', now() + interval '1 day',
+       'PUBLISHED', now() - interval '30 days', admin_user.id
+FROM clubs AS c
+JOIN users AS admin_user ON admin_user.tu_username = 'seed_admin'
+WHERE c.status = 'ACTIVE'
+  AND NOT EXISTS (
+      SELECT 1 FROM recruitment_rounds AS r
+      WHERE r.club_id = c.id AND r.publication_status = 'PUBLISHED'
+        AND r.opens_at <= now() AND now() < r.closes_at AND r.closed_at IS NULL
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM recruitment_rounds AS r
+      WHERE r.club_id = c.id AND r.publication_status = 'PUBLISHED'
+        AND r.published_at IS NOT NULL AND r.opens_at <= now()
+        AND COALESCE(r.closed_at, r.closes_at) <= now()
   );
 
 -- 11. Application questions.

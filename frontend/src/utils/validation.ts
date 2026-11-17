@@ -2,11 +2,19 @@ export function isRequired(value: string): boolean {
   return value.trim().length > 0
 }
 
-export function isValidUrl(value: string): boolean {
+export function isValidHttpsUrl(value: string): boolean {
+  if (
+    Array.from(value).length > 2048 ||
+    /\s/u.test(value) ||
+    Array.from(value, (ch) => ch.codePointAt(0) ?? 0).some(
+      (cp) => cp <= 0x1f || (cp >= 0x7f && cp <= 0x9f),
+    )
+  ) {
+    return false
+  }
   try {
-    const url = new URL(value.trim())
+    const url = new URL(value)
     return (
-      value.trim().length <= 2048 &&
       url.protocol === 'https:' &&
       Boolean(url.hostname) &&
       !url.username &&
@@ -17,6 +25,18 @@ export function isValidUrl(value: string): boolean {
   }
 }
 
+export function isValidUrl(value: string): boolean {
+  return isValidHttpsUrl(value.trim())
+}
+
+export function isValidClubImageUrl(value: string): boolean {
+  const trimmed = value.trim()
+  if (/^\/images\/[A-Za-z0-9._/-]+$/.test(trimmed) && !trimmed.includes('..') && trimmed.length <= 2048) {
+    return true
+  }
+  return isValidUrl(trimmed)
+}
+
 export function isValidFacebookUrl(value: string): boolean {
   return isValidSocialUrl(value, [
     'facebook.com',
@@ -25,16 +45,8 @@ export function isValidFacebookUrl(value: string): boolean {
   ])
 }
 
-export function isValidInstagramUrl(value: string): boolean {
-  return isValidSocialUrl(value, ['instagram.com', 'www.instagram.com'])
-}
-
 export function isValidInstagramHandle(value: string): boolean {
   return /^[a-zA-Z0-9._]+$/.test(value) && value.length <= 30
-}
-
-export function isValidDomeTuEmail(value: string): boolean {
-  return hasAllowedEmailDomain(value, ['dome.tu.ac.th'])
 }
 
 export function isValidClubContactEmail(value: string): boolean {
@@ -48,22 +60,6 @@ export function isValidClubContactEmail(value: string): boolean {
     domain.endsWith('.tu.ac.th')
 
   return isAllowedDomain && isValidEmailLocalPart(parts[0])
-}
-
-function hasAllowedEmailDomain(
-  value: string,
-  allowedDomains: readonly string[],
-): boolean {
-  const parts = value.trim().split('@')
-  if (
-    parts.length !== 2 ||
-    !isValidEmailLocalPart(parts[0]) ||
-    !allowedDomains.includes(parts[1].toLowerCase())
-  ) {
-    return false
-  }
-
-  return true
 }
 
 function isValidEmailLocalPart(localPart: string): boolean {

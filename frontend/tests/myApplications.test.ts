@@ -158,12 +158,22 @@ test('my applications list shows empty state when applicant has no applications 
   const stub = renderApp(() => json(pageOf([], 0, 0, 0)))
   try {
     assert.ok(await screen.findByRole('heading', { level: 2, name: 'คุณยังไม่มีประวัติการสมัครชมรม' }))
-    assert.equal(screen.getByRole('link', { name: 'ดูรอบที่เปิดรับสมัคร' }).getAttribute('href'), '/open-calls')
+    assert.equal(screen.getByRole('link', { name: 'ดูรายชื่อชมรม' }).getAttribute('href'), '/clubs')
     assert.equal(screen.queryByRole('article'), null)
   } finally {
     cleanup()
     stub.restore()
   }
+})
+
+test('the retired open-calls route redirects to the club directory', async () => {
+  const stub = renderApp(request => request.url === '/api/v1/public/club-categories'
+    ? json({ items: [] })
+    : json({ items: [], page: { number: 0, size: 20, totalElements: 0, totalPages: 0 } }), '/open-calls')
+  try {
+    assert.ok(await screen.findByRole('heading', { name: 'ชมรมที่น่าสนใจ' }))
+    assert.equal(screen.queryByRole('link', { name: 'รอบที่เปิดรับ' }), null)
+  } finally { cleanup(); stub.restore() }
 })
 
 test('my applications list shows error state without server SQL text and retries on click (TC-04-11)', async () => {
@@ -197,6 +207,7 @@ test('my applications list paginates using ?page= query parameter', async () => 
 
   try {
     await screen.findByRole('article', { name: 'ชมรมทดสอบ 90002' })
+    assert.ok(screen.getByText('จำนวนตามสถานะและตัวกรองแสดงเฉพาะใบสมัครในหน้านี้'))
     const nav = screen.getByRole('navigation', { name: 'เปลี่ยนหน้ารายการใบสมัคร' })
     assert.ok(within(nav).getByText('หน้า 2 จาก 2'))
     assert.equal(within(nav).getByRole('button', { name: 'ถัดไป' }).hasAttribute('disabled'), true)
@@ -209,6 +220,16 @@ test('my applications list paginates using ?page= query parameter', async () => 
     cleanup()
     stub.restore()
   }
+})
+
+test('a status filter reports an empty current page without implying other pages are empty', async () => {
+  const stub = renderApp(() => json(pageOf([summaryItem('90001')], 0, 2, 21)))
+  try {
+    await screen.findByRole('article', { name: 'ชมรมทดสอบ 90001' })
+    fireEvent.click(within(screen.getByRole('group', { name: 'กรองตามสถานะใบสมัคร' })).getByRole('button', { name: 'ไม่ผ่านการคัดเลือก' }))
+    assert.ok(screen.getByRole('heading', { name: 'ไม่พบใบสมัครในสถานะที่เลือกในหน้านี้' }))
+    assert.ok(screen.getByText('ลองเปลี่ยนตัวกรองหรือไปหน้าอื่นเพื่อดูใบสมัครเพิ่มเติม'))
+  } finally { cleanup(); stub.restore() }
 })
 
 test('my application detail page renders status history timeline, answers, and external links', async () => {

@@ -62,6 +62,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
       TU_AUTH_MODE: ${TU_AUTH_MODE:-mock}
+      DEV: ${DEV:-false}
       TU_AUTH_ENDPOINT_URL: ${TU_AUTH_ENDPOINT_URL:-}
       TU_AUTH_APPLICATION_KEY: ${TU_AUTH_APPLICATION_KEY:-}
     expose:
@@ -131,6 +132,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
       TU_AUTH_MODE: ${TU_AUTH_MODE:-mock}
+      DEV: ${DEV:-false}
       TU_AUTH_ENDPOINT_URL: ${TU_AUTH_ENDPOINT_URL:-}
       TU_AUTH_APPLICATION_KEY: ${TU_AUTH_APPLICATION_KEY:-}
     ports:

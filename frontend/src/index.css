@@ -11,7 +11,7 @@
   --color-tu-maroon-100: #f5e1e8;
   --color-tu-maroon-800: #6e1832;
 
-  --font-sans: "IBM Plex Sans Thai", ui-sans-serif, system-ui, -apple-system,
+  --font-sans: "IBM Plex Sans Thai", "Manrope", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", "Noto Sans Thai", "Leelawadee UI", sans-serif;
 }
 
@@ -21,9 +21,10 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scrollbar-gutter: stable;
 
-  color: var(--color-slate-900);
-  background: var(--color-slate-50);
+  color: #231b17;
+  background: #faf7f3;
 }
 
 body {
@@ -60,6 +61,38 @@ body {
 
 .validation-message-shake {
   animation: validation-message-shake 360ms ease-in-out;
+}
+
+@keyframes editorial-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes editorial-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-hero-fade {
+  animation: editorial-fade-in 400ms ease-out both;
+}
+
+.animate-club-rise {
+  animation: editorial-rise-in 320ms ease-out both;
+}
+
+.animate-tab-content {
+  animation: editorial-fade-in 180ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {

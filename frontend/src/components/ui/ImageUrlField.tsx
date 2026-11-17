@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { isValidUrl } from '../../utils/validation';
+import { isValidClubImageUrl } from '../../utils/validation';
 import { inputClass } from './classes';
 import { Field } from './Field';
-import { ImageIcon } from './icons';
+import { Image as ImageIcon } from 'lucide-react';
 
 interface ImageUrlFieldProps {
   id: string;
@@ -21,10 +21,10 @@ export function ImageUrlField({ id, label, value, onChange, variant, hint, error
   // The URL that failed to load; a new URL gets a fresh attempt.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const url = value.trim();
-  const canPreview = isValidUrl(url) && url !== failedUrl;
+  const canPreview = isValidClubImageUrl(url) && url !== failedUrl;
   const placeholderText = !url
     ? 'ยังไม่มีรูป'
-    : !isValidUrl(url)
+    : !isValidClubImageUrl(url)
       ? 'ต้องใช้ https://'
       : 'โหลดรูปไม่สำเร็จ';
 
@@ -45,7 +45,7 @@ export function ImageUrlField({ id, label, value, onChange, variant, hint, error
           />
         ) : (
           <div className="flex size-full flex-col items-center justify-center gap-1 p-2 text-center text-slate-600">
-            <ImageIcon className={variant === 'banner' ? 'size-8' : 'size-6'} />
+            <ImageIcon aria-hidden="true" strokeWidth={1.75} className={variant === 'banner' ? 'size-8' : 'size-6'} />
             <span className={variant === 'banner' ? 'text-sm' : 'text-xs leading-4'}>{placeholderText}</span>
           </div>
         )}

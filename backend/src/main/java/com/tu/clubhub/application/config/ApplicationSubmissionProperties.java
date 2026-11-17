@@ -1,5 +1,6 @@
 package com.tu.clubhub.application.config;
 
+import com.tu.clubhub.common.config.LockTimeouts;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -8,11 +9,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 @ConfigurationProperties(prefix = "clubhub.application.submission")
 public record ApplicationSubmissionProperties(@DefaultValue("2s") Duration lockTimeout) {
     public ApplicationSubmissionProperties {
-        if (lockTimeout == null || lockTimeout.compareTo(Duration.ofMillis(1)) < 0
-                || lockTimeout.compareTo(Duration.ofMillis(Integer.MAX_VALUE)) > 0) {
-            throw new IllegalArgumentException("Application submission lock-timeout must be between 1ms and 2147483647ms");
-        }
+        LockTimeouts.validate(lockTimeout, "Application submission");
     }
 
-    public String databaseLockTimeout() { return lockTimeout.toMillis() + "ms"; }
+    public String databaseLockTimeout() { return LockTimeouts.databaseMillis(lockTimeout); }
 }

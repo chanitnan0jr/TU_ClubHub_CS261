@@ -9,7 +9,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
@@ -27,11 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class ApplicationExceptionHandler extends ApiExceptionHandler {
     @ExceptionHandler(ApplicationSubmissionException.class)
     public ResponseEntity<ProblemResponse> submission(ApplicationSubmissionException exception, HttpServletRequest request) {
-        if ("ACCOUNT_NOT_ALLOWED".equals(exception.code())) {
-            var session = request.getSession(false);
-            if (session != null) session.invalidate();
-            SecurityContextHolder.clearContext();
-        }
+        clearSessionIfAccountNotAllowed(exception.code(), request);
         var response = problem(request, exception.status(), exception.code(), null,
                 exception.fieldErrors(), new HttpHeaders(), exception);
         if (exception.reason() != null) response.getBody().setProperty("reason", exception.reason());
@@ -45,9 +40,7 @@ public class ApplicationExceptionHandler extends ApiExceptionHandler {
             return problem(request, 400, "INVALID_RESOURCE_ID", null, List.of(), exception.getHeaders(), null);
         }
         if ("This account is not allowed to use TU-ClubHub".equals(exception.getReason())) {
-            var session = request.getSession(false);
-            if (session != null) session.invalidate();
-            SecurityContextHolder.clearContext();
+            clearSessionIfAccountNotAllowed("ACCOUNT_NOT_ALLOWED", request);
             return problem(request, 403, "ACCOUNT_NOT_ALLOWED", null, List.of(), exception.getHeaders(), null);
         }
         return super.serviceError(exception, request);
@@ -56,9 +49,7 @@ public class ApplicationExceptionHandler extends ApiExceptionHandler {
     @Override
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ProblemResponse> unreadable(HttpMessageNotReadableException exception, HttpServletRequest request) {
-        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
-            if (cause instanceof ApplicationSubmissionException validation) return submission(validation, request);
-        }
-        return super.unreadable(exception, request);
+        var validation = findCause(exception, ApplicationSubmissionException.class);
+        return validation != null ? submission(validation, request) : super.unreadable(exception, request);
     }
 }

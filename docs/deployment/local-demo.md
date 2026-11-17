@@ -23,6 +23,7 @@ This guide runs the current TU-ClubHub application and PostgreSQL locally using 
    - `PORT=8080`: Default host port for the `frontend` Nginx container (`FRONTEND_PORT` overrides it if set).
    - `SPRING_PROFILES_ACTIVE=dev`: Enables Flyway schema migration and local development defaults.
    - `TU_AUTH_MODE=mock`: Uses the internal mock TU Authentication provider (no external university API credentials required).
+   - `DEV=false`: Keeps the floating Dev Role Switcher disabled by default. Set `DEV=true` (requires `SPRING_PROFILES_ACTIVE=dev` and `TU_AUTH_MODE=mock`) to enable the `/api/v1/auth/dev/*` endpoints and floating role switcher pill (`USER`, `ADMIN`, `COMMITTEE`, `PRESIDENT`) in the UI.
    - `POSTGRES_DB=tu_clubhub`
    - `POSTGRES_USER=postgres`
    - `POSTGRES_PASSWORD=tu_clubhub_dev_secret`
@@ -74,11 +75,11 @@ The default frontend is at `http://localhost:8080`; Nginx proxies `/api/`, not `
 2. **Access the Application**:
    - Open your web browser and navigate to: [http://localhost:8080](http://localhost:8080) (or the configured `FRONTEND_PORT` / `PORT`).
    - With `dev` + `TU_AUTH_MODE=mock`, two accounts share the password `tu-clubhub-demo`: `student-demo` (president of ชมรมเขียนโปรแกรม after seeding) and `applicant-demo` (a student with no memberships, for applying to that club).
-   - After login the home page has a launcher that takes a club ID (and round ID). The club pages are `/clubs/{clubId}`, `/clubs/{clubId}/edit` and `/clubs/{clubId}/rounds/{roundId}/questions`. A fresh database has no clubs, so load the demo data first (step 3).
+   - `/` is the public club directory (`/clubs`); after committee login, `/dashboard` and `/clubs/{clubId}/manage` provide club management shortcuts (`/clubs/{clubId}/edit`, `/clubs/{clubId}/rounds`, `/clubs/{clubId}/applications`, `/clubs/{clubId}/rounds/{roundId}/questions`), while `/admin/dashboard` shows the central admin overview. A fresh database has no clubs, so load the demo data first (step 3).
    - Check backend health with `docker compose exec backend wget -qO- http://127.0.0.1:8080/actuator/health` (or at [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health) when using the optional `unified` profile).
 
 3. **Database Migrations and Initial Data**:
-   - Flyway automatically applies all database migrations (`V1__init_schema.sql`, `V3__create_spring_session_tables.sql`) on startup.
+   - Flyway automatically applies all database migrations (`V1__init_schema.sql`, `V3__create_spring_session_tables.sql`, `V4__committee_assignment_integrity_and_audit.sql`, `V5__add_club_name_search_index.sql`, `V6__selection_result_audit.sql`, `V7__allow_local_club_images.sql`) on startup.
    - These create 17 business tables and the two Spring Session tables. The demo data in `V2__seed_test_data.sql` lives in test resources and is never applied in `dev` or `prod`.
    - A fresh database has no demo clubs, memberships, or committee assignments. Mock login creates the `users` row and an ACTIVE `student_profiles` row from the mock TU status, but grants no membership or committee access. API examples such as club ID `20001` are not seeded records.
    - To load local demo data (10 clubs, committee accounts and sample rounds with questions), start the app once so Flyway creates the tables, then run `scripts/seed-dev-data.sh`. It is safe to run again. It makes `student-demo` the president of ชมรมเขียนโปรแกรม so the club editor and question pages work, and prints the page URLs to try. Set `APP_URL` to change the printed login URL for standalone development. It is for local development only.
@@ -99,13 +100,17 @@ The default frontend is at `http://localhost:8080`; Nginx proxies `/api/`, not `
 After seeding, all of this works in the browser (`dev`, `TU_AUTH_MODE=mock`, password `tu-clubhub-demo`):
 
 1. Log in as `student-demo`. The home page lists **ชมรมที่ฉันดูแล**: ชมรมเขียนโปรแกรม (`/clubs/3` on a fresh seed). Open it to reach the committee overview at `/clubs/3/manage`.
-2. **โปรไฟล์ชมรม** (`/clubs/3/edit`): change the description, the category, the tags and the image URLs (HTTPS, previewed live), then save. **ดูหน้าโปรไฟล์สาธารณะ** shows the change straight away.
+2. **โปรไฟล์ชมรม** (`/clubs/3/edit`): change the description, the category, the tags and the image URLs (`https://...` or local `/images/...` paths, previewed live), then save. **ดูหน้าโปรไฟล์สาธารณะ** shows the change straight away.
 3. **จัดการรอบรับสมัคร** (`/clubs/3/rounds`) → **สร้างรอบรับสมัคร**: opening time in the past, closing time in the future, a confirmation deadline after closing, and the questions. Save it as a draft, use **แก้ไข** to change it, then **เผยแพร่**.
-4. Open **รอบที่เปิดรับ** (`/open-calls`): the round is listed with its club, details and deadline. `/clubs/3` shows the same round with its details and results date.
-5. Log out, log in as `applicant-demo`, click **สมัคร** on the board, fill in the form, review and submit. The result page shows the application number and `SUBMITTED`.
-6. Log back in as `student-demo`, open `/clubs/3/rounds` and click **ปิดรับสมัคร** on the round. It disappears from `/open-calls`, and opening its application form now answers `ROUND_CLOSED`.
+4. Open **สำรวจชมรม** (`/clubs`) and select **เปิดรับสมัครอยู่** to find clubs with open rounds. `/clubs/3` shows the current round and its application window. The old `/open-calls` URL redirects to the club directory.
+5. Log out, log in as `applicant-demo`, click **สมัครเข้าชมรม** on the club card, fill in the form, review and submit. The result page shows the application number and `SUBMITTED`.
+6. Log back in as `student-demo`, open `/clubs/3/rounds` and click **ปิดรับสมัคร** on the round. The card no longer offers an application link for that round, and opening its application form now answers `ROUND_CLOSED`.
 
-`student-demo` cannot apply to its own club (it is already a member). The application history page (US-04) and application review (US-09) are Sprint 2 work.
+`student-demo` cannot apply to its own club (it is already a member). For Sprint 2 workflows in local demo, applicants can track status and read results at `/me/applications` (the confirm/decline buttons call a backend endpoint that is not implemented yet), committees can review applications and publish results at `/clubs/{clubId}/applications`, and central admins can inspect university metrics at `/admin/dashboard` (optionally using the `DEV=true` role switcher pill to jump across `USER`, `ADMIN`, `COMMITTEE`, and `PRESIDENT`).
+
+The base dev seed also creates closed example rounds for active demo clubs without an open or previously closed round. Their directory cards can display the latest closing time. The 30 activity images in `frontend/public/images/club-activities/` are generated illustrations for the ten demo banner assets, not photographs of real club events; the page labels them as such. See the [image README](../../frontend/public/images/club-activities/README.md). Other club images are not automatically mapped to this demo gallery.
+
+Club detail embeds Google Maps using the club's location text. When no location is supplied, it defaults to Thammasat Rangsit; a button lets the visitor switch to that fallback. Google Maps may not match a room-level address, and the embedded map does not report an unmatched search to the page.
 
 ---
 

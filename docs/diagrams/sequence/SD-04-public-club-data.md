@@ -1,6 +1,6 @@
 # SD-04: อ่านข้อมูลชมรมและรอบรับสมัครสาธารณะ
 
-อ้างอิง: [US-02](../../stories/sprint1/US-02.md) · [Public Club API](../../api/API_v1.md)
+อ้างอิง: [US-02](../../stories/sprint1/US-02.md) · [Public Club API](../../api/API_v1.md) · [Data Flow Diagram](../dataflow/DFD-01-us-02-public-club.md)
 
 <!-- ponytail: show successful exchanges between layers only. -->
 

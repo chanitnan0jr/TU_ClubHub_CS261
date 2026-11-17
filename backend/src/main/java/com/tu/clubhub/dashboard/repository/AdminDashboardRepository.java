@@ -1,11 +1,10 @@
 package com.tu.clubhub.dashboard.repository;
 
 import com.tu.clubhub.club.dto.PublicClubCategoryDto;
-import com.tu.clubhub.club.dto.PublicPageMetadataDto;
+import com.tu.clubhub.common.dto.PageResponse;
 import com.tu.clubhub.dashboard.dto.AdminDashboardFilter;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.CategoryStats;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.ClubStats;
-import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.ClubStatsPage;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.SummaryMetrics;
 import com.tu.clubhub.dashboard.dto.AdminDashboardStatsResponse.TopClub;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -319,7 +318,7 @@ public class AdminDashboardRepository {
                         rs.getLong("active_member_count")));
     }
 
-    public ClubStatsPage clubs(
+    public PageResponse<ClubStats> clubs(
             AdminDashboardFilter filter,
             Instant now,
             long total) {
@@ -338,16 +337,7 @@ public class AdminDashboardRepository {
                 params,
                 (rs, rowNum) -> mapClub(rs));
 
-        long totalPages = total / filter.size()
-                + (total % filter.size() == 0 ? 0 : 1);
-
-        return new ClubStatsPage(
-                items,
-                new PublicPageMetadataDto(
-                        filter.page(),
-                        filter.size(),
-                        total,
-                        totalPages));
+        return PageResponse.of(items, filter.page(), filter.size(), total);
     }
 
     private ClubStats mapClub(ResultSet rs) throws SQLException {

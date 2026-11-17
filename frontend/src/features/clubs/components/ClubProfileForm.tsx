@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { inputClass } from '../../../components/ui/classes'
 import { Field } from '../../../components/ui/Field'
-import { CircleAlertIcon, CircleCheckIcon, XIcon } from '../../../components/ui/icons'
+import { CircleAlert, CircleCheck, X } from 'lucide-react'
 import { ImageUrlField } from '../../../components/ui/ImageUrlField'
 import { SectionCard } from '../../../components/ui/SectionCard'
 import { StickySaveBar } from '../../../components/ui/StickySaveBar'
@@ -180,9 +180,9 @@ export default function ClubProfileForm({ profile, categories, tags, onSave }: C
           }`}
         >
           {notice.type === 'error' ? (
-            <CircleAlertIcon className="mt-0.5 size-5" />
+            <CircleAlert aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-5 shrink-0" />
           ) : (
-            <CircleCheckIcon className="mt-0.5 size-5" />
+            <CircleCheck aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-5 shrink-0" />
           )}
           <span>{notice.message}</span>
         </div>
@@ -310,14 +310,14 @@ export default function ClubProfileForm({ profile, categories, tags, onSave }: C
                     aria-label={`ลบแท็ก ${tag.name}`}
                     className="flex size-11 items-center justify-center rounded-full hover:bg-tu-maroon-100"
                   >
-                    <XIcon className="size-4" />
+                    <X aria-hidden="true" strokeWidth={1.75} className="size-4 shrink-0" />
                   </button>
                 </span>
               ))}
             </div>
             {errors.tagIds && (
               <p id={`${FIELD_IDS.tagIds}-error`} className="mt-1.5 flex items-start gap-1.5 text-sm text-red-700">
-                <CircleAlertIcon className="mt-0.5 size-4" />
+                <CircleAlert aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
                 <span>{errors.tagIds}</span>
               </p>
             )}

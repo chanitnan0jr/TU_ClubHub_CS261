@@ -738,7 +738,7 @@ and does not record formal PO/reviewer approval.
 | Route Path | ชื่อหน้าจอ (Screen) | สิทธิ์การเข้าถึง (Route Guard) | API ที่เรียกใช้ | งาน Frontend ที่รับผิดชอบ |
 |---|---|---|---|---|
 | `/` หรือ `/clubs` | หน้าค้นหาและกรองชมรมสาธารณะ (`ClubSearchPage`) | Public (ไม่ต้อง Login) | `GET /api/v1/public/clubs`<br/>`GET /api/v1/public/club-categories`<br/>`GET /api/v1/public/interest-tags` | `Task63` (`US-01`) |
-| `/open-calls` | กระดานรอบที่เปิดรับสมัครของทุกชมรม (Open Call Board) | Public (ไม่ต้อง Login) | `GET /api/v1/public/recruitment-rounds` | `US-07` AC-03 |
+| `/open-calls` | ส่งต่อไป `/clubs`; หน้ากระดานเดิมถูกนำออก | Public (ไม่ต้อง Login) | — | ค้นหาชมรมที่เปิดรับผ่านตัวกรองในหน้ารายชื่อชมรม |
 | `/clubs/:clubId` | หน้ารายละเอียดชมรมและรอบรับสมัคร (`ClubDetailPage`) | Public (แสดงปุ่ม "แก้ไขข้อมูลชมรม" เฉพาะเมื่อ `canEditProfile === true`) | `GET /api/v1/public/clubs/{id}`<br/>`GET /api/v1/public/clubs/{id}/recruitment-rounds` | `US-02`, `Task81` |
 | `/clubs/:clubId/edit` | หน้าแก้ไขโปรไฟล์ชมรม (`ClubEditPage`) | Protected: ต้อง Login และมีสิทธิ์กรรมการที่มีผลของชมรมนั้น (`canEditProfile === true` / `activeCommitteeAssignments`) | `GET /api/v1/clubs/{clubId}`<br/>`PUT /api/v1/clubs/{clubId}` | `US-06`, `Task81` |
 | `/clubs/:clubId/manage` | ภาพรวมชมรมสำหรับกรรมการ (`ClubManageRoutePage`) | Protected: กรรมการชมรมนั้น (`activeCommitteeAssignments`) | `GET /api/v1/clubs/{clubId}/rounds` | `US-07` (Sprint 1 UI) |
@@ -754,7 +754,7 @@ and does not record formal PO/reviewer approval.
 
 > [!IMPORTANT]
 > **ข้อกำหนดการลงทะเบียน SPA Deep-Link Routes ใน Backend (`SpaForwardController.java` & `PublicRoutes.java`):**
-> ปัจจุบัน [`SpaForwardController.java`](../../backend/src/main/java/com/tu/clubhub/config/SpaForwardController.java) และ [`PublicRoutes.java`](../../backend/src/main/java/com/tu/clubhub/config/PublicRoutes.java) เปิดรับเฉพาะ SPA Route Prefix `/login`, `/open-calls`, `/clubs/**`, `/profile`, และ `/dashboard/**` เท่านั้น ดังนั้นเมื่อพัฒนาหน้าจอที่มี Top-level Path ใหม่ ได้แก่ `/rounds/:roundId/apply` (`Task53`), `/me/applications` & `/me/applications/:applicationId` (`Task64`, `Task70`), และ `/admin/dashboard` (`Task72`, `Task80`) **ต้อง** เพิ่มการแมป `GET` สำหรับ `/rounds/{roundId}/apply`, `/me/applications`, `/me/applications/{applicationId}`, และ `/admin/dashboard` ในทั้ง `SpaForwardController.java` และ `PublicRoutes.java` เพื่อให้การกด Refresh หน้าเว็บหรือเปิดลิงก์ตรง (Deep Link) ส่ง `index.html` กลับไปยัง React Router ได้โดยไม่ติด `401` หรือ `404` จาก Spring MVC (ทั้งนี้ API จริงภายใต้ `/api/v1/**` ยังคงตรวจสิทธิ์ที่ Backend ทุกคำขอ)
+> **สถานะ implementation:** [`SpaForwardController.java`](../../backend/src/main/java/com/tu/clubhub/config/SpaForwardController.java) และ [`PublicRoutes.java`](../../backend/src/main/java/com/tu/clubhub/config/PublicRoutes.java) รองรับ `/clubs/**` (รวมหน้าสมัคร), `/me/applications` และรายละเอียด, `/admin/dashboard/**`, `/login`, `/profile/**` และ `/dashboard/**` แล้ว ส่วน `/open-calls` ยังคง forward เพื่อให้ frontend ส่งต่อไป `/clubs` เมื่อเพิ่ม route ใหม่ให้ตรวจทั้งสองไฟล์และทดสอบเปิดตรง/refresh; API ภายใต้ `/api/v1/**` ยังคงตรวจสิทธิ์แยกตาม contract
 
 ---
 

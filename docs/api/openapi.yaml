@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TU-ClubHub API
-  version: 1.4.0
+  version: 1.5.0
   description: >-
     TU-ClubHub API contract for foundation, public club search/profiles, application
     forms, submission, applicant status tracking, membership offer confirmation/decline,
@@ -1007,6 +1007,105 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         default:
           $ref: '#/components/responses/ServerError'
+  /api/v1/auth/dev/accounts:
+    get:
+      tags: [Authentication]
+      operationId: listDevAccounts
+      x-implementation-status: implemented
+      summary: List fixed local-development mock role accounts
+      description: >-
+        Returns the four fixed mock accounts (USER, ADMIN, COMMITTEE, PRESIDENT)
+        for the local dev role switcher. Available only when clubhub.dev=true,
+        tu.auth.mode=mock, and a dev or test Spring profile is active (forbidden
+        when prod is active). Returns 404 RESOURCE_NOT_FOUND otherwise. Responses
+        use Cache-Control: no-store.
+      security: []
+      responses:
+        '200':
+          description: Fixed dev mock role account summaries
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevAccountsResponse'
+        '404':
+          description: Dev role switcher is disabled
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/ServerError'
+  /api/v1/auth/dev/switch:
+    post:
+      tags: [Authentication]
+      operationId: switchDevAccount
+      x-implementation-status: implemented
+      summary: Switch the active session to a local-development mock role account
+      description: >-
+        Auto-provisions (when needed) and signs in as the requested fixed mock
+        role account, rotates the SESSION cookie, and returns CurrentUserResponse.
+        Available only when clubhub.dev=true, tu.auth.mode=mock, and a dev or test
+        Spring profile is active; returns 404 RESOURCE_NOT_FOUND otherwise.
+        Requires a valid X-CSRF-TOKEN header.
+      security:
+        - CsrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevSwitchRequest'
+            example:
+              role: COMMITTEE
+      responses:
+        '200':
+          description: Session switched to the requested dev mock account
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
+            Set-Cookie:
+              description: HttpOnly session cookie for the switched dev account.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          description: Missing/invalid CSRF token or account not allowed (CSRF_INVALID / ACCOUNT_NOT_ALLOWED)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Dev role switcher is disabled
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        default:
+          $ref: '#/components/responses/ServerError'
   /api/v1/public/clubs:
     get:
       tags: [Public Clubs]
@@ -1108,6 +1207,7 @@ paths:
                           - id: '40001'
                             name: Programming
                         hasOpenRecruitment: true
+                        lastRecruitmentClosedAt: null
                     page:
                       number: 0
                       size: 20
@@ -1605,8 +1705,10 @@ paths:
         Only name, description, objectives, contact/social URLs, contactEmail,
         imageUrl, bannerUrl, categoryId, and tagIds are writable. Affiliation,
         status, and recruitment rounds are read-only through this operation.
-        Omitted or null nullable request fields are cleared. URL fields must use
-        HTTPS. categoryId must be an id from GET /api/v1/public/club-categories.
+        Omitted or null nullable request fields are cleared. Contact and social URL
+        fields must use HTTPS, while imageUrl and bannerUrl accept HTTPS URLs or
+        bundled local /images/... paths without '..'. categoryId must be an id from
+        GET /api/v1/public/club-categories.
         tagIds is the complete new tag set (at most 10 distinct ids from
         GET /api/v1/public/interest-tags); it replaces the current tags and an
         empty array removes them all. To keep the current category or tags, send
@@ -4335,9 +4437,42 @@ components:
           type: string
           format: date-time
           description: End of the term (exclusive); from this instant the entry is no longer listed.
+    DevMockRole:
+      type: string
+      enum: [USER, ADMIN, COMMITTEE, PRESIDENT]
+      description: Fixed local-development mock account role key.
+    DevAccountSummary:
+      type: object
+      additionalProperties: false
+      required: [role, username, displayName, label]
+      properties:
+        role:
+          $ref: '#/components/schemas/DevMockRole'
+        username:
+          type: string
+        displayName:
+          type: string
+        label:
+          type: string
+    DevAccountsResponse:
+      type: object
+      additionalProperties: false
+      required: [accounts]
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DevAccountSummary'
+    DevSwitchRequest:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/DevMockRole'
     ClubDetail:
       type: object
-      required: [id, categoryId, name, description, objectives, contactUrl, facebookUrl, instagramUrl, contactEmail, affiliationLevel, affiliationName, imageUrl, bannerUrl, status, category, tags, recruitmentRounds]
+      required: [id, categoryId, name, description, objectives, contactUrl, facebookUrl, instagramUrl, contactEmail, affiliationLevel, affiliationName, imageUrl, bannerUrl, status, category, tags, recruitmentRounds, canEditProfile]
       properties:
         id:
           type: string
@@ -4380,15 +4515,15 @@ components:
           maxLength: 200
         imageUrl:
           type: [string, 'null']
-          format: uri
+          format: uri-reference
           maxLength: 2048
-          pattern: '^https://\S+$'
-          description: If present, must use HTTPS. The backend does not fetch the URL.
+          pattern: '^(https://\S+|/images/[A-Za-z0-9._/-]+)$'
+          description: If present, must use HTTPS or a local /images/... path (without '..'). The backend does not fetch remote URLs.
         bannerUrl:
           type: [string, 'null']
-          format: uri
+          format: uri-reference
           maxLength: 2048
-          pattern: '^https://\S+$'
+          pattern: '^(https://\S+|/images/[A-Za-z0-9._/-]+)$'
         status:
           type: string
           enum: [ACTIVE, INACTIVE]
@@ -4454,14 +4589,16 @@ components:
           maxLength: 254
         imageUrl:
           type: [string, 'null']
-          format: uri
+          format: uri-reference
           maxLength: 2048
-          pattern: '^https://\S+$'
+          pattern: '^(https://\S+|/images/[A-Za-z0-9._/-]+)$'
+          description: Optional HTTPS image URL or bundled local /images/... path without '..'.
         bannerUrl:
           type: [string, 'null']
-          format: uri
+          format: uri-reference
           maxLength: 2048
-          pattern: '^https://\S+$'
+          pattern: '^(https://\S+|/images/[A-Za-z0-9._/-]+)$'
+          description: Optional HTTPS banner URL or bundled local /images/... path without '..'.
         categoryId:
           $ref: '#/components/schemas/PositiveBigintId'
           description: Id of an existing club category from GET /api/v1/public/club-categories.
@@ -4572,15 +4709,15 @@ components:
           maxLength: 200
         imageUrl:
           type: [string, 'null']
-          format: uri
+          format: uri-reference
           maxLength: 2048
-          pattern: '^https://\S+$'
-          description: If absent, clients may show their bundled default image. The backend does not fetch this URL.
+          pattern: '^(https://\S+|/images/[A-Za-z0-9._/-]+)$'
+          description: If absent, clients may show their bundled default image. Accepts HTTPS URLs or local /images/... paths without '..'. The backend does not fetch remote URLs.
         bannerUrl:
           type: [string, 'null']
-          format: uri
+          format: uri-reference
           maxLength: 2048
-          pattern: '^https://\S+$'
+          pattern: '^(https://\S+|/images/[A-Za-z0-9._/-]+)$'
         category:
           $ref: '#/components/schemas/PublicClubCategory'
           description: Public category summary only.
@@ -4642,7 +4779,7 @@ components:
     PublicClubSummary:
       type: object
       additionalProperties: false
-      required: [id, name, description, affiliationLevel, affiliationName, imageUrl, category, tags, hasOpenRecruitment]
+      required: [id, name, description, affiliationLevel, affiliationName, imageUrl, category, tags, hasOpenRecruitment, lastRecruitmentClosedAt]
       properties:
         id:
           type: string
@@ -4662,9 +4799,9 @@ components:
           maxLength: 200
         imageUrl:
           type: [string, 'null']
-          format: uri
+          format: uri-reference
           maxLength: 2048
-          pattern: '^https://\S+$'
+          pattern: '^(https://\S+|/images/[A-Za-z0-9._/-]+)$'
         category:
           $ref: '#/components/schemas/PublicClubCategory'
         tags:
@@ -4677,6 +4814,12 @@ components:
             True when at least one round for this club has publication_status =
             'PUBLISHED', closed_at IS NULL, and opens_at <= now < closes_at at
             the request evaluation instant.
+        lastRecruitmentClosedAt:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            Most recent effective closing time of a published round that has
+            started and closed; uses closedAt for early closure. Null if none.
     PublicClubSearchPage:
       type: object
       additionalProperties: false
@@ -4758,10 +4901,10 @@ components:
           maxLength: 200
         imageUrl:
           type: [string, 'null']
-          format: uri
+          format: uri-reference
           maxLength: 2048
-          pattern: '^https://\S+$'
-          description: HTTPS logo URL, or null when unset; the client shows its own fallback image.
+          pattern: '^(https://\S+|/images/[A-Za-z0-9._/-]+)$'
+          description: HTTPS logo URL or local /images/... path, or null when unset; the client shows its own fallback image.
         category:
           $ref: '#/components/schemas/PublicClubCategory'
     PublicOpenCall:
@@ -5385,9 +5528,9 @@ components:
           maxLength: 200
         imageUrl:
           type: [string, 'null']
-          format: uri
+          format: uri-reference
           maxLength: 2048
-          pattern: '^https://\S+$'
+          pattern: '^(https://\S+|/images/[A-Za-z0-9._/-]+)$'
     ApplicantRoundSummary:
       type: object
       additionalProperties: false

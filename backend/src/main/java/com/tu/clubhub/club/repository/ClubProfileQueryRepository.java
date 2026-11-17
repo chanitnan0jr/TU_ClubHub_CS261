@@ -300,7 +300,16 @@ public class ClubProfileQueryRepository {
                            FROM recruitment_rounds r
                            WHERE r.club_id = c.id
                              AND %s
-                       ) AS has_open_recruitment
+                       ) AS has_open_recruitment,
+                       (
+                           SELECT MAX(COALESCE(r.closed_at, r.closes_at))
+                           FROM recruitment_rounds r
+                           WHERE r.club_id = c.id
+                             AND r.publication_status = 'PUBLISHED'
+                             AND r.published_at IS NOT NULL
+                             AND r.opens_at <= ?
+                             AND COALESCE(r.closed_at, r.closes_at) <= ?
+                       ) AS last_recruitment_closed_at
                 FROM clubs c
                 JOIN club_categories cc ON cc.id = c.category_id
                 %s
@@ -315,6 +324,8 @@ public class ClubProfileQueryRepository {
         OffsetDateTime evaluationTime = utc(now);
 
         List<Object> params = new ArrayList<>();
+        params.add(evaluationTime);
+        params.add(evaluationTime);
         params.add(evaluationTime);
         params.add(evaluationTime);
         params.addAll(filter.params());
@@ -335,7 +346,8 @@ public class ClubProfileQueryRepository {
                                 rs.getString("category_name")
                         ),
                         List.of(),
-                        rs.getBoolean("has_open_recruitment")
+                        rs.getBoolean("has_open_recruitment"),
+                        toInstant(rs.getObject("last_recruitment_closed_at", OffsetDateTime.class))
                 ),
                 params.toArray()
         );
@@ -357,7 +369,8 @@ public class ClubProfileQueryRepository {
                         item.imageUrl(),
                         item.category(),
                         tagsByClub.getOrDefault(item.id(), List.of()),
-                        item.hasOpenRecruitment()
+                        item.hasOpenRecruitment(),
+                        item.lastRecruitmentClosedAt()
                 ))
                 .toList();
     }

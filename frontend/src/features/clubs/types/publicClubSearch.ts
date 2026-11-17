@@ -8,6 +8,7 @@ export interface PublicClubSearchItem {
   category: { id: string; name: string };
   tags: { id: string; name: string }[];
   hasOpenRecruitment: boolean;
+  lastRecruitmentClosedAt?: string | null;
 }
 
 export interface PublicClubSearchPage {

@@ -81,8 +81,8 @@ Table clubs [headercolor: #0F766E] {
   contact_email            varchar(254) [note: 'Validate email format in Java; not an HTTPS URL']
   affiliation_level        varchar(30) [note: 'University/faculty/other approved level; vocabulary defined by project']
   affiliation_name         varchar(200)
-  image_url                varchar(2048) [note: 'Optional external HTTPS image; otherwise use bundled default image']
-  banner_url               varchar(2048) [note: 'Optional external HTTPS banner; no file upload']
+  image_url                varchar(2048) [note: 'Optional external HTTPS URL or local /images/ asset path; otherwise use bundled default image']
+  banner_url               varchar(2048) [note: 'Optional external HTTPS URL or local /images/ asset path; no file upload']
   status                   varchar(20) [not null, default: 'ACTIVE']
   created_by               bigint [not null]
   created_at               timestamptz [not null, default: `now()`]
@@ -94,8 +94,8 @@ Table clubs [headercolor: #0F766E] {
   checks {
     `status IN ('ACTIVE', 'INACTIVE')`
     `contact_url IS NULL OR contact_url ~* '^https://[^[:space:]]+$'`
-    `image_url IS NULL OR image_url ~* '^https://[^[:space:]]+$'`
-    `banner_url IS NULL OR banner_url ~* '^https://[^[:space:]]+$'`
+    `image_url IS NULL OR image_url ~* '^(https://|/images/)[^[:space:]]+$'`
+    `banner_url IS NULL OR banner_url ~* '^(https://|/images/)[^[:space:]]+$'`
     `facebook_url IS NULL OR facebook_url ~* '^https://[^[:space:]]+$'`
     `instagram_url IS NULL OR instagram_url ~* '^https://[^[:space:]]+$'`
   }

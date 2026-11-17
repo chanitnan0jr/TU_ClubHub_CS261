@@ -1,34 +1,37 @@
 # TU-ClubHub frontend
 
-React 19, TypeScript 6, Vite 8, and Tailwind CSS 4. Versions are recorded in [package.json](package.json) and the lockfile.
+React 19, TypeScript 6, Vite 8, Tailwind CSS 4 (`@tailwindcss/postcss`), React Router 7, and `lucide-react`. Dependency versions are recorded in [package.json](package.json) and the lockfile.
 
-## Current screens and integration
+## Current screens and routes
 
-Reviewed from source on 2026-10-21. The routing, club detail, club editor and question pages were also exercised in a browser against a local backend with seeded data; this is not a CI report.
+Routes live in [src/app/AppRoutes.tsx](src/app/AppRoutes.tsx), under the path prefixes the backend forwards to `index.html` (`/login`, `/clubs/**`, `/profile/**`, `/me/applications/**`, `/dashboard/**`, and `/admin/dashboard`). Positive decimal IDs are checked with `isValidId` before loading route views; malformed IDs render `NotFoundPage` without calling the API.
 
-Routes live in `src/app/AppRoutes.tsx`, under the path prefixes the backend forwards to `index.html` (`/login`, `/clubs/**`). A club or round ID in a URL must be a positive decimal number, otherwise the page shows "not found" without calling the API.
-
-| Route | Access | Current behavior |
+| Route | Access | Component / Behavior |
 |---|---|---|
-| `/` | Public | Shows the login form without a session. After login it shows the account ID/role, logout, and a launcher where you enter a club ID (and round ID), because no API lists a user's clubs or rounds yet. |
-| `/login` | Public | Login form. After login and `/auth/me` both succeed, it returns to the `next` path (same-site paths only), or `/`, with a dismissible, screen-reader-accessible “เข้าสู่ระบบสำเร็จ” confirmation (issue #78). |
-| `/clubs/:clubId` | Public | `ClubDetailPage` reads `GET /api/v1/public/clubs/{id}` and `/recruitment-rounds` and shows only the fields they return. An unknown club shows "not found"; a failed load shows a retry button instead of placeholder data. The apply action opens the session-protected form when a round is available. |
-| `/clubs/:clubId/rounds/:roundId/apply` | Session | Loads the applicant form and questions from `GET /api/v1/rounds/{roundId}/application-form`, validates answers/HTTPS document links, reviews the submission, and posts to `POST /api/v1/rounds/{roundId}/applications`. The form-load endpoint is not implemented by the backend yet. |
-| `/profile/applications` | Session | Placeholder destination after successful submission. Application history is not connected because the US-04 API is not implemented. |
-| `/clubs/:clubId/edit` | Session | `ClubEditFormContainer` is prefilled from the public profile, because there is no committee `GET /api/v1/clubs/{clubId}`, and saves with `PUT`. Blank optional fields are sent as `null`. A non-committee user gets the backend's 403. A club that is not `ACTIVE` cannot be loaded. |
-| `/clubs/:clubId/rounds/new` | Session | `RoundCreateRoutePage` creates the round with its questions through `POST /api/v1/clubs/{clubId}/rounds` and, for **บันทึกและเผยแพร่**, publishes it with `PATCH … {action: PUBLISH, version}`. A draft opens the questions page; it cannot be published later from the UI until a round read API exists. The form has no capacity field, because rounds have no seat limit. |
-| `/clubs/:clubId/rounds/:roundId/questions` | Session | `QuestionManagementPage` uses the question APIs with session/CSRF. Open DRAFTs allow edits/deletes of unanswered existing questions, even with other answered questions. Answered content and positions stay fixed; adding questions still requires no applications. A 409 `QUESTION_HAS_ANSWERS` shows a specific alert, preserves the row and clears stale success messages; other conflicts retain their fallback. Applicant counts are not exposed. |
+| `/`, `/clubs` | Public | `ClubSearchPage` reads `GET /api/v1/public/clubs`, categories, and earliest open recruitment rounds (`clubRecruitment.ts`), with search, category, and open-recruitment filters plus last-close timestamps. |
+| `/open-calls` | Public | Redirects to `/clubs`. |
+| `/login` | Public | `LoginPage` + `Login`: authenticates with session/CSRF and redirects to safe same-site `next` paths with `LoginSuccessNotice`. |
+| `/dashboard` | Public / Session | `HomePage`: shows clubs the signed-in user manages (linking to `/clubs/:clubId/manage`) or the login/discovery entry point for visitors. |
+| `/clubs/:clubId` | Public | `ClubDetailRoutePage` -> `ClubDetailPage`: reads `GET /api/v1/public/clubs/{id}` and `/recruitment-rounds`, renders club profile, contacts/map, activity gallery, and open-round apply actions. |
+| `/clubs/:clubId/rounds/:roundId/apply` | Session | `ApplicationRoutePage` -> `DynamicApplicationForm`: loads `GET /api/v1/rounds/{roundId}/application-form`, shares `ApplicantIdentityGrid` & `<Field>`, validates answers/HTTPS links (`utils/validation.ts`), previews, and submits via `POST /api/v1/rounds/{roundId}/applications`. |
+| `/clubs/:clubId/rounds/:roundId/apply/result` | Session | `ApplicationResultRoutePage`: displays submission confirmation receipt and links to `/profile/applications` or `/`. |
+| `/me/applications`, `/profile/applications` | Session | `MyApplicationsPage`: lists applicant submissions (`GET /api/v1/me/applications`) with status tabs, year filters, and `StatusBadge` / `StatusPill` badges. |
+| `/me/applications/:applicationId`, `/profile/applications/:applicationId` | Session | `MyApplicationDetailRoutePage` -> `MyApplicationDetailPage`: displays submitted answers, links, status history timeline, and confirm/decline offer actions (`ConfirmDialog`; calls `POST /api/v1/me/applications/{id}/confirm|decline`, which has no backend handler yet). |
+| `/clubs/:clubId/manage` | Session (Committee) | `ClubManageRoutePage` inside `CommitteeLayout`: overview shortcuts, term-filtered recruitment metrics, and recent rounds summary. |
+| `/clubs/:clubId/edit` | Session (Committee) | `ClubEditRoutePage` -> `ClubProfileForm`: loads profile/categories/tags via `useApiResource` and saves updates with `PUT /api/v1/clubs/{clubId}`. |
+| `/clubs/:clubId/rounds` | Session (Committee) | `RoundListRoutePage` -> `RoundListPage`: paginated committee round list with `PUBLISH` / `CLOSE` actions and confirmation dialogs. |
+| `/clubs/:clubId/rounds/new` | Session (Committee) | `RoundCreateRoutePage` -> `RecruitmentRoundForm`: creates a draft or publishes immediately. |
+| `/clubs/:clubId/rounds/:roundId/edit` | Session (Committee) | `RoundEditRoutePage` -> `RecruitmentRoundForm`: edits draft rounds (`PUT` with optimistic `version`). |
+| `/clubs/:clubId/rounds/:roundId/questions` | Session (Committee) | `QuestionManagementRoutePage` -> `QuestionManagementPage`: adds, edits, reorders, and deletes screening questions with `409 QUESTION_HAS_ANSWERS` handling. |
+| `/clubs/:clubId/applications` | Session (Committee) | `CommitteeApplicationsPage`: filters club applications by round/status, records batch decisions, and opens `PublishResultsModal` (`PRESIDENT`). |
+| `/clubs/:clubId/applications/:applicationId` | Session (Committee) | `CommitteeApplicationDetailPage`: views applicant profile, answers, validated HTTPS document links (`isValidHttpsUrl`), and individual evaluation snapshot/decision. |
+| `/admin/dashboard` | Session (`ADMIN`) | `CentralDashboardPage` (`AdminGuard`): university-wide club/application metrics (`StatCards`), category/top-club charts (`DataCharts`), filterable table, and CSV export. |
 
-Components without a route yet:
+## Shared UI, layout, and API client
 
-| Area | Current behavior |
-|---|---|
-| Authentication | `AuthContext` calls the `csrf`, `login`, `me`, and `logout` endpoints under `/api/v1/auth`, sending cookies and CSRF for writes. |
-| Recruitment round form | `RecruitmentRoundForm` is routed at `/clubs/:clubId/rounds/new` (below). Editing an existing round is not wired, because the backend has no round list or get yet. |
-| Application form | `DynamicApplicationForm` loads the form and questions from `GET /api/v1/rounds/{roundId}/application-form`, validates and submits to the real submission API, then navigates to `/clubs/:clubId/rounds/:roundId/apply/result` with the submission receipt. The US-04 history route is currently a clear placeholder. No file uploads are supported by the API contract; document links are HTTPS URLs. |
-| Club profile form | `src/ClubProfileForm.tsx` is not used by any route. |
-
-`/dashboard/**` and `/profile` are forwarded by the backend but have no frontend screen.
+- **Layouts**: `PublicLayout` (sticky public navigation header, optional `fullBleed` mode, and `WIDE_CONTAINER_CLASS = 'mx-auto w-full max-w-[1680px] px-4 sm:px-8 lg:px-12 xl:px-16'`) and `CommitteeLayout` (left sidebar + `WIDE_CONTAINER_CLASS` workspace).
+- **UI Primitives** (`src/components/ui/`): `Breadcrumbs`, `Button`, `ConfirmDialog`, `EmptyState`, `Field` (`hintAlign`), `ImageUrlField`, `PageHeaderBanner`, `SectionCard`, `StatusBadge` / `StatusPill`, `StickySaveBar`, `classes.ts`; icons come directly from `lucide-react`.
+- **HTTP & Resource Hooks**: `src/lib/api.ts` centralizes JSON fetch, CSRF header management (`X-CSRF-TOKEN`), `ApiError`, `describeApiError`, and auth failure notifications; `src/hooks/useApiResource.ts` handles keyed async loading, stale-response cancellation, and reloads.
 
 ## Development
 
@@ -39,26 +42,15 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. [vite.config.ts](vite.config.ts) proxies `/api` to `http://localhost:8080`; the backend must be running for login. `/actuator/health` is accessed directly on port 8080.
+Open `http://localhost:5173`. [vite.config.ts](vite.config.ts) proxies `/api` to `http://localhost:8080`; `/actuator/health` is accessed directly on port 8080.
 
-For backend mock authentication, use the `dev` profile with `TU_AUTH_MODE=mock` and `student-demo` / `tu-clubhub-demo`. This creates a local user but does not grant committee access or verify student eligibility.
+For backend mock authentication, use the `dev` profile with `TU_AUTH_MODE=mock` and `student-demo` or `applicant-demo` (password `tu-clubhub-demo`).
 
-`AuthContext` also contains a separate browser-only mock enabled by `VITE_MOCK_AUTH=true` or `VITE_ENABLE_MOCK_AUTH=true`. It skips authentication requests and stores a fake user in `sessionStorage`; it does not create a backend session. Leave both unset for API integration and production builds. The current check is not restricted to Vite development mode.
+For quick multi-role testing in local development, set `DEV=true` on the backend (with `TU_AUTH_MODE=mock` and `dev` profile). The self-contained `src/features/dev/DevRoleSwitcherPill.tsx` component (mounted in `src/App.tsx`) probes `GET /api/v1/auth/dev/accounts`, stays hidden when the endpoint returns `404`, and switches real backend sessions via `POST /api/v1/auth/dev/switch` + `AuthContext.establishSession`. Removing `src/features/dev/` and the `<DevRoleSwitcherPill />` tag in `src/App.tsx` cleanly strips the frontend feature.
 
 ### Login confirmation (issue #78)
 
-`AuthContext` records a fresh-login event only after the explicit login flow has
-loaded the current session. `App` mounts `LoginSuccessNotice` outside the routes:
-its pre-mounted `role="status"`, `aria-live="polite"`, `aria-atomic="true"` region
-receives the confirmation after leaving `/login`. The message uses the existing
-green notification style and a keyboard-accessible close button; it stays until
-dismissed, logged out, or authentication fails, so it has no reading time limit.
-It is never persisted in storage or navigation state. Restoring a session on a
-page reload does not display it. Failed credentials, unavailable/invalid session
-responses and stale responses after session invalidation show no success message.
-Both real API mode and explicit browser-mock login use the same notice behavior.
-HTTP 200 plus the existing `user`/`csrf` response remains the backend contract;
-no `status` or `message` field is added. See the [verification report](../docs/testing/issue78-login-success.md).
+`AuthContext` records a fresh-login event only after the explicit login flow has loaded the current session. `App` mounts `LoginSuccessNotice` outside the routes: its pre-mounted `role="status"`, `aria-live="polite"`, `aria-atomic="true"` region receives the confirmation after leaving `/login`. The message uses a dismissible notification banner with a keyboard-accessible close button and stays until dismissed, logged out, or authentication fails. It is never persisted in storage or navigation state.
 
 ## Scripts
 
@@ -67,17 +59,14 @@ no `status` or `message` field is added. See the [verification report](../docs/t
 | `npm run dev` | Vite development server |
 | `npm run build` | `tsc -b` followed by Vite; writes `dist/` |
 | `npm run lint` | Oxlint |
-| `npm test` | `tsx --test` runs every `tests/*.test.ts` file, including application-form component tests with jsdom as well as validation, API client, club, question, and routing tests. |
-| `npm run preview` | Preview built assets; this command does not start the backend |
+| `npm test` | `tsx --test` runs every `tests/*.test.ts` file (unit and jsdom component tests) |
+| `npm run test:task54:e2e` | Browser E2E verification script (`scripts/verify-task54-browser.mjs`) |
+| `npm run preview` | Preview built assets; does not start the backend |
 
-There are no `typecheck` or `test:run` scripts. CI runs lint, `npm test`, and build. Tailwind is loaded from `src/index.css` through the PostCSS plugin in `postcss.config.js`.
+Tailwind CSS v4 and typography (`IBM Plex Sans Thai` + `Manrope` loaded in `index.html`) are configured in `src/index.css` via `@tailwindcss/postcss` in `postcss.config.js`.
 
-## Contracts to use when connecting features
+## Contracts
 
-- [Main API contract](../docs/api/API_v1.md) and [OpenAPI](../docs/api/openapi.yaml): auth, clubs, and application submission.
-- [Recruitment contract](../docs/api/rounds.openapi.yaml): create/replace a round with its complete `questions` array; the individual-question endpoints under `/api/v1/rounds/{roundId}/questions` are defined in the same file.
-- [Permission matrix](../docs/security/permission-matrix.md): authorization is enforced by the backend; UI role strings and hidden controls do not grant access.
-
-Club profile updates use `ClubUpdateRequestDto`; category/tags are read-only, and blank optional values are sent as `null`. Public profile and open-round responses have their own DTOs; `ClubDetailData` is built from them in `clubService.ts`.
-
-Application submission uses `motivation`, `answers[]`, and `links[]` from API Contract §11. The actual form route loads questions from the implemented backend application-form endpoint and posts to the submission endpoint. After a successful submission, the responsive result screen links to `/profile/applications`; that destination remains a placeholder until the US-04 history API and list UI are implemented.
+- [Main API contract](../docs/api/API_v1.md) and [OpenAPI](../docs/api/openapi.yaml): auth, clubs, application form/submission, applicant history, confirm/decline (contract only; backend handler pending), committee review, selection results, and admin dashboard.
+- [Recruitment contract](../docs/api/rounds.openapi.yaml): round and screening-question endpoints.
+- [Permission matrix](../docs/security/permission-matrix.md): authorization is enforced by the backend; UI role strings and route guards are UX only.

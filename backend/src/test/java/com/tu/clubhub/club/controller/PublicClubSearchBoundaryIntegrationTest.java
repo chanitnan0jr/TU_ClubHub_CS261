@@ -92,7 +92,8 @@ class PublicClubSearchBoundaryIntegrationTest {
                 .andExpect(jsonPath("$.items[0].hasOpenRecruitment").value(true))
                 .andExpect(jsonPath("$.items[0].tags", hasSize(2)))
                 .andExpect(jsonPath("$.items[0].keys()", containsInAnyOrder("id", "name", "description",
-                        "affiliationLevel", "affiliationName", "imageUrl", "category", "tags", "hasOpenRecruitment")));
+                        "affiliationLevel", "affiliationName", "imageUrl", "category", "tags", "hasOpenRecruitment",
+                        "lastRecruitmentClosedAt")));
         mvc.perform(get(PATH).param("q", "ชมรมกีฬา"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].id").value(Long.toString(thai)));
         for (String wildcard : new String[]{"%", "_", "\\", "!"}) {

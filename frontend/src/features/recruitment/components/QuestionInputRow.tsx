@@ -1,6 +1,6 @@
 import { Button } from '../../../components/ui/Button';
 import { inputClass } from '../../../components/ui/classes';
-import { ArrowDownIcon, ArrowUpIcon, XIcon } from '../../../components/ui/icons';
+import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import type { ScreeningQuestionInput } from '../types/recruitment';
 
 interface QuestionInputRowProps {
@@ -64,7 +64,7 @@ export const QuestionInputRow = ({
             aria-label={`เลื่อนคำถามที่ ${index + 1} ขึ้น`}
             title="เลื่อนขึ้น"
           >
-            <ArrowUpIcon />
+            <ArrowUp aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
           </Button>
           <Button
             variant="ghost"
@@ -74,7 +74,7 @@ export const QuestionInputRow = ({
             aria-label={`เลื่อนคำถามที่ ${index + 1} ลง`}
             title="เลื่อนลง"
           >
-            <ArrowDownIcon />
+            <ArrowDown aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
           </Button>
           <Button
             variant="ghost"
@@ -84,7 +84,7 @@ export const QuestionInputRow = ({
             aria-label={`ลบคำถามที่ ${index + 1}`}
             title="ลบคำถาม"
           >
-            <XIcon />
+            <X aria-hidden="true" strokeWidth={1.75} className="size-5 shrink-0" />
           </Button>
         </div>
       </div>

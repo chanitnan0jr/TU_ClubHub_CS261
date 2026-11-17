@@ -71,7 +71,7 @@ test('a form saved and loaded again gives back the same form values', () => {
   }
   assert.deepEqual(toRoundFormInput(savedRound(toRoundWriteRequest(clean))), {
     ...clean,
-    questions: clean.questions.map((question, index) => ({ ...question, id: String(81001 + index) })),
+    questions: clean.questions.map((question, index) => ({ ...question, id: String(81001 + index), maxLength: 2000 })),
   })
   assert.equal(toRoundFormInput(savedRound(toRoundWriteRequest(form))).announcementDate, '')
 })
@@ -111,8 +111,18 @@ test('loads questions in display order and maps semester numbers back', () => {
   })
   assert.equal(values.semester, 'SUMMER')
   assert.deepEqual(values.questions, [
-    { id: '81', questionText: 'ข้อแรก', isRequired: true, orderIndex: 0 },
-    { id: '82', questionText: 'ข้อสอง', isRequired: false, orderIndex: 1 },
+    { id: '81', questionText: 'ข้อแรก', isRequired: true, orderIndex: 0, maxLength: 2000 },
+    { id: '82', questionText: 'ข้อสอง', isRequired: false, orderIndex: 1, maxLength: 2000 },
   ])
   assert.equal(toRoundFormInput({ ...savedRound(toRoundWriteRequest(form)), semester: 9 }).semester, '')
+})
+
+test('retains existing question limits when editing and uses the default for new questions', () => {
+  const round = savedRound(toRoundWriteRequest(form))
+  round.questions[0].maxLength = 500
+  round.questions[1].maxLength = 1000
+  const input = toRoundFormInput(round)
+  input.questions.reverse()
+  input.questions.push({ questionText: 'ใหม่', isRequired: true, orderIndex: 2 })
+  assert.deepEqual(toRoundWriteRequest(input).questions.map((question) => question.maxLength), [1000, 500, 2000])
 })

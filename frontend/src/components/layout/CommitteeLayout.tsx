@@ -1,20 +1,22 @@
-import { useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
+import { useState, type ComponentType, type ReactNode } from 'react';
 import { Link, NavLink } from 'react-router';
+import {
+  AlertCircle,
+  CalendarDays,
+  ChevronRight,
+  ClipboardCheck,
+  Code2,
+  ExternalLink,
+  LayoutGrid,
+  Menu,
+  Users,
+  X,
+} from 'lucide-react';
 import { useAuth } from '../../features/auth/AuthContext';
 import { Breadcrumbs, type BreadcrumbItem } from '../ui/Breadcrumbs';
 import { buttonClass } from '../ui/classes';
 import { EmptyState } from '../ui/EmptyState';
-import {
-  CalendarDaysIcon,
-  CircleAlertIcon,
-  ClipboardCheckIcon,
-  LayoutGridIcon,
-  LogOutIcon,
-  MenuIcon,
-  UsersIcon,
-  XIcon,
-} from '../ui/icons';
-import PublicLayout, { SkipLink } from './PublicLayout';
+import PublicLayout, { WIDE_CONTAINER_CLASS } from './PublicLayout';
 
 interface CommitteeLayoutProps {
   clubId: string;
@@ -30,12 +32,13 @@ interface CommitteeLayoutProps {
 interface MenuItem {
   label: string;
   path: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
   /** False when nested pages (a round's questions) also mark the item active. */
   end: boolean;
 }
 
-const menuItemClass = 'flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors';
+const menuItemClass =
+  'flex min-h-11 items-center gap-3 rounded-xl px-3.5 text-sm font-medium transition-colors duration-150';
 
 // The first characters of the club name without the word "ชมรม".
 function clubInitials(name: string) {
@@ -55,7 +58,7 @@ export default function CommitteeLayout({
   actions,
   children,
 }: CommitteeLayoutProps) {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const assignments = user?.activeCommitteeAssignments;
@@ -68,7 +71,7 @@ export default function CommitteeLayout({
         <div className="mx-auto max-w-xl py-8">
           <EmptyState
             headingLevel={1}
-            icon={<CircleAlertIcon className="size-6" />}
+            icon={<AlertCircle aria-hidden="true" strokeWidth={1.75} className="size-6" />}
             title="คุณไม่มีสิทธิ์จัดการชมรมนี้"
             description="หน้านี้สำหรับกรรมการของชมรมที่ยังอยู่ในวาระเท่านั้น หากคิดว่าเป็นข้อผิดพลาด กรุณาติดต่อประธานชมรมหรือผู้ดูแลระบบ"
             action={
@@ -92,109 +95,128 @@ export default function CommitteeLayout({
   const roleLabel = assignment
     ? assignment.positionName?.trim() || (assignment.permissionRole === 'PRESIDENT' ? 'ประธานชมรม' : 'กรรมการชมรม')
     : 'กรรมการชมรม';
-  const menu: MenuItem[] = [
-    { label: 'ภาพรวม', path: `${base}/manage`, icon: LayoutGridIcon, end: true },
-    { label: 'โปรไฟล์ชมรม', path: `${base}/edit`, icon: UsersIcon, end: true },
-    { label: 'จัดการรอบรับสมัคร', path: `${base}/rounds`, icon: CalendarDaysIcon, end: false },
-    { label: 'ตรวจสอบใบสมัคร', path: `${base}/applications`, icon: ClipboardCheckIcon, end: false },
+  const myClubsRootPath = (assignments?.length ?? 0) > 1 ? '/dashboard' : `${base}/manage`;
+  const workspaceMenu: MenuItem[] = [
+    { label: 'ภาพรวม', path: `${base}/manage`, icon: LayoutGrid, end: true },
+    { label: 'โปรไฟล์ชมรม', path: `${base}/edit`, icon: Users, end: true },
+  ];
+  const recruitmentMenu: MenuItem[] = [
+    { label: 'จัดการรอบรับสมัคร', path: `${base}/rounds`, icon: CalendarDays, end: false },
+    { label: 'ตรวจสอบใบสมัคร', path: `${base}/applications`, icon: ClipboardCheck, end: false },
+  ];
+  const breadcrumbItems: BreadcrumbItem[] = [
+    { label: 'ชมรมที่ดูแล', to: myClubsRootPath },
+    { label: clubName, to: `${base}/manage` },
+    ...breadcrumbs,
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 lg:flex">
-      <SkipLink />
-      <aside className="sticky top-0 z-40 border-b border-slate-200 bg-white lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-5 lg:py-5">
-          <Link to={`${base}/manage`} className="flex min-w-0 items-center gap-3 rounded-lg">
-            <span
-              aria-hidden="true"
-              className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-sm font-semibold text-white"
-            >
-              {assignment ? clubInitials(assignment.clubName) : 'ชม'}
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-slate-900">{clubName}</span>
-              <span className="block text-xs text-slate-600">พื้นที่กรรมการชมรม</span>
-            </span>
-          </Link>
-          <button
-            type="button"
-            className={`${buttonClass('ghost', 'icon')} lg:hidden`}
-            aria-expanded={menuOpen}
-            aria-controls="committee-menu"
-            aria-label={menuOpen ? 'ปิดเมนูชมรม' : 'เปิดเมนูชมรม'}
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            {menuOpen ? <XIcon /> : <MenuIcon />}
-          </button>
-        </div>
-
-        <div
-          id="committee-menu"
-          className={`${menuOpen ? 'flex' : 'hidden'} max-h-[calc(100vh-4rem)] flex-col gap-4 overflow-y-auto border-t border-slate-100 px-3 pb-4 pt-3 lg:flex lg:max-h-none lg:flex-1 lg:border-t-0 lg:pt-0`}
-        >
-          <nav aria-label="เมนูจัดการชมรม">
-            <p className="px-3 pb-2 text-xs font-medium text-slate-600">จัดการชมรม</p>
-            <ul className="flex flex-col gap-1">
-              {menu.map(({ label, path, icon: Icon, end }) => (
-                <li key={path}>
-                  <NavLink
-                    to={path}
-                    end={end}
-                    onClick={() => setMenuOpen(false)}
-                    className={({ isActive }) =>
-                      `${menuItemClass} ${
-                        isActive
-                          ? 'bg-tu-maroon-50 font-semibold text-tu-maroon'
-                          : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-                      }`
-                    }
-                  >
-                    <Icon className="size-5" />
-                    {label}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          <div className="mt-auto flex flex-col gap-2 border-t border-slate-200 px-1 pt-4">
-            <div className="flex items-center gap-3 px-2">
+    <PublicLayout fullBleed>
+      <div className="min-h-[calc(100vh-72px)] bg-[#FAF7F3] text-[#25202A] lg:flex">
+        <aside className="sticky top-[72px] z-30 border-b border-[#EAE2D8] bg-white lg:flex lg:h-[calc(100vh-72px)] lg:w-[272px] lg:shrink-0 lg:flex-col lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between gap-3 border-b border-[#F2ECE4] px-4 py-3.5 lg:px-5 lg:py-5">
+            <Link to={`${base}/manage`} className="flex min-w-0 items-center gap-3 rounded-lg">
               <span
                 aria-hidden="true"
-                className="flex size-9 shrink-0 items-center justify-center rounded-full bg-tu-maroon-100 text-sm font-semibold text-tu-maroon"
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#68112B] text-xs font-bold text-white shadow-xs"
               >
-                {Array.from(user?.displayName?.trim() || 'ผ')[0]}
+                {assignment ? clubInitials(assignment.clubName) : <Code2 strokeWidth={1.75} className="size-5" />}
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-sm font-medium text-slate-900">
-                  {user?.displayName?.trim() || 'ผู้ใช้'}
-                </span>
-                <span className="block truncate text-xs text-slate-600">{roleLabel}</span>
+                <span className="block truncate text-sm font-bold text-[#25202A]">{clubName}</span>
+                <span className="block truncate text-xs text-[#59545B]">{roleLabel}</span>
               </span>
-            </div>
+            </Link>
             <button
               type="button"
-              onClick={() => void logout()}
-              className={`${menuItemClass} text-slate-700 hover:bg-slate-100 hover:text-slate-900`}
+              className={`${buttonClass('ghost', 'icon')} lg:hidden`}
+              aria-expanded={menuOpen}
+              aria-controls="committee-menu"
+              aria-label={menuOpen ? 'ปิดเมนูชมรม' : 'เปิดเมนูชมรม'}
+              onClick={() => setMenuOpen((open) => !open)}
             >
-              <LogOutIcon className="size-5" />
-              ออกจากระบบ
+              {menuOpen ? <X aria-hidden="true" strokeWidth={1.75} className="size-5" /> : <Menu aria-hidden="true" strokeWidth={1.75} className="size-5" />}
             </button>
           </div>
-        </div>
-      </aside>
 
-      <main id="main-content" className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-        <Breadcrumbs items={[{ label: clubName, to: `${base}/manage` }, ...breadcrumbs]} />
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
-            {description && <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>}
+          <div
+            id="committee-menu"
+            className={`${menuOpen ? 'flex' : 'hidden'} max-h-[calc(100vh-8.5rem)] flex-col gap-4 overflow-y-auto px-3 pb-4 pt-4 lg:flex lg:max-h-none lg:flex-1`}
+          >
+            <nav aria-label="เมนูจัดการชมรม" className="flex flex-col gap-5">
+              <div>
+                <p className="px-3.5 pb-2 text-xs font-medium text-[#706B70]">พื้นที่ทำงาน</p>
+                <ul className="flex flex-col gap-1">
+                  {workspaceMenu.map((item) => (
+                    <SidebarMenuLink key={item.path} item={item} onSelect={() => setMenuOpen(false)} />
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="px-3.5 pb-2 text-xs font-medium text-[#706B70]">การรับสมัคร</p>
+                <ul className="flex flex-col gap-1">
+                  {recruitmentMenu.map((item) => (
+                    <SidebarMenuLink key={item.path} item={item} onSelect={() => setMenuOpen(false)} />
+                  ))}
+                </ul>
+              </div>
+            </nav>
+
+            <div className="mt-auto border-t border-[#EAE2D8] pt-3">
+              <Link
+                to={`/clubs/${clubId}`}
+                onClick={() => setMenuOpen(false)}
+                className="flex min-h-11 items-center gap-3 rounded-xl px-3.5 text-sm font-medium text-[#3B3540] transition-colors duration-150 hover:bg-[#FAF7F3] hover:text-[#861638]"
+              >
+                <ExternalLink aria-hidden="true" strokeWidth={1.75} className="size-4 shrink-0" />
+                <span>ดูหน้าชมรม</span>
+              </Link>
+            </div>
           </div>
-          {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+        </aside>
+
+        <div className={`${WIDE_CONTAINER_CLASS} flex flex-1 min-w-0 flex-col gap-6 py-6 lg:py-8`}>
+          <Breadcrumbs
+            items={breadcrumbItems}
+            separator={<ChevronRight aria-hidden="true" strokeWidth={1.75} className="size-3.5 shrink-0 text-[#9A918B]" />}
+          />
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <span aria-hidden="true" className="h-7 w-[3.5px] shrink-0 rounded-full bg-[#861638]" />
+                <h1 className="text-[26px] font-extrabold tracking-tight text-[#25202A] sm:text-[30px]">{title}</h1>
+              </div>
+              {description && <p className="mt-1 pl-[15.5px] text-sm leading-6 text-[#59545B]">{description}</p>}
+            </div>
+            {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+          </div>
+          {children}
         </div>
-        {children}
-      </main>
-    </div>
+      </div>
+    </PublicLayout>
+  );
+}
+
+function SidebarMenuLink({ item, onSelect }: { item: MenuItem; onSelect: () => void }) {
+  const Icon = item.icon;
+  return (
+    <li>
+      <NavLink
+        to={item.path}
+        end={item.end}
+        onClick={onSelect}
+        className={({ isActive }) =>
+          `${menuItemClass} ${
+            isActive
+              ? 'bg-[#F2E7E5] font-semibold text-[#861638]'
+              : 'text-[#3B3540] hover:bg-[#FAF7F3] hover:text-[#25202A]'
+          }`
+        }
+      >
+        <Icon aria-hidden="true" strokeWidth={1.75} className="size-[18px] shrink-0" />
+        <span>{item.label}</span>
+      </NavLink>
+    </li>
   );
 }

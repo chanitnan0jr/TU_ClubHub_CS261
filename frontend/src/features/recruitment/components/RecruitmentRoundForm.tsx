@@ -3,7 +3,7 @@ import { Button } from '../../../components/ui/Button';
 import { inputClass } from '../../../components/ui/classes';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import { Field } from '../../../components/ui/Field';
-import { CircleAlertIcon } from '../../../components/ui/icons';
+import { CircleAlert } from 'lucide-react';
 import { SectionCard } from '../../../components/ui/SectionCard';
 import type {
   RecruitmentRoundFormInput,
@@ -39,7 +39,7 @@ const defaultFormInput: RecruitmentRoundFormInput = {
   announcementDate: '',
   confirmationDeadline: '',
   questions: [
-    { questionText: 'เพราะเหตุใดคุณจึงสนใจเข้าร่วมชมรมอาสาพัฒนา?', isRequired: true, orderIndex: 0 },
+    { questionText: 'เพราะเหตุใดคุณจึงสนใจเข้าร่วมชมรมนี้?', isRequired: true, orderIndex: 0 },
     { questionText: 'คุณมีทักษะหรือประสบการณ์ใดที่อยากนำมาช่วยชมรม?', isRequired: true, orderIndex: 1 },
   ],
 };
@@ -135,14 +135,14 @@ export const RecruitmentRoundForm = ({
     <div className="flex flex-col gap-6 pb-8">
       {errorCount > 0 && (
         <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800">
-          <CircleAlertIcon className="mt-0.5 size-5" />
+          <CircleAlert aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-5 shrink-0" />
           <span>ยังบันทึกข้อมูลไม่ได้ พบข้อผิดพลาด {errorCount} จุด กรุณาตรวจสอบข้อมูล</span>
         </div>
       )}
 
       {submitError && (
         <div role="alert" className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800">
-          <CircleAlertIcon className="mt-0.5 size-5" />
+          <CircleAlert aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-5 shrink-0" />
           <span>{submitError}</span>
         </div>
       )}
@@ -160,7 +160,7 @@ export const RecruitmentRoundForm = ({
                 type="text"
                 value={formData.title}
                 onChange={(e) => updateField('title', e.target.value)}
-                placeholder="เช่น รอบรับสมัครสมาชิกใหม่ ประจำภาคเรียนที่ 1/2567"
+                placeholder={`เช่น รอบรับสมัครสมาชิกใหม่ ประจำภาคเรียนที่ 1/${currentAcademicYear}`}
                 className={inputClass(Boolean(errors.title))}
               />
             )}
@@ -302,7 +302,7 @@ export const RecruitmentRoundForm = ({
           )}
           {errors.questions && (
             <p className="flex items-start gap-1.5 text-sm text-red-700">
-              <CircleAlertIcon className="mt-0.5 size-4" />
+              <CircleAlert aria-hidden="true" strokeWidth={1.75} className="mt-0.5 size-4 shrink-0" />
               <span>{errors.questions}</span>
             </p>
           )}

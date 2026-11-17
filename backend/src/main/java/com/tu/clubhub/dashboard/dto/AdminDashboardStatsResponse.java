@@ -1,7 +1,7 @@
 package com.tu.clubhub.dashboard.dto;
 
 import com.tu.clubhub.club.dto.PublicClubCategoryDto;
-import com.tu.clubhub.club.dto.PublicPageMetadataDto;
+import com.tu.clubhub.common.dto.PageResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -13,7 +13,7 @@ public record AdminDashboardStatsResponse(
         SummaryMetrics summary,
         List<CategoryStats> categoryBreakdown,
         List<TopClub> topClubs,
-        ClubStatsPage clubs) {
+        PageResponse<ClubStats> clubs) {
 
     public record AppliedFilters(
             Integer academicYear,
@@ -75,10 +75,5 @@ public record AdminDashboardStatsResponse(
             long withdrawnCount,
             long expiredCount,
             long activeMemberCount) {
-    }
-
-    public record ClubStatsPage(
-            List<ClubStats> items,
-            PublicPageMetadataDto page) {
     }
 }

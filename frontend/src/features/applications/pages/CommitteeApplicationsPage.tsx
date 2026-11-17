@@ -4,7 +4,7 @@ import CommitteeLayout from '../../../components/layout/CommitteeLayout';
 import { Button } from '../../../components/ui/Button';
 import { inputClass } from '../../../components/ui/classes';
 import { EmptyState } from '../../../components/ui/EmptyState';
-import { CircleAlertIcon, ClipboardCheckIcon } from '../../../components/ui/icons';
+import { CircleAlert, ClipboardCheck } from 'lucide-react';
 import { useApiResource } from '../../../hooks/useApiResource';
 import { describeApiError } from '../../../lib/api';
 import { formatThaiDateTime } from '../../../lib/format';
@@ -12,9 +12,10 @@ import { isValidId } from '../../../lib/ids';
 import NotFoundPage from '../../../pages/NotFoundPage';
 import { useAuth } from '../../auth/AuthContext';
 import { listRounds, type Round } from '../../recruitment/api/roundApi';
-import { CommitteeApplicationStatusBadge } from '../components/CommitteeApplicationStatusBadge';
+import { StatusPill } from '../../../components/ui/StatusBadge';
 import {
   COMMITTEE_APPLICATION_STATUS_OPTIONS,
+  COMMITTEE_APPLICATION_STATUS_PRESENTATION,
   isCommitteeApplicationStatus,
 } from '../components/committeeApplicationStatus';
 import { PublishResultsModal } from '../components/PublishResultsModal';
@@ -299,14 +300,14 @@ function ApplicationsList({ clubId }: { clubId: string }) {
           </div>
         ) : !data ? (
           <EmptyState
-            icon={<CircleAlertIcon className="size-6" />}
+            icon={<CircleAlert aria-hidden="true" strokeWidth={1.75} className="size-6 shrink-0" />}
             title="โหลดรายชื่อผู้สมัครไม่สำเร็จ"
             description={describeApiError(error, 'ไม่สามารถโหลดรายชื่อผู้สมัครได้ กรุณาลองใหม่อีกครั้ง')}
             action={<Button variant="primary" onClick={reload}>ลองใหม่</Button>}
           />
         ) : data.items.length === 0 ? (
           <EmptyState
-            icon={<ClipboardCheckIcon className="size-6" />}
+            icon={<ClipboardCheck aria-hidden="true" strokeWidth={1.75} className="size-6 shrink-0" />}
             title={status ? 'ไม่พบใบสมัครในสถานะนี้' : 'ยังไม่มีผู้สมัคร'}
             description={status ? 'ลองเลือกสถานะอื่นเพื่อดูใบสมัครเพิ่มเติม' : 'ใบสมัครที่ส่งเข้ามาจะแสดงในหน้านี้'}
             headingLevel={2}
@@ -349,7 +350,7 @@ function ApplicationsList({ clubId }: { clubId: string }) {
                             {formatThaiDateTime(application.submittedAt) || 'ไม่ระบุวันที่'}
                           </td>
                           <td className="px-5 py-4">
-                            <CommitteeApplicationStatusBadge status={application.status} />
+                            <StatusPill {...COMMITTEE_APPLICATION_STATUS_PRESENTATION[application.status]} />
                           </td>
                           {selectedRoundId && !isRoundPublished && (
                             <td className="px-5 py-4">

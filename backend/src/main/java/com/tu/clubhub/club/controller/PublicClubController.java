@@ -1,13 +1,14 @@
 package com.tu.clubhub.club.controller;
 
+import com.tu.clubhub.club.dto.OpenPublicRecruitmentRoundDto;
 import com.tu.clubhub.club.dto.PublicClubCategoryDto;
 import com.tu.clubhub.club.dto.PublicClubProfileDto;
-import com.tu.clubhub.club.dto.PublicClubSearchPageDto;
+import com.tu.clubhub.club.dto.PublicClubSearchItemDto;
 import com.tu.clubhub.club.dto.PublicClubTagDto;
 import com.tu.clubhub.club.dto.PublicItemListDto;
-import com.tu.clubhub.club.dto.PublicOpenCallPageDto;
-import com.tu.clubhub.club.dto.PublicRecruitmentRoundPageDto;
+import com.tu.clubhub.club.dto.PublicOpenCallDto;
 import com.tu.clubhub.club.service.PublicClubService;
+import com.tu.clubhub.common.dto.PageResponse;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,7 +38,7 @@ public class PublicClubController {
 
     /** Public club search and filter (US-01 / Task62). */
     @GetMapping("/clubs")
-    public ResponseEntity<PublicClubSearchPageDto> searchClubs(
+    public ResponseEntity<PageResponse<PublicClubSearchItemDto>> searchClubs(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String categoryId,
             @RequestParam(required = false) String tagId,
@@ -69,7 +70,7 @@ public class PublicClubController {
     }
 
     @GetMapping("/clubs/{id}/recruitment-rounds")
-    public ResponseEntity<PublicRecruitmentRoundPageDto> getOpenRecruitmentRounds(
+    public ResponseEntity<PageResponse<OpenPublicRecruitmentRoundDto>> getOpenRecruitmentRounds(
             @PathVariable("id") String id,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
@@ -79,7 +80,7 @@ public class PublicClubController {
 
     /** Open Call Board across all active clubs (US-07 AC-03). */
     @GetMapping("/recruitment-rounds")
-    public ResponseEntity<PublicOpenCallPageDto> getOpenCalls(
+    public ResponseEntity<PageResponse<PublicOpenCallDto>> getOpenCalls(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {

@@ -9,9 +9,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 import com.jayway.jsonpath.JsonPath;
+import com.tu.clubhub.club.dto.OpenPublicRecruitmentRoundDto;
 import com.tu.clubhub.club.dto.PublicClubProfileDto;
-import com.tu.clubhub.club.dto.PublicRecruitmentRoundPageDto;
 import com.tu.clubhub.club.service.PublicClubService;
+import com.tu.clubhub.common.dto.PageResponse;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -89,7 +90,7 @@ class PublicClubErrorHandlingIntegrationTest {
         }
 
         @Override
-        public PublicRecruitmentRoundPageDto getOpenRecruitmentRounds(String id, int page, int size) {
+        public PageResponse<OpenPublicRecruitmentRoundDto> getOpenRecruitmentRounds(String id, int page, int size) {
             fail(id);
             return null;
         }
