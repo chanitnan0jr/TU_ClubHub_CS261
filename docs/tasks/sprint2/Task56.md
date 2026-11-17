@@ -32,7 +32,7 @@
 3. **Execution Log:** บันทึกผล Smoke Test ลงใน Test Log
 
 **Artefact (ชิ้นงานที่ต้องส่ง)**
-- บันทึกผลการรัน Smoke Test บน Staging Environment
+- [บันทึกผลการรัน Smoke Test บน Staging Environment](../../testing/task56-staging-smoke-test-report.md)
 
 ---
 
@@ -40,15 +40,15 @@
 
 ### เกณฑ์ตรวจรับ (Acceptance Criteria)
 
-- [ ] คอนเทนเนอร์และฐานข้อมูลรันขึ้นอย่างเสถียรบน Staging
-- [ ] Health Check Endpoint ตอบกลับสถานะ UP
-- [ ] สามารถเข้าถึงหน้าแรกของเว็บไซต์ได้โดยไม่มี Error 500
+- [x] คอนเทนเนอร์และฐานข้อมูลรันขึ้นอย่างเสถียรบน Staging
+- [x] Health Check Endpoint ตอบกลับสถานะ UP
+- [x] สามารถเข้าถึงหน้าแรกของเว็บไซต์ได้โดยไม่มี Error 500
 
 ### Definition of Done (Checklist กลาง)
 
-- [ ] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
-- [ ] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
-- [ ] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
-- [ ] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
+- [x] ขอบเขตและ API/Data Contract ที่เกี่ยวข้องชัดเจน
+- [x] พัฒนาและทดสอบครบเกณฑ์เฉพาะของการ์ด
+- [x] แนบ PR, ผลทดสอบ, Artefact ที่กำหนด และวิธีตรวจงานให้ Reviewer
+- [x] CI ที่เกี่ยวข้องผ่าน รวม Frontend Tests เมื่อแก้ Logic ฝั่ง Frontend
 - [ ] แก้ข้อเสนอแนะที่ขัดการตรวจรับครบ และ Reviewer อนุมัติ
 - [ ] รวมโค้ดแล้ว พร้อมอัปเดตเอกสารที่ได้รับผลกระทบ
