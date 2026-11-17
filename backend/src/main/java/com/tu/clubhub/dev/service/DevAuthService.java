@@ -6,6 +6,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 import com.tu.clubhub.auth.service.AccountNotAllowedException;
 import com.tu.clubhub.dev.config.DevAuthAvailability;
@@ -90,6 +91,10 @@ public class DevAuthService {
 		userAccountService.provisionAfterVerifiedLogin(
 				role.username(), role.displayName(), role.email(), role.studentIdentity());
 
+		Long targetClubId = role.clubPermissionRole() != null
+				? ensureTargetClubId(role.username())
+				: null;
+
 		return transactionTemplate.execute(status -> {
 			UserAccount account = userAccountRepository.findByTuUsernameForUpdate(role.username())
 					.orElseThrow();
@@ -101,15 +106,14 @@ public class DevAuthService {
 				account = userAccountRepository.saveAndFlush(account);
 			}
 			if (role.clubPermissionRole() != null) {
-				ensureClubAssignment(account, role);
+				ensureClubAssignment(account, role, targetClubId);
 			}
 			return account;
 		});
 	}
 
-	private void ensureClubAssignment(UserAccount account, DevMockRole role) {
-		Instant now = clock.instant();
-		Long clubId = ensureTargetClubId(account.getId());
+	private void ensureClubAssignment(UserAccount account, DevMockRole role, Long clubId) {
+		Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 
 		ClubMembership membership = membershipRepository.findByClubIdAndUserId(clubId, account.getId())
 				.map(existing -> {
@@ -122,61 +126,79 @@ public class DevAuthService {
 		boolean hasRole = assignmentRepository.findEffectiveAssignments(account.getId(), clubId, now).stream()
 				.anyMatch(assignment -> role.clubPermissionRole().equals(assignment.getPermissionRole()));
 		if (!hasRole) {
+			Instant defaultEnd = now.plus(365, ChronoUnit.DAYS);
+			Instant endsAt = assignmentRepository
+					.findNextScheduledStart(membership.getId(), role.clubPermissionRole(), now)
+					.filter(nextStart -> nextStart.isBefore(defaultEnd))
+					.orElse(defaultEnd);
 			assignmentRepository.saveAndFlush(new ClubCommitteeAssignment(
 					membership.getId(),
 					role.positionName(),
 					role.clubPermissionRole(),
-					now.minusSeconds(1),
-					now.plus(365, ChronoUnit.DAYS),
+					now,
+					endsAt,
 					account.getId()));
 		}
 	}
 
-	private Long ensureTargetClubId(Long creatorUserId) {
-		return clubRepository.findByName(DEFAULT_CLUB_NAME)
+	private Long ensureTargetClubId(String creatorUsername) {
+		return findExistingActiveClubId()
+				.orElseGet(() -> createFallbackClub(creatorUsername));
+	}
+
+	private Optional<Long> findExistingActiveClubId() {
+		return transactionTemplate.execute(status -> clubRepository.findByName(DEFAULT_CLUB_NAME)
 				.filter(club -> "ACTIVE".equals(club.getStatus()))
 				.map(Club::getId)
 				.or(() -> clubRepository.findByStatus("ACTIVE").stream()
 						.min(Comparator.comparing(Club::getId))
-						.map(Club::getId))
-				.orElseGet(() -> createFallbackClub(creatorUserId));
+						.map(Club::getId)));
 	}
 
-	private Long createFallbackClub(Long creatorUserId) {
+	private Long createFallbackClub(String creatorUsername) {
 		Long categoryId = ensureCategoryId();
 		try {
-			Club club = clubRepository.saveAndFlush(new Club(
-					categoryId,
-					DEFAULT_CLUB_NAME,
-					"ชมรมตัวอย่างสำหรับทดสอบระบบ (Dev)",
-					creatorUserId));
-			return club.getId();
+			return transactionTemplate.execute(status -> {
+				Long creatorUserId = userAccountRepository.findByTuUsername(creatorUsername)
+						.orElseThrow()
+						.getId();
+				Club club = clubRepository.saveAndFlush(new Club(
+						categoryId,
+						DEFAULT_CLUB_NAME,
+						"ชมรมตัวอย่างสำหรับทดสอบระบบ (Dev)",
+						creatorUserId));
+				return club.getId();
+			});
 		} catch (DataIntegrityViolationException concurrentInsert) {
-			return clubRepository.findByName(DEFAULT_CLUB_NAME)
+			// Run the lookup in a fresh transaction so PostgreSQL does not reject it after rollback.
+			return transactionTemplate.execute(status -> clubRepository.findByName(DEFAULT_CLUB_NAME)
 					.map(Club::getId)
-					.orElseThrow(() -> concurrentInsert);
+					.orElseThrow(() -> concurrentInsert));
 		}
 	}
 
 	private Long ensureCategoryId() {
-		List<Long> ids = jdbcTemplate.query(
-				"SELECT id FROM club_categories ORDER BY id",
-				(rs, rowNum) -> rs.getLong("id"));
-		if (!ids.isEmpty()) {
-			return ids.get(0);
+		Optional<Long> existing = transactionTemplate.execute(status -> {
+			List<Long> ids = jdbcTemplate.query(
+					"SELECT id FROM club_categories ORDER BY id",
+					(rs, rowNum) -> rs.getLong("id"));
+			return ids.isEmpty() ? Optional.empty() : Optional.of(ids.get(0));
+		});
+		if (existing.isPresent()) {
+			return existing.get();
 		}
 		try {
-			jdbcTemplate.update(
+			transactionTemplate.executeWithoutResult(status -> jdbcTemplate.update(
 					"INSERT INTO club_categories (name, description) VALUES (?, ?)",
 					DEFAULT_CATEGORY_NAME,
-					"หมวดหมู่ชมรมตัวอย่างสำหรับทดสอบระบบ");
+					"หมวดหมู่ชมรมตัวอย่างสำหรับทดสอบระบบ"));
 		} catch (DataIntegrityViolationException ignored) {
-			// Concurrent request inserted the default category first.
+			// Concurrent request inserted the default category first; read it in a new transaction below.
 		}
-		return jdbcTemplate.queryForObject(
+		return transactionTemplate.execute(status -> jdbcTemplate.queryForObject(
 				"SELECT id FROM club_categories WHERE name = ?",
 				Long.class,
-				DEFAULT_CATEGORY_NAME);
+				DEFAULT_CATEGORY_NAME));
 	}
 
 	private void requireEnabled() {
