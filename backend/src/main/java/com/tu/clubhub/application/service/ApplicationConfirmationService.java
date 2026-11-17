@@ -1,11 +1,15 @@
 package com.tu.clubhub.application.service;
 
+import com.tu.clubhub.application.config.ApplicationSubmissionProperties;
 import com.tu.clubhub.application.dto.ApplicationConfirmationResponse;
 import com.tu.clubhub.application.repository.ApplicationConfirmationRepository;
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Set;
+import java.util.function.Supplier;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,20 +22,25 @@ import static com.tu.clubhub.application.service.ApplicationSubmissionException.
 public class ApplicationConfirmationService {
     private final ApplicationConfirmationRepository repository;
     private final Clock clock;
+    private final String lockTimeout;
 
-    public ApplicationConfirmationService(ApplicationConfirmationRepository repository, Clock clock) {
+    public ApplicationConfirmationService(
+            ApplicationConfirmationRepository repository,
+            Clock clock,
+            ApplicationSubmissionProperties properties) {
         this.repository = repository;
         this.clock = clock;
+        this.lockTimeout = properties.databaseLockTimeout();
     }
 
     @Transactional(rollbackFor = Exception.class)
     public ApplicationConfirmationResponse confirm(String applicationId) {
-        return respond(applicationId, true);
+        return lockErrors(() -> respond(applicationId, true));
     }
 
     @Transactional(rollbackFor = Exception.class)
     public ApplicationConfirmationResponse decline(String applicationId) {
-        return respond(applicationId, false);
+        return lockErrors(() -> respond(applicationId, false));
     }
 
     private ApplicationConfirmationResponse respond(String rawId, boolean confirm) {
@@ -41,6 +50,7 @@ public class ApplicationConfirmationService {
         if (scope.applicantId() != userId) throw denied();
 
         // Keep this order compatible with submission/assignment and Selection Result.
+        repository.lockTimeout(lockTimeout);
         String account = repository.lockAccount(userId)
                 .orElseThrow(() -> failure(401, "AUTHENTICATION_REQUIRED", "A valid account is required."));
         if (!"ACTIVE".equals(account))
@@ -90,6 +100,22 @@ public class ApplicationConfirmationService {
         repository.insertStatusHistory(id, userId, target, now);
         if (confirm) repository.insertMembershipHistory(membership, userId, now);
         return response(application, target, now, membership, false);
+    }
+
+    private static <T> T lockErrors(Supplier<T> action) {
+        try {
+            return action.get();
+        } catch (RuntimeException error) {
+            for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+                if (cause instanceof SQLException sql && Set.of("55P03", "40P01").contains(sql.getSQLState())) {
+                    var unavailable = failure(503, "SERVICE_UNAVAILABLE",
+                            "Membership offer response is temporarily unavailable.");
+                    unavailable.initCause(error);
+                    throw unavailable;
+                }
+            }
+            throw error;
+        }
     }
 
     private static ApplicationConfirmationResponse response(
