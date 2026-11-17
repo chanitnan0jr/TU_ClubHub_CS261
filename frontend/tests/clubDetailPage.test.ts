@@ -198,3 +198,24 @@ test('a recruitment loading error is not labelled as a closed round', async () =
     assert.ok(screen.getByRole('button', { name: 'ลองโหลดอีกครั้ง' }))
   } finally { cleanup(); stub.restore() }
 })
+
+test('club page lets visitors select any open round and renders more than three objectives', async () => {
+  const stub = stubFetch(request => json(request.url.endsWith('/recruitment-rounds')
+    ? rounds
+    : { ...profile, objectives: 'ข้อ 1\nข้อ 2\nข้อ 3\nข้อ 4\nข้อ 5' }))
+  const applied: string[] = []
+  render(createElement(MemoryRouter, null, createElement(ClubDetailPage, {
+    clubId: '20001',
+    isLoggedIn: true,
+    onNavigateToApplication: (roundId: string) => { applied.push(roundId) },
+  })))
+  try {
+    await screen.findByRole('heading', { level: 1, name: 'ชมรมตัวอย่าง' })
+    for (const item of ['ข้อ 1', 'ข้อ 2', 'ข้อ 3', 'ข้อ 4', 'ข้อ 5']) {
+      assert.ok(screen.getByText(item))
+    }
+    fireEvent.click(screen.getByRole('radio', { name: /รอบที่ 2/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'สมัครเข้าชมรม' }))
+    assert.deepEqual(applied, ['50002'])
+  } finally { cleanup(); stub.restore() }
+})
