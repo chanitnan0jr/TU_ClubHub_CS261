@@ -1,12 +1,13 @@
 package com.tu.clubhub.application.service;
 
 import com.tu.clubhub.application.dto.CommitteeClubApplicationDetail;
-import com.tu.clubhub.application.dto.CommitteeClubApplicationPage;
+import com.tu.clubhub.application.dto.CommitteeClubApplicationSummary;
 import com.tu.clubhub.application.repository.CommitteeApplicationRepository;
 import com.tu.clubhub.application.repository.CommitteeApplicationRepository.Filter;
 import com.tu.clubhub.auth.dto.ProblemResponse.FieldError;
 import com.tu.clubhub.auth.service.ClubHubPrincipal;
 import com.tu.clubhub.committee.security.ClubSecurity;
+import com.tu.clubhub.common.dto.PageResponse;
 import java.util.List;
 import java.util.Set;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -29,7 +30,7 @@ public class CommitteeApplicationService {
         this.security = security;
     }
 
-    public CommitteeClubApplicationPage list(String rawClubId, String rawRoundId, String status, String q, int page, int size) {
+    public PageResponse<CommitteeClubApplicationSummary> list(String rawClubId, String rawRoundId, String status, String q, int page, int size) {
         long viewerId = currentUserId();
         long clubId = id(rawClubId);
         requireCommittee(clubId); // Parent authorization precedes all child existence/state checks.
@@ -43,8 +44,7 @@ public class CommitteeApplicationService {
         var filter = new Filter(clubId, viewerId, roundId, status, search);
         long total = repository.count(filter);
         var items = repository.list(filter, page, size);
-        return new CommitteeClubApplicationPage(items, new CommitteeClubApplicationPage.Page(page, size, total,
-                total / size + (total % size == 0 ? 0 : 1)));
+        return PageResponse.of(items, page, size, total);
     }
 
     public CommitteeClubApplicationDetail detail(String rawClubId, String rawApplicationId) {

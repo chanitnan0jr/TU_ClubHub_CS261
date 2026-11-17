@@ -3,8 +3,8 @@
 | Property | Value |
 |---|---|
 | Version | `v1` |
-| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.4.0), `rounds.openapi.yaml` (v1.2.0), and `task75-sprint2-design.md` |
-| Last updated | 2026-11-06 |
+| Contract status | Partially implemented; endpoint status listed below; Sprint 2 contracts specified in `openapi.yaml` (v1.5.0), `rounds.openapi.yaml` (v1.2.0), and `task75-sprint2-design.md` |
+| Last updated | 2026-11-17 |
 | Audience | Frontend and backend developers |
 
 This document defines the shared HTTP contract for the TU-ClubHub foundation and application submission. It is based on the [scaffold context](../architecture/scaffold-context.md) and [system architecture](../architecture/system-architecture.md). The contract describes the intended behavior and remains the target even where the current implementation is incomplete.
@@ -17,22 +17,27 @@ The machine-readable OpenAPI 3.1 document is [`docs/api/openapi.yaml`](openapi.y
 
 ### Implementation status
 
-Initial source review on 2026-10-19; application POST status updated on 2026-10-21. This table records handlers and integration, not test results or complete policy enforcement.
+Source and frontend integration status reviewed on 2026-11-17. This table records handlers and integration, not test results or complete policy enforcement.
 
 | API | Backend status | Frontend status |
 |---|---|---|
-| Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout; `me` returns `studentStatus` and `activeCommitteeAssignments` read on every call | Login/account/logout connected; committee pages do not read assignments yet |
-| `GET /api/v1/public/clubs` | Task62 public directory: active clubs, name/category/tag/recruitment filters and pagination | Club search page calls the public directory API |
-| `GET /api/v1/public/clubs/{id}` and `.../{id}/recruitment-rounds` | Implemented; active clubs and currently open rounds from DB | Club detail still uses mock data and is not mounted |
-| `GET /api/v1/public/recruitment-rounds` (Open Call Board) | Implemented; open rounds across all active clubs | `/open-calls` page pending |
+| Auth endpoints under `/api/v1/auth`: `csrf`, `login`, `me`, `logout` (+ optional dev endpoints `dev/accounts`, `dev/switch`) | Implemented with TU adapters, JDBC session, CSRF, and absolute timeout; `me` returns `studentStatus` and `activeCommitteeAssignments` read on every call; `/api/v1/auth/dev/*` (in `com.tu.clubhub.dev`) is gated behind `clubhub.dev=true`, `tu.auth.mode=mock`, and `dev`/`test` profile (`404` otherwise) | Login/account/logout connected; optional floating switcher (`frontend/src/features/dev/DevRoleSwitcherPill.tsx`) handles `/api/v1/auth/dev/*` independently of `AuthContext` |
+| `GET /api/v1/public/clubs` | Task62 public directory: active clubs, name/category/tag/recruitment filters, pagination and nullable `lastRecruitmentClosedAt` | Club search uses the API; closed cards show the latest effective closing time when available |
+| `GET /api/v1/public/clubs/{id}` and `.../{id}/recruitment-rounds` | Implemented; active clubs and currently open rounds from DB | `/clubs/:clubId` loads the profile and open rounds; the directory also loads open rounds per recruiting club to select the earliest closing deadline |
+| `GET /api/v1/public/recruitment-rounds` | Implemented; open rounds across all active clubs | The separate Open Call Board was removed; `/open-calls` redirects to `/clubs` |
 | `GET /api/v1/public/club-categories` and `GET /api/v1/public/interest-tags` | Implemented; complete lists ordered by name, then id | Profile editor uses both; club search page uses categories |
-| `GET /api/v1/clubs/{clubId}` | Contract-only; no handler | Editor client calls this missing endpoint |
+| `GET /api/v1/clubs/{clubId}` | Contract-only; no handler | The profile editor reads `/api/v1/public/clubs/{id}` |
 | `PUT /api/v1/clubs/{clubId}` | Implemented with the current committee guard; `categoryId` and `tagIds` are required and saved with the profile in one transaction | Profile editor at `/clubs/:clubId/edit` sends `categoryId` and `tagIds` |
-| Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Forms still need integration |
-| Committee round `GET` list/detail (`listRounds`, `getRound`) | Implemented with the round-write committee guard and self-review filter; see rounds contract | Pending |
+| Round `POST`/`PUT`, `PATCH PUBLISH`/`CLOSE` | Implemented; see rounds contract | Round creation, draft editing, publishing and early closing use the API |
+| Committee round `GET` list/detail (`listRounds`, `getRound`) | Implemented with the round-write committee guard and self-review filter; see rounds contract | Committee round list and draft editor use the API |
 | Round `PATCH CANCEL` | Pending; cancellation reason still needs a schema | Pending |
-| `GET /api/v1/rounds/{roundId}/application-form` (§12) | Implemented with the Task42-confirmed account/student/window policy; PO/team review pending | Form prototype only |
-| `POST /api/v1/rounds/{roundId}/applications` (§11) | Implemented: transactional service, HTTP handler, shared Problem errors, session/CSRF; see [Task45 verification](../testing/task45-concurrency-and-rollback.md) | No submission client |
+| `GET /api/v1/rounds/{roundId}/application-form` (§12) | Implemented with the Task42-confirmed account/student/window policy; PO/team review pending | Application form loads the round and questions from the API |
+| `POST /api/v1/rounds/{roundId}/applications` (§11) | Implemented: transactional service, HTTP handler, shared Problem errors, session/CSRF; see [Task45 verification](../testing/task45-concurrency-and-rollback.md) | Submission form sends the application to the API |
+| `GET /api/v1/me/applications`, `GET /api/v1/me/applications/{applicationId}` (§11, US-04) | Implemented with owner-only access and applicant-visible status mapping | `/me/applications` and `/me/applications/:applicationId` (`/profile/applications/**` aliases) use the API |
+| `POST /api/v1/me/applications/{applicationId}/confirm` and `/decline` (US-05) | Contract only; no handler | `MyApplicationsPage` already calls both paths, so the action fails until the backend is implemented |
+| `GET /api/v1/clubs/{id}/applications`, `.../{appId}` (§13) | Implemented with current club/term grants and self-review exclusion | `/clubs/:clubId/applications` list and detail pages use the API |
+| `GET/PUT /api/v1/rounds/{roundId}/applications/{applicationId}/decision`, `PUT .../application-decisions`, `POST .../publish-results` (§15) | Implemented (Task67); PRESIDENT-only publication | Committee list/detail pages and `PublishResultsModal` use the API |
+| `GET /api/v1/admin/dashboard/stats` | Implemented with database `ADMIN` recheck | `/admin/dashboard` (`CentralDashboardPage`) uses the API |
 | `/actuator/health` | Implemented | Operational endpoint |
 
 The [permission matrix](../security/permission-matrix.md#9-สถานะ-implementation-และงานที่ต้องตามนโยบาย) lists remaining Active, PRESIDENT, account-refresh, and self-review checks. Login-time student-profile provisioning/synchronization exists in [UserAccountService](../../backend/src/main/java/com/tu/clubhub/user/service/UserAccountService.java); real TU access and verification of upstream student-status mapping remain integration work. Login does not create memberships, assignments, or privileged roles.
@@ -200,6 +205,13 @@ Returns the authenticated account as it is stored now. `role`, `studentStatus`, 
 
 Invalidates the current server-side session and clears the session cookie. Requires the current CSRF token. Returns `204 No Content` with `Cache-Control: no-store` after successful invalidation; the response has no JSON body.
 
+### Local-dev mock role switcher (optional, gated)
+
+Implemented in the isolated `com.tu.clubhub.dev` package so it can be removed without modifying core `auth`. Both endpoints are enabled **only** when `clubhub.dev=true` (`DEV=true`), `tu.auth.mode=mock`, and a `dev` or `test` Spring profile is active (enabling `clubhub.dev=true` with `prod` prevents startup). Otherwise both return `404 RESOURCE_NOT_FOUND` with `Cache-Control: no-store`.
+
+- **`GET /api/v1/auth/dev/accounts`**: Public when enabled; returns `{ "accounts": [{ role, username, displayName, label }] }` for the four fixed mock accounts (`USER`, `ADMIN`, `COMMITTEE`, `PRESIDENT`) with `Cache-Control: no-store`.
+- **`POST /api/v1/auth/dev/switch`**: Public bootstrap route requiring a valid `X-CSRF-TOKEN` header and `{ "role": "USER" | "ADMIN" | "COMMITTEE" | "PRESIDENT" }` JSON body. Auto-provisions the mock account (and default demo club/assignment when switching to `COMMITTEE` or `PRESIDENT`), rotates the `SESSION` cookie, and returns `CurrentUserResponse` (`{ "user": ... }`) with `Cache-Control: no-store`. See [`openapi.yaml`](openapi.yaml) for exact schemas (`DevAccountsResponse`, `DevSwitchRequest`, `DevMockRole`).
+
 ### Authentication errors
 
 | Status | Code | Meaning |
@@ -221,7 +233,7 @@ The following read-only endpoints are public and do not require a session cookie
 
 Returns an anonymous, paginated directory of active clubs. `q` is a trimmed, case-insensitive substring of the club name (maximum 200 characters); an empty value means no name filter and `%`, `_`, and `\` are treated as literal text. Optional `categoryId` and `tagId` are positive bigint IDs. `recruitmentStatus` is `ALL` (default), `OPEN`, or `CLOSED`; open means at least one published round has `closed_at IS NULL` and `opens_at <= now < closes_at`. All supplied filters apply together.
 
-`page` is zero-based (default 0), `size` defaults to 20 and is limited to 1–100, and `sort` is `name,asc` (default) or `name,desc`, with `id ASC` as a tie-breaker. The `items`/`page` response, fields, and errors are defined by [`searchPublicClubs` in OpenAPI](openapi.yaml). Category and tag fields contain public summaries; filtering by a tag must not duplicate a club in the results or totals.
+`page` is zero-based (default 0), `size` defaults to 20 and is limited to 1–100, and `sort` is `name,asc` (default) or `name,desc`, with `id ASC` as a tie-breaker. The `items`/`page` response, fields (including nullable `lastRecruitmentClosedAt` for the latest effective closing time of a closed published round), and errors are defined by [`searchPublicClubs` in OpenAPI](openapi.yaml). Category and tag fields contain public summaries; filtering by a tag must not duplicate a club in the results or totals.
 
 #### `GET /api/v1/public/clubs/{id}`
 
@@ -374,7 +386,7 @@ Returns a public club profile without requiring login. `clubId` is a decimal str
 }
 ```
 
-`objectives`, contact/social URLs, email, affiliation, image, and banner values may be `null` when not set. `imageUrl` may be `null`; the frontend displays its bundled default image in that case. Contact, social, image, and banner URLs, when present, must use HTTPS. The backend returns URLs as data and does not download or preview the remote resource. `recruitmentRounds` contains published rounds only. `status` is `ACTIVE` for public profiles; inactive clubs are not returned by this public endpoint.
+`objectives`, contact/social URLs, email, affiliation, image, and banner values may be `null` when not set. `imageUrl` may be `null`; the frontend displays its bundled default image in that case. Contact and social URLs, when present, must use HTTPS; `imageUrl` and `bannerUrl` accept HTTPS URLs or bundled local `/images/...` asset paths (`V7__allow_local_club_images.sql`). The backend returns URLs as data and does not download or preview the remote resource. `recruitmentRounds` contains published rounds only. `status` is `ACTIVE` for public profiles; inactive clubs are not returned by this public endpoint.
 
 | Status | Code | Meaning |
 |---|---|---|
@@ -389,7 +401,7 @@ IDs containing non-decimal characters or a minus sign return `400 INVALID_RESOUR
 
 Replaces the editable profile fields for a club and returns the updated public profile. Requires an authenticated session, the current CSRF header, and an effective `COMMITTEE` or `PRESIDENT` assignment for this club. Under the adopted permission matrix, account, student profile, club, membership, and assignment must be `ACTIVE`; membership must have `joined_at <= now` and `ended_at IS NULL`; assignment must have `revoked_at IS NULL` and `starts_at <= now < ends_at`. The server rechecks current database state on every request and inside the write transaction. `ADMIN` alone grants no access. A missing or expired session returns `401`; a suspended account returns `403 ACCOUNT_NOT_ALLOWED`; other permission failures return `403 ACCESS_DENIED`. The matrix records the guard additions still required in the implementation.
 
-The caller may update only `name`, `description`, `objectives`, `contactUrl`, `facebookUrl`, `instagramUrl`, `contactEmail`, `imageUrl`, `bannerUrl`, `categoryId`, and `tagIds`. Affiliation, status, the club ID, and recruitment rounds are not writable through this endpoint. `name` and `description` are required and non-blank; `name` is limited to 200 characters. Nullable fields omitted or sent as `null` are cleared. URL fields, when provided, must be HTTPS URLs; `contactEmail`, when provided, must be a valid email address. Text is treated as data, not executable HTML; persistence queries must use bound parameters, and clients must escape text when rendering it.
+The caller may update only `name`, `description`, `objectives`, `contactUrl`, `facebookUrl`, `instagramUrl`, `contactEmail`, `imageUrl`, `bannerUrl`, `categoryId`, and `tagIds`. Affiliation, status, the club ID, and recruitment rounds are not writable through this endpoint. `name` and `description` are required and non-blank; `name` is limited to 200 characters. Nullable fields omitted or sent as `null` are cleared. Contact/social URL fields, when provided, must be HTTPS URLs, while `imageUrl` and `bannerUrl` accept HTTPS URLs or safe local `/images/...` paths; `contactEmail`, when provided, must be a valid email address. Text is treated as data, not executable HTML; persistence queries must use bound parameters, and clients must escape text when rendering it.
 
 `categoryId` (required) is a decimal-string ID from [`GET /api/v1/public/club-categories`](#get-apiv1publicclub-categories). `tagIds` (required) is the complete new tag set: up to 10 distinct decimal-string IDs from [`GET /api/v1/public/interest-tags`](#get-apiv1publicinterest-tags). It replaces the club's current tags, `[]` removes them all, and order does not matter. To keep the current category or tags, send their current IDs (the public profile returns them). The profile fields, category, and tags are saved together: a rejected or failed request changes nothing, and after `200 OK` both the response and the public profile show the new category and tags.
 
@@ -510,7 +522,7 @@ The [Permission Matrix](../security/permission-matrix.md) is authoritative. The 
 - Admin may access aggregate university statistics and manage committee appointments and limited initial membership provisioning. Admin cannot appoint itself, read application content through its global role, or override Active, terms, ownership, self-review, or published decisions. The app does not grant global-role/account-status/club-status management permissions in this scope.
 - The backend verifies resource-parent relationships and current permissions; it does not trust hidden buttons, cached roles, or client-provided ownership/status values. Missing permissions, expired terms, inactive eligibility, and self-review use `403 ACCESS_DENIED`; valid authorization followed by a state/deadline/version conflict uses `409 RESOURCE_CONFLICT`. CSRF rejection may precede these checks.
 
-Recruitment management contracts are in [rounds.openapi.yaml](rounds.openapi.yaml), and application submission is defined in [section 11](#11-application-submission). Application reads/review, publication, dashboard, and assignment-management endpoints still require their own contracts and implementation.
+Recruitment management contracts are in [rounds.openapi.yaml](rounds.openapi.yaml), and application submission is defined in [section 11](#11-application-submission). Applicant reads, committee review, selection publication, dashboard, and assignment-management endpoints have their own sections and are implemented (see the status table); offer confirm/decline remains contract-only.
 
 ## 8. Remaining product contracts and integration
 

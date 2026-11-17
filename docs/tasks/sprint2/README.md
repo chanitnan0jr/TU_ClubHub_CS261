@@ -2,8 +2,8 @@
 
 **โครงการ:** TU ClubHub (CS261 Software Engineering, กลุ่ม 5, Section 100001)  
 **บอร์ด Trello:** [Sprint & Release Planning Board (VGby0fDM)](https://trello.com/b/VGby0fDM/sprint-release-planning-group5section-100001)  
-**วันที่ซิงก์ข้อมูลล่าสุด:** 28 ตุลาคม 2026  
-**จำนวนการ์ดงาน Sprint 2 ทั้งหมด:** 38 Tasks (และ 6 User Stories ใน Backlog)  
+**วันที่ซิงก์ข้อมูลล่าสุด:** 17 พฤศจิกายน 2026  
+**จำนวนการ์ดงาน Sprint 2 ทั้งหมด:** 41 Tasks (และ 6 User Stories ใน Backlog)  
 **เอกสารภาพรวมตาม SDLC:** [sprint-2-feature-backlog.md](../../sprint-2-feature-backlog.md)
 
 ---
@@ -21,7 +21,7 @@
 
 ---
 
-## 2. ตารางรวมการ์ดงาน Sprint 2 ทั้งหมด (38 Tasks)
+## 2. ตารางรวมการ์ดงาน Sprint 2 ทั้งหมด (41 Tasks)
 
 | Task | Feature Code | ชื่องาน | สถานะ Trello | ผู้รับผิดชอบ (Owner) | ผู้ตรวจรับ (Reviewer) | ลิงก์ Trello |
 |---|---|---|---|---|---|---|
@@ -63,3 +63,6 @@
 | [**Task90**](Task90.md) | `FEEDBACK-MEMBER` | ประชุมสั้นทบทวนฟีเจอร์ ยืนยันสิทธิ์สมาชิก (Mini Retro) | `To Do` | วรพล (BE1) & เขมจิรา (FE2) | สิรวิชญ์ (Scrum Master) | [Trello](https://trello.com/c/XHB3oALe) |
 | [**Task91**](Task91.md) | `FEEDBACK-REPORT` | ประชุมสั้นทบทวนฟีเจอร์ Admin Dashboard (Mini Retro) | `To Do` | ณัฐชนินทร์ (Boom) & เขมจิรา (FE2) | สิรวิชญ์ (Scrum Master) | [Trello](https://trello.com/c/Q5Kmi3In) |
 | [**Task92**](Task92.md) | `SPRINT-RETRO` | ประชุมสรุปผลงาน Sprint 2 Review และ Retrospective ระดับทีม | `To Do` | สิรวิชญ์ (Scrum Master) นำทีม | สมาชิกทั้ง 7 คน | [Trello](https://trello.com/c/qu7EcNsT) |
+| [**Task93**](Task93.md) | `UI-HOTFIX-01` | ปรับดีไซน์ UI หลัก แก้ปัญหาข้อมูลหน้าสมัคร และรองรับรูปชมรมแบบ Local | `To Do` | ชนิตว์นันท์ (chanitnan0jr) | สิรวิชญ์ (SE / QA) | - |
+| [**Task94**](Task94.md) | `DEV-TOOL-01` | พัฒนาระบบ Dev Mock Role Switcher และ Flag DEV บน Compose | `To Do` | ชนิตว์นันท์ (chanitnan0jr) | สิรวิชญ์ (SE / QA) | - |
+| [**Task95**](Task95.md) | `MAINT-01` | ปรับโครงสร้าง Backend Refactor, Sync เอกสาร และอัปเดตชุด Test | `To Do` | ชนิตว์นันท์ (chanitnan0jr) | สิรวิชญ์ (SE / QA) | - |

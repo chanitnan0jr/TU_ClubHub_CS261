@@ -1,7 +1,7 @@
 # TU ClubHub — Sprint 2 Task Backlog ตาม SDLC และ Feature
 
 **โครงการ:** TU ClubHub (CS261 Software Engineering, กลุ่ม 5, Section 100001)  
-**วันที่ปรับปรุงล่าสุด:** 25 ตุลาคม 2026  
+**วันที่ปรับปรุงล่าสุด:** 17 พฤศจิกายน 2026  
 **สถานะเอกสาร:** แผนงานและข้อกำหนดการ์ดงานฉบับปรับปรุงคำอธิบายให้เข้าใจง่าย สอดคล้องกับบอร์ด Trello และบทบาทของทีม (รวม US-03 ครบ 6 ฟีเจอร์)  
 **บอร์ด Trello:** [Sprint & Release Planning Board (VGby0fDM)](https://trello.com/b/VGby0fDM/sprint-release-planning-group5section-100001)
 
@@ -64,7 +64,7 @@ Sprint 2 มุ่งเน้นการส่งมอบฟีเจอร�
 
 ---
 
-## 1. ตารางสรุปภาพรวมการ์ดงาน Sprint 2 (38 Active Cards)
+## 1. ตารางสรุปภาพรวมการ์ดงาน Sprint 2 (41 Active Cards)
 
 | Task | Feature Code | ชื่องาน (ฉบับเข้าใจง่าย) | ผู้รับผิดชอบ (Owner) | ผู้ตรวจรับ (Reviewer) | SDLC Phase |
 |---|---|---|---|---|---|
@@ -106,6 +106,9 @@ Sprint 2 มุ่งเน้นการส่งมอบฟีเจอร�
 | **Task90** | `FEEDBACK-MEMBER` | ประชุมสั้นทบทวนฟีเจอร์ ยืนยันสิทธิ์สมาชิก (Mini Retro) | วรพล & เขมจิรา | สิรวิชญ์ (SM) | 6. Scrum / Review & Retro |
 | **Task91** | `FEEDBACK-REPORT` | ประชุมสั้นทบทวนฟีเจอร์ Admin Dashboard (Mini Retro) | ณัฐชนินทร์ & เขมจิรา | สิรวิชญ์ (SM) | 6. Scrum / Review & Retro |
 | **Task92** | `SPRINT-RETRO` | ประชุมสรุปผลงาน Sprint 2 Review และ Retrospective ระดับทีม | สิรวิชญ์ (SM) นำทีม | สมาชิกทั้ง 7 คน | 6. Scrum / Review & Retro |
+| **Task93** | `UI-HOTFIX-01` | ปรับดีไซน์ UI หลัก แก้ปัญหาข้อมูลหน้าสมัคร และรองรับรูปชมรมแบบ Local | ชนิตว์นันท์ (PO/SA) | สิรวิชญ์ (SE/QA) | 2. System & UI Design + 3. Development |
+| **Task94** | `DEV-TOOL-01` | พัฒนาระบบ Dev Mock Role Switcher และ Flag DEV บน Compose | ชนิตว์นันท์ (PO/SA) | สิรวิชญ์ (SE/QA) | 3. Development + 5. Deployment & DevOps |
+| **Task95** | `MAINT-01` | ปรับโครงสร้าง Backend Refactor, Sync เอกสาร และอัปเดตชุด Test | ชนิตว์นันท์ (PO/SA) | สิรวิชญ์ (SE/QA) | 3. Development + 4. Testing & QA |
 
 ---
 
@@ -583,3 +586,31 @@ Sprint 2 มุ่งเน้นการส่งมอบฟีเจอร�
   - [ ] สมาชิกทั้ง 7 คนเข้าร่วมประชุมและให้ความคิดเห็นครบถ้วน
   - [ ] ได้ Action Items ที่ชัดเจนและนำไปปรับใช้จริงใน Sprint ถัดไป
 - **Artefact:** เอกสารสรุปผล Sprint 2 Review & Retrospective ใน Repository
+
+---
+
+### [Post-Sprint Hotfix, Dev Tooling & Maintenance (Task93–Task95)]
+
+#### Task93 [UI-HOTFIX-01] ปรับดีไซน์ UI หลัก แก้ปัญหาข้อมูลหน้าสมัคร และรองรับรูปชมรมแบบ Local
+- **Label:** 2. System & UI Design + 3. Development (Coding)
+- **Owner:** ชนิตว์นันท์ (chanitnan0jr)
+- **Reviewer:** สิรวิชญ์ (SE / QA)
+- **Dependency:** Core UI ของ Sprint 1 & Sprint 2 (Club Search, Club Detail, Apply, My Applications, Admin Dashboard)
+- **จุดประสงค์ & ขอบเขต:** ปรับปรุง UX/UI ของหน้าหลักทั้งหมดให้สอดคล้องกันทั้งระบบ แก้ไข bug ฝั่ง Frontend และเพิ่มการรองรับ path รูปชมรม/กิจกรรมแบบ Local (`/images/...`) ทั้ง DB Migration (`V7`), Backend validation และ Nginx caching; ดูรายละเอียดใน [Task93.md](tasks/sprint2/Task93.md)
+- **Artefact:** PR ปรับดีไซน์ UI หลัก, รองรับรูปชมรมแบบ Local, DB Migration และแก้ไข Bug ฝั่ง Frontend พร้อม Component Tests (`feat/task93-ui-hotfix-01`)
+
+#### Task94 [DEV-TOOL-01] พัฒนาระบบ Dev Mock Role Switcher และ Flag DEV บน Compose
+- **Label:** 3. Development (Coding) + 5. Deployment & DevOps
+- **Owner:** ชนิตว์นันท์ (chanitnan0jr)
+- **Reviewer:** สิรวิชญ์ (SE / QA)
+- **Dependency:** Mock TU Auth Client และ Docker Compose Stack (`compose.yaml`)
+- **จุดประสงค์ & ขอบเขต:** เพิ่ม API (`/api/v1/auth/dev/accounts`, `/switch` ใน package `com.tu.clubhub.dev`), Frontend Floating Switcher Pill (`DevRoleSwitcherPill.tsx`) และตัวแปร `DEV` ใน `compose.yaml` เพื่อสลับบัญชี 4 บทบาทใน Local Dev โดยปิดอัตโนมัติในโหมด Production/Real Auth; ดูรายละเอียดใน [Task94.md](tasks/sprint2/Task94.md)
+- **Artefact:** PR ระบบ Dev Mock Role Switcher API/UI, Compose `DEV` Flag พร้อม Integration และ Component Tests (`feat/task94-dev-role-switcher`)
+
+#### Task95 [MAINT-01] ปรับโครงสร้าง Backend Refactor, Sync เอกสาร และอัปเดตชุด Test
+- **Label:** 3. Development (Coding) + 4. Testing & QA
+- **Owner:** ชนิตว์นันท์ (chanitnan0jr)
+- **Reviewer:** สิรวิชญ์ (SE / QA)
+- **Dependency:** Task93 (UI & Club Discovery Updates) และ Task94 (Dev Role Switcher)
+- **จุดประสงค์ & ขอบเขต:** ลดความซ้ำซ้อนฝั่ง Backend (`PageResponse`, `LockTimeouts`, `ApiExceptionHandler`, ลบ `.gitkeep` และ Lombok ที่ไม่ใช้), ซิงก์เอกสาร OpenAPI/ERD/Guides และปรับชุดทดสอบ Integration และ Browser E2E ให้สอดคล้องกับโค้ดล่าสุด; ดูรายละเอียดใน [Task95.md](tasks/sprint2/Task95.md)
+- **Artefact:** PR ปรับโครงสร้าง Backend Refactor, อัปเดต OpenAPI/เอกสารประกอบ และปรับ Test Suite ให้ผ่าน CI (`refactor/task95-maint-01`)

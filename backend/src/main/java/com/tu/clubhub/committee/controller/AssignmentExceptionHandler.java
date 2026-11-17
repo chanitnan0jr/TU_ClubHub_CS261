@@ -8,7 +8,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -17,19 +16,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class AssignmentExceptionHandler extends ApiExceptionHandler {
     @ExceptionHandler(AssignmentException.class)
     public ResponseEntity<ProblemResponse> assignment(AssignmentException exception, HttpServletRequest request) {
-        if ("ACCOUNT_NOT_ALLOWED".equals(exception.code())) {
-            var session = request.getSession(false);
-            if (session != null) session.invalidate();
-            SecurityContextHolder.clearContext();
-        }
+        clearSessionIfAccountNotAllowed(exception.code(), request);
         var response = problem(request, exception.status(), exception.code(), null, exception.fields(), new HttpHeaders(), exception);
         if (exception.reason() != null) response.getBody().setProperty("reason", exception.reason());
         return response;
     }
     @Override @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ProblemResponse> unreadable(HttpMessageNotReadableException exception, HttpServletRequest request) {
-        for (Throwable cause = exception; cause != null; cause = cause.getCause())
-            if (cause instanceof AssignmentException validation) return assignment(validation, request);
-        return super.unreadable(exception, request);
+        var validation = findCause(exception, AssignmentException.class);
+        return validation != null ? assignment(validation, request) : super.unreadable(exception, request);
     }
 }

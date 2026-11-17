@@ -1,8 +1,9 @@
 package com.tu.clubhub.application.controller;
 
 import com.tu.clubhub.application.dto.CommitteeClubApplicationDetail;
-import com.tu.clubhub.application.dto.CommitteeClubApplicationPage;
+import com.tu.clubhub.application.dto.CommitteeClubApplicationSummary;
 import com.tu.clubhub.application.service.CommitteeApplicationService;
+import com.tu.clubhub.common.dto.PageResponse;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,7 +19,7 @@ public class CommitteeApplicationController {
     public CommitteeApplicationController(CommitteeApplicationService service) { this.service = service; }
 
     @GetMapping
-    public ResponseEntity<CommitteeClubApplicationPage> list(@PathVariable String id,
+    public ResponseEntity<PageResponse<CommitteeClubApplicationSummary>> list(@PathVariable String id,
             @RequestParam(required = false) String roundId, @RequestParam(required = false) String status,
             @RequestParam(required = false) String q, @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {

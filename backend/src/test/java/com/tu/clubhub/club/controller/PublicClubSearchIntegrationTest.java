@@ -41,6 +41,12 @@ class PublicClubSearchIntegrationTest {
     @Test
     @Transactional
     void lastClosingTimeUsesActualPublishedCloseAndExcludesDraftsAndFutureRounds() throws Exception {
+        // Seeded clubs already own closed rounds, so use a club with no other rounds.
+        jdbcTemplate.update("""
+                INSERT INTO clubs(name, category_id, status, description, created_by)
+                SELECT 'Closing Time Club', (SELECT id FROM club_categories LIMIT 1), 'ACTIVE',
+                       'closing time test', (SELECT id FROM users LIMIT 1)
+                """);
         jdbcTemplate.update("""
                 INSERT INTO recruitment_rounds
                     (club_id, title, academic_year, semester, description, opens_at, closes_at,
@@ -54,9 +60,9 @@ class PublicClubSearchIntegrationTest {
                     ('draft', '2020-02-01T00:00:00Z', '2020-02-10T00:00:00Z', NULL, '2020-02-11T00:00:00Z', 'DRAFT'),
                     ('future', '2099-01-01T00:00:00Z', '2099-01-10T00:00:00Z', NULL, '2099-01-11T00:00:00Z', 'PUBLISHED')
                 ) v(title, opens_at, closes_at, closed_at, deadline, status)
-                WHERE c.name = 'ชมรม AI และวิทยาการข้อมูล'
+                WHERE c.name = 'Closing Time Club'
                 """);
-        mockMvc.perform(get("/api/v1/public/clubs").param("q", "AI"))
+        mockMvc.perform(get("/api/v1/public/clubs").param("q", "Closing Time Club"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].lastRecruitmentClosedAt").value("2020-01-05T12:30:00Z"));
     }

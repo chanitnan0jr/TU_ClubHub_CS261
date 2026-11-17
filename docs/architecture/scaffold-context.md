@@ -1,6 +1,6 @@
 # TU-ClubHub — Repository Context
 
-ปรับปรุง: 1 พฤศจิกายน 2026 · ตรวจจาก local `main` ที่ commit `faa90df` · สถานะ: Context จาก Source, Configuration และเอกสาร ณ revision นี้ ไม่ใช่ผลรันทดสอบหรือการยืนยันว่า Deploy แล้ว
+ปรับปรุง: 17 พฤศจิกายน 2026 · ตรวจจาก local `main` · สถานะ: Context จาก Source, Configuration และเอกสาร ณ revision นี้ ไม่ใช่ผลรันทดสอบหรือการยืนยันว่า Deploy แล้ว
 
 ไฟล์นี้ใช้ชื่อเดิมเพื่อรักษาลิงก์จากเอกสารอื่น โดยปรับจากคำสั่งสร้าง Scaffold เป็นบริบทสำหรับทำงานต่อ อ่าน [README](../../README.md) สำหรับสถานะและวิธีรัน, [System Architecture](system-architecture.md) สำหรับแบบเป้าหมาย และ [Permission Matrix](../security/permission-matrix.md) สำหรับนโยบายสิทธิ์
 
@@ -19,9 +19,9 @@
 
 ## 1. ผลิตภัณฑ์และขอบเขต
 
-TU-ClubHub รองรับนักศึกษา มธ. ในการดูชมรม สมัคร และติดตามผล กรรมการดูแลชมรมและรอบรับสมัคร ส่วน Admin มีงานสถิติและแต่งตั้งกรรมการตามขอบเขตของ Permission Matrix
+TU-ClubHub รองรับนักศึกษา มธ. ในการค้นหาชมรม สมัคร ติดตามผล (การตอบรับ/สละสิทธิ์ยังรอ Backend) กรรมการดูแลข้อมูลชมรม รอบรับสมัคร คำถามคัดเลือก และการพิจารณาผล ส่วน Admin มีแดชบอร์ดสถิติภาพรวมและงานแต่งตั้งกรรมการตามขอบเขตของ Permission Matrix
 
-Backend มี Authentication, Public Club APIs, การอัปเดตโปรไฟล์, การจัดการรอบ/คำถามบางส่วน และ API ส่งใบสมัครแล้ว Frontend หลักมี Login, ข้อมูลผู้ใช้, Logout, หน้ารายละเอียดชมรม, แก้โปรไฟล์ และจัดการคำถามที่เชื่อม API แล้ว ส่วนฟอร์มรอบและใบสมัครยังต้องเชื่อมเข้ากับแอปและ API จึงยังไม่ใช่ระบบรับสมัครที่ใช้งานครบทุกขั้นตอน
+ทั้ง Backend และ Frontend เชื่อมต่อ workflow หลักผ่าน API จริงแล้ว ได้แก่ Auth, Public Club Search/Detail, Club Profile Edit, Recruitment Rounds (list/get/create/edit/publish/close), Screening Questions, Application Form & Submission, My Applications (ประวัติ/รายละเอียด), Committee Review & Selection Publication และ Admin Dashboard / Assignments ส่วนที่ยังรอการตรวจสอบ/พัฒนาต่อคือ `CANCEL` รอบ, Backend handler ของ `POST /api/v1/me/applications/{id}/confirm|decline` (Frontend เรียกไว้แล้วแต่ยังไม่มี endpoint), Offer-expiry scheduler, External notifications และ End-to-end QA/PO sign-off
 
 ## 2. โครงสร้างที่มีอยู่
 
@@ -29,42 +29,52 @@ Backend มี Authentication, Public Club APIs, การอัปเดตโ�
 TU_ClubHub_CS261/
 ├── frontend/
 │   ├── src/main.tsx, App.tsx          # AuthProvider และ Router
-│   ├── src/ClubProfileForm.tsx        # ฟอร์มและหน้า preview แยก
+│   ├── src/components/               # PublicLayout, CommitteeLayout และ shared UI (PageHeaderBanner, Breadcrumbs, Dialog)
 │   ├── src/features/
+│   │   ├── admin-dashboard/          # แดชบอร์ดสถิติส่วนกลาง (/admin/dashboard)
 │   │   ├── auth/                     # Login / AuthContext
-│   │   ├── clubs/                    # Components, hooks และ API client ข้อมูลชมรม
-│   │   ├── recruitment/              # ฟอร์มรอบและคำถาม
-│   │   └── applications/             # ฟอร์มใบสมัครต้นแบบ
-│   └── tests/                        # Unit tests ของ validation, clients และ routing helpers
+│   │   ├── dev/                      # Optional local-dev role switcher UI (DevRoleSwitcherPill)
+│   │   ├── clubs/                    # Components, services และ types ข้อมูลชมรม
+│   │   ├── recruitment/              # ฟอร์มรอบรับสมัคร รายการรอบ และคำถามคัดเลือก
+│   │   └── applications/             # ส่งใบสมัคร ประวัติ/รายละเอียดใบสมัคร และการพิจารณาของกรรมการ
+│   └── tests/                        # Unit และ component tests (node --test)
 ├── backend/
 │   ├── src/main/java/com/tu/clubhub/
 │   │   ├── auth/, user/              # TU adapters, session, บัญชีผู้ใช้
+│   │   ├── dev/                      # Optional local-dev role switcher (แยกเฉพาะ dev, ลบออกได้อิสระ)
 │   │   ├── club/, recruitment/       # REST APIs, services, repositories
-│   │   ├── application/              # Submission controller/service/repository
+│   │   ├── application/              # Submission, history, review และ selection results
 │   │   ├── committee/, membership/   # สิทธิ์กรรมการและข้อมูลสมาชิกภาพ
+│   │   ├── dashboard/                # Admin statistics controller/service/repository
+│   │   ├── common/                   # Shared pagination DTO, lock timeouts และ ApiExceptionHandler
 │   │   └── config/                   # Security, timeout, SPA forwarding
 │   └── src/main/resources/db/migration/
 │       ├── V1__init_schema.sql        # 17 ตารางธุรกิจ
-│       └── V3__create_spring_session_tables.sql
+│       ├── V3__create_spring_session_tables.sql
+│       ├── V4__committee_assignment_integrity_and_audit.sql
+│       ├── V5__add_club_name_search_index.sql
+│       ├── V6__selection_result_audit.sql
+│       └── V7__allow_local_club_images.sql
 ├── docs/                             # Contracts, architecture, stories, diagrams, reports
 ├── .github/workflows/                # App CI และ OpenAPI contract lint
 ├── Dockerfile                        # (optional unified profile) React build → Spring Boot JAR → Java runtime
 └── compose.yaml                      # frontend + backend + database (ค่าเริ่มต้น 3 คอนเทนเนอร์); มี unified profile เพิ่ม
 ```
 
-Backend มี handler ส่งใบสมัคร แต่ยังไม่มี handlers สำหรับอ่าน/พิจารณาใบสมัคร ประกาศผล ตอบรับ/สละสิทธิ์ notification หรือ dashboard การมีตารางในฐานข้อมูลไม่ได้แปลว่ามี API ของตารางนั้นแล้ว Frontend มี Router (`src/app/AppRoutes.tsx`) และ HTTP client กลาง (`src/lib/api.ts`) แล้ว
+โครงสร้าง Backend แบ่งเป็น package ตาม domain โดยใช้ DTO กลาง `PageResponse<T>`, `LockTimeouts` และ `ApiExceptionHandler` ร่วมกัน Frontend ใช้ Router (`src/app/AppRoutes.tsx`), HTTP client กลาง (`src/lib/api.ts`) และ hook `useApiResource`
 
 ## 3. Contract และจุดเชื่อมต่อปัจจุบัน
 
 | ส่วน | สถานะและงานต่อ |
 |---|---|
 | Auth | `/api/v1/auth/csrf`, `login`, `me`, `logout` มี handler และหน้า Login เรียกใช้แล้ว; Real TU adapter มีโค้ด แต่การเข้าถึงบริการจริงต้องยืนยันในสภาพแวดล้อมส่งมอบ |
-| Public club | `GET /api/v1/public/clubs/{id}` และ `.../{id}/recruitment-rounds` อ่าน DB แล้ว; หน้า `/clubs/:clubId` แสดงข้อมูลจากสอง API นี้; ค้นหา/รายการชมรม หมวดหมู่ และ tags มีใน Public Routes แต่ยังไม่มี handler |
-| Club editor | `PUT /api/v1/clubs/{clubId}` มีแล้ว; GET path เดียวกันยังไม่มี handler หน้า `/clubs/:clubId/edit` จึงเติมค่าจาก public profile; category/tags ยังอ่านอย่างเดียว |
-| Recruitment | POST/PUT และ PATCH `PUBLISH`/`CLOSE` มีแล้ว พร้อมข้อห้ามจัดการรอบที่ตนสมัคร และ response ตาม schema `Round`; GET list/detail และ `CANCEL` ยังไม่ทำ; ฟอร์มยังไม่มีการเชื่อมใช้งานใน App |
-| Questions | บันทึกผ่าน `questions` ใน POST/PUT ของรอบ และจัดการรายข้อผ่าน `/api/v1/rounds/{roundId}/questions` (Backend และ `questionApi.ts` ใช้ path เดียวกัน); error เป็น Problem body แต่ 409 ยังใช้ `RESOURCE_CONFLICT` แทนรหัสเฉพาะเช่น `QUESTION_HAS_ANSWERS` |
-| Submission | `POST /api/v1/rounds/{roundId}/applications` มี [controller](../../backend/src/main/java/com/tu/clubhub/application/controller/ApplicationController.java) และ [transactional service](../../backend/src/main/java/com/tu/clubhub/application/service/ApplicationService.java) ตาม [API Contract §11](../api/API_v1.md#11-application-submission); GET application form และ frontend client/integration ยังไม่มี; `Location` ใน response ชี้ไปยัง applicant detail ที่ยังไม่มี handler |
-| History / review / confirmation / Admin | Task75 และ [OpenAPI](../api/openapi.yaml) มี Design/Contract ที่ระบุ `pending` สำหรับประวัติใบสมัคร การอ่าน/ตัดสิน/ประกาศผล ตอบรับ/สละสิทธิ์ และ dashboard; ยังไม่มี handler สำหรับ Workflow เหล่านี้ |
+| Public club | `GET /api/v1/public/clubs`, `.../clubs/{id}`, `.../recruitment-rounds`, categories และ tags อ่าน DB แล้ว; หน้า `/`, `/clubs` (`ClubSearchPage`) และ `/clubs/:clubId` (`ClubDetailPage`) เชื่อม API จริง (คืน `PageResponse<T>`) |
+| Club editor | `PUT /api/v1/clubs/{clubId}` มีแล้ว; หน้า `/clubs/:clubId/edit` (`ClubEditRoutePage` + `ClubProfileForm`) โหลดจาก public profile และบันทึกผ่าน `PUT`; category/tags ยังอ่านอย่างเดียว |
+| Recruitment | `GET` list/detail, `POST`, `PUT` และ `PATCH` (`PUBLISH`/`CLOSE`) มี handler และเชื่อมหน้า `/clubs/:clubId/manage`, `/rounds`, `/rounds/new`, `/rounds/:roundId/edit` แล้ว; `CANCEL` ยังไม่ทำ |
+| Questions | บันทึกผ่าน `questions` ใน POST/PUT ของรอบ และจัดการรายข้อผ่าน `/api/v1/rounds/{roundId}/questions` (คืน `409 RESOURCE_CONFLICT` พร้อม `reason: QUESTION_HAS_ANSWERS`); เชื่อมกับ `QuestionManagementPage` แล้ว |
+| Submission & History | `GET /api/v1/rounds/{roundId}/application-form`, `POST /api/v1/rounds/{roundId}/applications`, `POST /api/v1/clubs/{id}/applications`, `GET /api/v1/me/applications/**` มี handler และเชื่อมกับ `DynamicApplicationForm` และ `MyApplicationsPage` แล้ว; `POST /confirm`, `/decline` มีเฉพาะฝั่ง Frontend (`MyApplicationsPage`) และ Contract — **ยังไม่มี Backend handler** |
+| Committee review & Results | `GET /api/v1/clubs/{id}/applications/**`, `PUT .../decision`, `PUT .../application-decisions` และ `POST .../publish-results` เชื่อมกับ `CommitteeApplicationsPage`, `CommitteeApplicationDetailPage` และ `PublishResultsModal` แล้ว |
+| Admin | `GET /api/v1/admin/dashboard/stats` เชื่อมกับ `CentralDashboardPage` (`/admin/dashboard`) แล้ว; ส่วน Admin committee assignment มี REST API แต่ยังไม่มี Admin assignment UI |
 
 ใช้ [API_v1.md](../api/API_v1.md) และ [openapi.yaml](../api/openapi.yaml) สำหรับ Auth/Clubs/Submission; ใช้ [rounds.openapi.yaml](../api/rounds.openapi.yaml) สำหรับรอบและคำถาม ไม่สร้าง Contract จาก path ชั่วคราวใน UI
 
@@ -102,8 +112,8 @@ Submission จับ lock ตามลำดับผู้สมัคร → s
 คำสั่งและตัวแปรที่ใช้งานอยู่ดู [README](../../README.md#development-setup) และ [Local demo](../deployment/local-demo.md) Runtime ใช้ Java 21, Spring Boot 4.1.1, React 19, TypeScript 6, Vite 8 และ Tailwind 4 ตาม manifests/lockfile
 
 - Local development: Vite `5173` proxy `/api` ไป Spring Boot `8080`; ใช้ `/actuator/health` ที่ Backend โดยตรง
-- Compose ปกติ: `app` เสิร์ฟ Frontend ที่ Build รวมใน JAR และใช้ `db` PostgreSQL 17
-- Split demo: ระบุ services `db backend frontend` เพื่อไม่ Start `app` ซ้ำ; Nginx เสิร์ฟ Frontend และ proxy `/api`
+- Compose ปกติ (3 คอนเทนเนอร์): `frontend` (Nginx เสิร์ฟ React SPA และ proxy `/api/`), `backend` (Spring Boot) และ `database` (PostgreSQL 17)
+- Optional `unified` profile: `app` เสิร์ฟ Frontend ที่ Build รวมใน JAR เดียวกันกับ Backend และใช้ `database`
 - Root `.env` ใช้กับ Compose; JVM ที่รันตรงต้อง export ตัวแปรเอง หากเปลี่ยนชื่อ DB/ผู้ใช้/พอร์ตให้ตั้ง `SPRING_DATASOURCE_*` ให้ตรง
 - Render ยังเป็น Deployment target; ไม่มีผล Deploy ในเอกสารนี้
 
@@ -126,6 +136,6 @@ Submission จับ lock ตามลำดับผู้สมัคร → s
 2. ทบทวน Task75 และ [Decision Log](system-architecture.md#s2-decision-log) ร่วม FE/BE/QA โดยเฉพาะ Schema/DTO sign-off, ความถี่และการกู้คืน expiry worker, นิยาม dashboard และสอง Draft Stories; อย่าถือว่า US-09 แบบ read-only ครอบคลุมงานตัดสิน/ประกาศผล
 3. เชื่อมฟอร์มรอบและใบสมัครเข้ากับ Routes/Pages และ DTO/API; พัฒนา application-form GET และ applicant-detail GET ตาม Contract ที่ผ่าน Review โดยรักษา Submission และ SD-05 ให้ตรงกัน
 4. ยืนยัน student-status mapping กับ TU จริง และทำช่องว่างสิทธิ์ตาม Matrix รวม PRESIDENT guard และ current ADMIN role check
-5. ทำ committee reads, cancellation และ frontend รอบตาม `rounds.openapi.yaml`; ทำ Workflow ประวัติ ผลคัดเลือก ตอบรับ/สละสิทธิ์ และ Admin ตาม Contract/Scope ที่ผ่าน Review
+5. ทำ `CANCEL` รอบตาม `rounds.openapi.yaml`; ทำ Backend ตอบรับ/สละสิทธิ์ (`confirm`/`decline`), งานหมดเวลา (expire offers), notification ภายนอก และ Admin assignment UI ตาม Contract/Scope ที่ผ่าน Review
 
 เมื่อแก้งาน ให้ปรับสถานะใน README, Contract, Story และ Diagram ที่เกี่ยวข้องร่วมกัน ไม่ทำเครื่องหมายเสร็จจากการมี Schema หรือ UI ต้นแบบเพียงอย่างเดียว
