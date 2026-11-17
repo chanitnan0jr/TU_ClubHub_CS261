@@ -38,11 +38,17 @@ public record ClubUpdateRequestDto(
 		@Size(max = 254, message = "Email must be at most 254 characters")
 		String contactEmail,
 
-		@Pattern(regexp = "^https://\\S+$", message = "URL must use HTTPS")
+		@Pattern(
+				regexp = "^(?:https://\\S+|/images/[A-Za-z0-9._/-]+)$",
+				message = "Must be a valid HTTPS URL or /images/ path"
+		)
 		@Size(max = 2048, message = "URL must be at most 2048 characters")
 		String imageUrl,
 
-		@Pattern(regexp = "^https://\\S+$", message = "URL must use HTTPS")
+		@Pattern(
+				regexp = "^(?:https://\\S+|/images/[A-Za-z0-9._/-]+)$",
+				message = "Must be a valid HTTPS URL or /images/ path"
+		)
 		@Size(max = 2048, message = "URL must be at most 2048 characters")
 		String bannerUrl,
 
