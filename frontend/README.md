@@ -16,7 +16,7 @@ Routes live in [src/app/AppRoutes.tsx](src/app/AppRoutes.tsx), under the path pr
 | `/clubs/:clubId/rounds/:roundId/apply` | Session | `ApplicationRoutePage` -> `DynamicApplicationForm`: loads `GET /api/v1/rounds/{roundId}/application-form`, shares `ApplicantIdentityGrid` & `<Field>`, validates answers/HTTPS links (`utils/validation.ts`), previews, and submits via `POST /api/v1/rounds/{roundId}/applications`. |
 | `/clubs/:clubId/rounds/:roundId/apply/result` | Session | `ApplicationResultRoutePage`: displays submission confirmation receipt and links to `/profile/applications` or `/`. |
 | `/me/applications`, `/profile/applications` | Session | `MyApplicationsPage`: lists applicant submissions (`GET /api/v1/me/applications`) with status tabs, year filters, and `StatusBadge` / `StatusPill` badges. |
-| `/me/applications/:applicationId`, `/profile/applications/:applicationId` | Session | `MyApplicationDetailRoutePage` -> `MyApplicationDetailPage`: displays submitted answers, links, status history timeline, and confirm/decline offer actions (`ConfirmDialog`; calls `POST /api/v1/me/applications/{id}/confirm|decline`, which has no backend handler yet). |
+| `/me/applications/:applicationId`, `/profile/applications/:applicationId` | Session | `MyApplicationDetailRoutePage` -> `MyApplicationDetailPage`: displays submitted answers, links, status history timeline, and confirm/decline offer actions (`ConfirmDialog`). |
 | `/clubs/:clubId/manage` | Session (Committee) | `ClubManageRoutePage` inside `CommitteeLayout`: overview shortcuts, term-filtered recruitment metrics, and recent rounds summary. |
 | `/clubs/:clubId/edit` | Session (Committee) | `ClubEditRoutePage` -> `ClubProfileForm`: loads profile/categories/tags via `useApiResource` and saves updates with `PUT /api/v1/clubs/{clubId}`. |
 | `/clubs/:clubId/rounds` | Session (Committee) | `RoundListRoutePage` -> `RoundListPage`: paginated committee round list with `PUBLISH` / `CLOSE` actions and confirmation dialogs. |
@@ -67,6 +67,6 @@ Tailwind CSS v4 and typography (`IBM Plex Sans Thai` + `Manrope` loaded in `inde
 
 ## Contracts
 
-- [Main API contract](../docs/api/API_v1.md) and [OpenAPI](../docs/api/openapi.yaml): auth, clubs, application form/submission, applicant history, confirm/decline (contract only; backend handler pending), committee review, selection results, and admin dashboard.
+- [Main API contract](../docs/api/API_v1.md) and [OpenAPI](../docs/api/openapi.yaml): auth, clubs, application form/submission, applicant history, confirm/decline, committee review, selection results, and admin dashboard.
 - [Recruitment contract](../docs/api/rounds.openapi.yaml): round and screening-question endpoints.
 - [Permission matrix](../docs/security/permission-matrix.md): authorization is enforced by the backend; UI role strings and route guards are UX only.

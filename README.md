@@ -2,7 +2,7 @@
 
 TU-ClubHub is a web platform in development for Thammasat University students to discover clubs, apply for membership, and track results. Club committees manage profiles and recruitment; central staff reporting is planned.
 
-> Authentication, public club APIs, club profile updates, recruitment round writes, question management, application submission, applicant history, committee review, selection results, and the admin dashboard have implementations. The frontend includes the public directory, club detail, club management, application form, applicant history, committee review and admin dashboard routes; offer confirm/decline is frontend-only until its backend handler lands. The status below describes repository contents, not a deployment or test result. The [Sprint 2 Task74 analysis and review packet](docs/architecture/task74-sprint2-analysis.md) records user decisions and remains Draft / Pending Team Review; it does not establish team approval or a completed workflow.
+> Authentication, public club APIs, club profile updates, recruitment round writes, question management, application submission, applicant history, committee review, selection results, membership offer confirmation/decline, and the admin dashboard have implementations. The frontend includes the public directory, club detail, club management, application form, applicant history, committee review and admin dashboard routes. The status below describes repository contents, not a deployment or test result. The [Sprint 2 Task74 analysis and review packet](docs/architecture/task74-sprint2-analysis.md) records user decisions and remains Draft / Pending Team Review; it does not establish team approval or a completed workflow.
 
 ## Current implementation
 
