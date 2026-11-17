@@ -65,10 +65,14 @@ class PublicRoutesTest {
     void authenticationBootstrapIsRestrictedByMethod() {
         assertTrue(matches("GET", "/api/v1/auth/csrf"));
         assertTrue(matches("POST", "/api/v1/auth/login"));
+        assertTrue(matches("GET", "/api/v1/auth/dev/accounts"));
+        assertTrue(matches("POST", "/api/v1/auth/dev/switch"));
 
         assertFalse(matches("POST", "/api/v1/auth/csrf"));
         assertFalse(matches("GET", "/api/v1/auth/login"));
         assertFalse(matches("PUT", "/api/v1/auth/login"));
+        assertFalse(matches("POST", "/api/v1/auth/dev/accounts"));
+        assertFalse(matches("GET", "/api/v1/auth/dev/switch"));
         assertFalse(matches("POST", "/api/v1/auth/logout"));
     }
 

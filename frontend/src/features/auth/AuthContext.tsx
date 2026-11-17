@@ -32,11 +32,18 @@ type AuthContextType = {
   loginSuccess: boolean;
   dismissLoginSuccess: () => void;
   login: (username: string, password: string) => Promise<void>;
+  establishSession: (nextUser: User) => User;
   logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const isMockAuth = import.meta.env?.VITE_MOCK_AUTH === "true" || import.meta.env?.VITE_ENABLE_MOCK_AUTH === "true";
+
+function assertValidUser(user: User | undefined | null): User {
+  if (!user || typeof user.id !== "string" || !user.id.trim() || typeof user.role !== "string" || !user.role.trim()) {
+    throw new Error("Authenticated session could not be loaded");
+  }
+  return user;
+}
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -60,11 +67,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const version = authVersion.current;
     const checkSession = async () => {
       try {
-        if (isMockAuth) {
-          const saved = sessionStorage.getItem("tu_test_user");
-          if (saved && !cancelled) setUser(JSON.parse(saved));
-          return;
-        }
         const data = await apiRequest<{ user: User }>("/api/v1/auth/me", { notifyAuthFailure: false });
         if (!cancelled && version === authVersion.current) { resetAuthFailureNotification(); setUser(data.user); }
       } catch { if (!cancelled && version === authVersion.current) setUser(null); }
@@ -79,25 +81,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setNotice(null);
     setLoginSuccess(false);
     try {
-      if (isMockAuth) {
-        const mockUser: User = { id: "mock-id-1", role: "STUDENT" };
-        sessionStorage.setItem("tu_test_user", JSON.stringify(mockUser));
-        resetAuthFailureNotification();
-        setUser(mockUser);
-        setLoginSuccess(true);
-        return;
-      }
       await apiRequest("/api/v1/auth/login", { method: "POST", body: { username, password } });
       if (version !== authVersion.current) throw new Error("Login superseded");
       // Subsequent writes fetch the fresh token from the current session through apiRequest.
       const data = await apiRequest<{ user: User }>("/api/v1/auth/me");
-      if (version !== authVersion.current || !data?.user
-          || typeof data.user.id !== "string" || !data.user.id.trim()
-          || typeof data.user.role !== "string" || !data.user.role.trim()) {
-        throw new Error("Authenticated session could not be loaded");
-      }
+      if (version !== authVersion.current) throw new Error("Login superseded");
+      const validUser = assertValidUser(data?.user);
       resetAuthFailureNotification();
-      setUser(data.user);
+      setUser(validUser);
       setLoginSuccess(true);
     } catch (error) {
       if (version === authVersion.current) { setUser(null); setLoginSuccess(false); }
@@ -105,20 +96,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const establishSession = (nextUser: User): User => {
+    authVersion.current++;
+    const validUser = assertValidUser(nextUser);
+    setNotice(null);
+    setLoginSuccess(false);
+    resetAuthFailureNotification();
+    setUser(validUser);
+    return validUser;
+  };
+
   const logout = async () => {
     authVersion.current++;
     setNotice(null);
     setLoginSuccess(false);
     try {
-      if (isMockAuth) sessionStorage.removeItem("tu_test_user");
-      else await apiRequest<void>("/api/v1/auth/logout", { method: "POST" });
+      await apiRequest<void>("/api/v1/auth/logout", { method: "POST" });
     } catch (error) {
       setNotice(describeApiError(error, "ไม่สามารถติดต่อระบบเพื่อออกจากระบบได้ กรุณาลองใหม่"));
     } finally { setUser(null); }
   };
 
   return <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, notice,
-    loginSuccess, dismissLoginSuccess: () => setLoginSuccess(false), login, logout }}>{children}</AuthContext.Provider>;
+    loginSuccess, dismissLoginSuccess: () => setLoginSuccess(false), login, establishSession, logout }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {

@@ -37,6 +37,7 @@ tu:
     read-timeout: ${TU_AUTH_READ_TIMEOUT:5s}
 
 clubhub:
+  dev: ${DEV:false}
   application:
     submission:
       lock-timeout: ${APPLICATION_SUBMISSION_LOCK_TIMEOUT:2s}

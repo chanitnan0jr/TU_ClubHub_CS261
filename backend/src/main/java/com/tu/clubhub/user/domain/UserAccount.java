@@ -66,6 +66,13 @@ public class UserAccount {
 		this.lastLoginAt = loginTime;
 	}
 
+	public void assignSystemRole(String systemRole) {
+		if (!"USER".equals(systemRole) && !"ADMIN".equals(systemRole)) {
+			throw new IllegalArgumentException("Unsupported system role: " + systemRole);
+		}
+		this.systemRole = systemRole;
+	}
+
 	@PrePersist
 	void setCreationTimes() {
 		Instant now = Instant.now();
